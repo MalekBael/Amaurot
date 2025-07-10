@@ -1,0 +1,18 @@
+{
+  "sheet": "MapSymbol",
+  "defaultColumn": "int32",
+  "definitions": [
+    {
+      "index": 1,
+      "name": "PlaceName",
+      "converter": {
+        "type": "link",
+        "target": "PlaceName"
+      }
+    },
+    {
+      "index": 2,
+      "name": "DisplayNavi"
+    }
+  ]
+}

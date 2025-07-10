@@ -1,0 +1,45 @@
+{
+  "sheet": "PlaceName",
+  "definitions": [
+    {
+      "index": 0,
+      "name": "Name"
+    },
+    {
+      "index": 1,
+      "name": "Unknown1"
+    },
+    {
+      "index": 2,
+      "name": "NameNoArticle"
+    },
+    {
+      "index": 3,
+      "name": "Unknown2"
+    },
+    {
+      "index": 4,
+      "name": "Unknown3"
+    },
+    {
+      "index": 5,
+      "name": "Unknown4"
+    },
+    {
+      "index": 6,
+      "name": "Unknown5"
+    },
+    {
+      "index": 7,
+      "name": "Unknown6"
+    },
+    {
+      "index": 8,
+      "name": "Unknown0"
+    },
+    {
+      "index": 9,
+      "name": "Unknown7"
+    }
+  ]
+}

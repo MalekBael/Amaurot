@@ -1,0 +1,136 @@
+﻿<Window x:Class="map_editor.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:map_editor"
+        mc:Ignorable="d"
+        Title="FFXIV Map Editor" Height="1000" Width="1200">
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="0*"/>
+            <ColumnDefinition Width="0*"/>
+            <ColumnDefinition/>
+        </Grid.ColumnDefinitions>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Menu Bar -->
+        <Menu Grid.Row="0" Grid.ColumnSpan="3">
+            <MenuItem Header="_File">
+                <MenuItem Header="_Load FFXIV Data..." Click="LoadGameData_Click"/>
+                <Separator/>
+                <MenuItem Header="E_xit"/>
+            </MenuItem>
+        </Menu>
+
+        <!-- Main Content -->
+        <Grid Grid.Row="1" Grid.ColumnSpan="3">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="300"/>
+                <ColumnDefinition Width="5"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- Territory List -->
+            <DockPanel Grid.Column="0">
+                <TextBlock DockPanel.Dock="Top" Text="Territories" FontWeight="Bold" Margin="5"/>
+                <ListBox Name="TerritoryList" 
+                         ItemsSource="{Binding Territories}"
+                         SelectionChanged="TerritoryList_SelectionChanged"
+                         Margin="5">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate>
+                            <TextBlock>
+                                <Run Text="{Binding Source, Mode=OneWay}"/>
+                                <Run Text="{Binding Id, Mode=OneWay}"/>
+                                <Run Text=" "/>
+                                <Run Text="{Binding Name, Mode=OneWay}"/>
+                            </TextBlock>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+            </DockPanel>
+
+            <GridSplitter Grid.Column="1" HorizontalAlignment="Stretch"/>
+
+            <!-- Map Display Area -->
+            <Grid Grid.Column="2">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="200"/>
+                </Grid.RowDefinitions>
+
+                <!-- Map Canvas with fixed size -->
+                <Border Grid.Row="0" Background="LightGray" Margin="5">
+                    <Canvas x:Name="MapCanvas" Width="{Binding ElementName=OverlayCanvas, Path=Width}" 
+                            Height="{Binding ElementName=OverlayCanvas, Path=Height}" 
+                            Background="White"
+                            ClipToBounds="True"
+                            MouseWheel="MapCanvas_MouseWheel" 
+                            MouseLeftButtonDown="MapCanvas_MouseLeftButtonDown"
+                            MouseLeftButtonUp="MapCanvas_MouseLeftButtonUp"
+                            MouseRightButtonDown="MapCanvas_MouseRightButtonDown"
+                            MouseMove="MapCanvas_MouseMove">
+                        <TextBlock Text="Select a territory to view its map" 
+                                   Canvas.Left="10" Canvas.Top="10"
+                                   Foreground="Gray"
+                                   x:Name="MapPlaceholderText"/>
+                        <Image x:Name="MapImageControl" 
+                               Canvas.Left="0" Canvas.Top="0"
+                               RenderTransformOrigin="0,0">
+                            <Image.RenderTransform>
+                                <TransformGroup>
+                                    <ScaleTransform x:Name="MapScale" ScaleX="1" ScaleY="1" />
+                                    <TranslateTransform x:Name="MapTranslate" X="0" Y="0" />
+                                </TransformGroup>
+                            </Image.RenderTransform>
+                        </Image>
+                    </Canvas>
+                </Border>
+
+                <!-- Map Info Panel -->
+                <GroupBox Grid.Row="1" Header="Map Information" Margin="5">
+                    <ScrollViewer>
+                        <TextBlock Name="MapInfoText" 
+                                   Text="No territory selected"
+                                   TextWrapping="Wrap"
+                                   Margin="5"/>
+                    </ScrollViewer>
+                </GroupBox>
+            </Grid>
+        </Grid>
+
+        <!-- Debug Information - Updated for better visibility and functionality -->
+        <Expander Grid.Row="2" Grid.ColumnSpan="3" Header="Debug Information" IsExpanded="False" 
+                  Margin="5" Background="LightGray" BorderBrush="Gray" BorderThickness="1">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+                
+                <ScrollViewer Grid.Row="0" Name="DebugScrollViewer" MaxHeight="250" VerticalScrollBarVisibility="Auto">
+                    <TextBox x:Name="DebugTextBox" IsReadOnly="True" TextWrapping="Wrap" 
+                             FontFamily="Consolas" FontSize="12" Background="#FFFCFCFC"
+                             VerticalAlignment="Stretch"/>
+                </ScrollViewer>
+                
+                <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,5,0,0">
+                    <Button x:Name="ClearLogButton" Content="Clear Log" Width="80" Margin="0,0,5,0" Click="ClearLogButton_Click"/>
+                    <Button x:Name="SaveLogButton" Content="Save Log" Width="80" Margin="0,0,5,0" Click="SaveLogButton_Click"/>
+                    <CheckBox x:Name="AutoScrollCheckBox" Content="Auto-scroll" IsChecked="True" VerticalAlignment="Center"/>
+                </StackPanel>
+            </Grid>
+        </Expander>
+
+        <!-- Status Bar -->
+        <StatusBar Grid.Row="3" Grid.ColumnSpan="3">
+            <TextBlock Name="StatusText" Text="Ready - Load FFXIV data to begin"/>
+        </StatusBar>
+    </Grid>
+</Window>

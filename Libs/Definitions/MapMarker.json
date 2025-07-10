@@ -1,0 +1,86 @@
+{
+  "sheet": "MapMarker",
+  "definitions": [
+    {
+      "index": 0,
+      "name": "X"
+    },
+    {
+      "index": 1,
+      "name": "Y"
+    },
+    {
+      "index": 2,
+      "name": "Icon",
+      "converter": {
+        "type": "icon"
+      }
+    },
+    {
+      "index": 3,
+      "name": "PlaceNameSubtext",
+      "converter": {
+        "type": "link",
+        "target": "PlaceName"
+      }
+    },
+    {
+      "index": 4,
+      "name": "SubtextOrientation"
+    },
+    {
+      "index": 5,
+      "name": "MapMarkerRegion"
+    },
+    {
+      "index": 6,
+      "name": "Type"
+    },
+    {
+      "index": 7,
+      "name": "DataKey",
+      "converter": {
+        "type": "complexlink",
+        "target": "DataKey",
+        "links": [
+          {
+            "when": {
+              "key": "DataType",
+              "value": 1
+            },
+            "sheet": "Map"
+          },
+          {
+            "when": {
+              "key": "DataType",
+              "value": 2
+            },
+            "sheet": "Map"
+          },
+          {
+            "when": {
+              "key": "DataType",
+              "value": 3
+            },
+            "sheet": "Aetheryte"
+          },
+          {
+            "when": {
+              "key": "DataType",
+              "value": 4
+            },
+            "sheet": "PlaceName"
+          }
+        ]
+      }
+    },
+    {
+      "index": 8,
+      "name": "DataType"
+    },
+    {
+      "index": 9,
+      "name": "Unknown0"
+    }
+  ]
+}

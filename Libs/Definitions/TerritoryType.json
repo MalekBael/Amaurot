@@ -1,0 +1,165 @@
+{
+  "sheet": "TerritoryType",
+  "definitions": [
+    {
+      "index": 0,
+      "name": "Name"
+    },
+    {
+      "index": 1,
+      "name": "Bg"
+    },
+    {
+      "index": 2,
+      "name": "Resident"
+    },
+    {
+      "index": 3,
+      "name": "PlaceNameRegion",
+      "converter": {
+        "type": "link",
+        "target": "PlaceName"
+      }
+    },
+    {
+      "index": 4,
+      "name": "PlaceNameZone",
+      "converter": {
+        "type": "link",
+        "target": "PlaceName"
+      }
+    },
+    {
+      "index": 5,
+      "name": "PlaceName",
+      "converter": {
+        "type": "link",
+        "target": "PlaceName"
+      }
+    },
+    {
+      "index": 6,
+      "name": "Map",
+      "converter": {
+        "type": "link",
+        "target": "Map"
+      }
+    },
+    {
+      "index": 7,
+      "name": "NotoriousMonsterTerritory"
+    },
+    {
+      "index": 8,
+      "name": "BattalionMode"
+    },
+    {
+      "index": 9,
+      "name": "ContentFinderCondition",
+      "converter": {
+        "type": "link",
+        "target": "ContentFinderCondition"
+      }
+    },
+    {
+      "index": 10,
+      "name": "LoadingImage"
+    },
+    {
+      "index": 11,
+      "name": "ExclusiveType"
+    },
+    {
+      "index": 12,
+      "name": "AetherCurrentCompFlgSet",
+      "converter": {
+        "type": "link",
+        "target": "AetherCurrentCompFlgSet"
+      }
+    },
+    {
+      "index": 13,
+      "name": "MountSpeed"
+    },
+    {
+      "index": 14,
+      "name": "IndividualWeather"
+    },
+    {
+      "index": 15,
+      "name": "BGM",
+      "converter": {
+        "type": "link",
+        "target": "BGM"
+      }
+    },
+    {
+      "index": 16,
+      "name": "PlaceNameRegionIcon"
+    },
+    {
+      "index": 17,
+      "name": "PlaceNameIcon"
+    },
+    {
+      "index": 18,
+      "name": "ArrayEventHandler"
+    },
+    {
+      "index": 19,
+      "name": "QuestBattle",
+      "converter": {
+        "type": "link",
+        "target": "QuestBattle"
+      }
+    },
+    {
+      "index": 20,
+      "name": "Aetheryte",
+      "converter": {
+        "type": "link",
+        "target": "Aetheryte"
+      }
+    },
+    {
+      "index": 21,
+      "name": "FixedTime"
+    },
+    {
+      "index": 22,
+      "name": "TerritoryIntendedUse",
+      "converter": {
+        "type": "link",
+        "target": "TerritoryIntendedUse"
+      }
+    },
+    {
+      "index": 23,
+      "name": "Unknown2"
+    },
+    {
+      "index": 24,
+      "name": "ZoneSharedGroup"
+    },
+    {
+      "index": 25,
+      "name": "AchievementIndex"
+    },
+    {
+      "index": 26,
+      "name": "WeatherRate",
+      "converter": {
+        "type": "link",
+        "target": "WeatherRate"
+      }
+    },
+    {
+      "index": 27,
+      "name": "Unknown1"
+    },
+    {
+      "index": 28,
+      "name": "ExVersion"
+    }
+  ]
+}

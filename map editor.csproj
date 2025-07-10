@@ -1,0 +1,87 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<OutputType>WinExe</OutputType>
+		<TargetFramework>net8.0-windows</TargetFramework>
+		<RootNamespace>map_editor</RootNamespace>
+		<Nullable>enable</Nullable>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<UseWPF>true</UseWPF>
+		<UseWindowsForms>true</UseWindowsForms>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<PackageReference Include="DotNetZip" Version="1.16.0" />
+		<PackageReference Include="EntityFramework" Version="6.0.0" />
+		<PackageReference Include="Lumina" Version="6.3.0" />
+		<PackageReference Include="Lumina.Excel" Version="7.2.3" />
+		<PackageReference Include="Lumina.Generated" Version="5.30.2" />
+		<PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<Reference Include="SaintCoinach">
+			<HintPath>Libs\SaintCoinach.dll</HintPath>
+		</Reference>
+		<Reference Include="DotSquish">
+			<HintPath>Libs\DotSquish.dll</HintPath>
+		</Reference>
+	</ItemGroup>
+
+	<!-- Add this section to include the definition files -->
+	<ItemGroup>
+		<Content Include="Libs\Definitions\**\*.*">
+			<Link>Definitions\%(RecursiveDir)%(Filename)%(Extension)</Link>
+			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		</Content>
+		<Compile Remove="notes\Map.cs" />
+		<Compile Remove="notes\Quest.cs" />
+		<Content Remove="Libs\Definitions\Lobby.json" />
+		<Content Remove="Libs\Definitions\LogFilter.json" />
+		<None Remove="Libs\Definitions\Lobby.json" />
+		<None Remove="Libs\Definitions\LogFilter.json" />
+		<Compile Include="notes\Coinach CS\Ex\Variant2\RelationalDataRow.txt" />
+		<Compile Include="notes\Coinach CS\Ex\Variant2\SubRow.txt" />
+	</ItemGroup>
+	<ItemGroup>
+	  <Content Update="Libs\Definitions\Map.json">
+	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+	  </Content>
+	  <Content Update="Libs\Definitions\MapMarker.json">
+	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+	  </Content>
+	  <Content Update="Libs\Definitions\MapSymbol.json">
+	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+	  </Content>
+	  <Content Update="Libs\Definitions\PlaceName.json">
+	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+	  </Content>
+	  <Content Update="Libs\Definitions\TerritoryType.json">
+	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+	  </Content>
+	</ItemGroup>
+	<ItemGroup>
+	  <Folder Include="Sheets\" />
+	</ItemGroup>
+	<ItemGroup>
+	  <None Update="Libs\Definitions\game.ver">
+	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+	  </None>
+	  <None Update="Libs\Definitions\Map.json">
+	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+	  </None>
+	  <None Update="Libs\Definitions\MapMarker.json">
+	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+	  </None>
+	  <None Update="Libs\Definitions\MapSymbol.json">
+	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+	  </None>
+	  <None Update="Libs\Definitions\PlaceName.json">
+	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+	  </None>
+	  <None Update="Libs\Definitions\TerritoryType.json">
+	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+	  </None>
+	</ItemGroup>
+
+</Project>

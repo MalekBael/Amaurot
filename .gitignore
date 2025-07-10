@@ -16,6 +16,10 @@
 # Mono auto generated files
 mono_crash.*
 
+notes/
+Libs/SaintCoinach.History.zip
+
+
 # Build results
 [Dd]ebug/
 [Dd]ebugPublic/
