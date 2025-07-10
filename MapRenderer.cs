@@ -6,640 +6,536 @@ using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Shapes;
+using System.Threading.Tasks;
+using System.Windows.Threading;
 using System.IO;
-using SaintCoinach; // Add this for ARealmReversed
-using SaintCoinach.Xiv; // Add this for Map and other game data classes
+// Add these missing using statements
+using SaintCoinach;
+using SaintCoinach.Xiv;
+// Fix the ambiguous Application reference
+using Application = System.Windows.Application;
+// Add back the aliases that were in the original file
 using WpfPoint = System.Windows.Point;
 using WpfSize = System.Windows.Size;
-using WpfImage = System.Windows.Controls.Image;
 using WpfBrushes = System.Windows.Media.Brushes;
-using WpfBrush = System.Windows.Media.Brush;
-using WpfClipboard = System.Windows.Clipboard;
-using WpfRectangle = System.Windows.Shapes.Rectangle;
-using WpfColor = System.Windows.Media.Color;
 
 namespace map_editor
 {
     public class MapRenderer
     {
-        private readonly Canvas _canvas;
-        private readonly WpfImage _mapImage;
         private readonly List<UIElement> _markerElements = new();
-        private readonly Dictionary<string, BitmapImage> _iconCache = new();
         private ARealmReversed? _realm;
+        private Canvas? _overlayCanvas;
+        private Map? _currentMap;
+        private bool _isUpdatingMarkers = false;
+        private DispatcherTimer? _markerUpdateTimer;
+        private List<MapMarker>? _pendingMarkers;
+        private WpfPoint _lastImagePosition;
+        private WpfSize _lastImageSize;
+        private double _lastScale;
 
-        // Add a static shared cache to avoid reloading icons across different maps
-        private static readonly Dictionary<uint, BitmapImage> _globalIconCache = new();
+        private long _lastUpdateTimestamp = 0;
+        private readonly object _updateLock = new object();
 
-        public event EventHandler<MapClickEventArgs>? MapClicked;
-
-        public MapRenderer(Canvas canvas, WpfImage mapImage, ARealmReversed? realm = null)
+        public MapRenderer(ARealmReversed? realm = null)
         {
-            _canvas = canvas;
-            _mapImage = mapImage;
             _realm = realm;
+            _markerUpdateTimer = new DispatcherTimer
+            {
+                Interval = TimeSpan.FromMilliseconds(200)
+            };
+            _markerUpdateTimer.Tick += OnMarkerUpdateTimerTick;
         }
 
-        // Add a method to update the realm reference
+        private void OnMarkerUpdateTimerTick(object? sender, EventArgs e)
+        {
+            if (_markerUpdateTimer != null)
+            {
+                _markerUpdateTimer.Stop();
+            }
+            
+            // Fix null check
+            if (_pendingMarkers != null && _currentMap != null && !_isUpdatingMarkers)
+            {
+                UpdateMarkersInternal(_pendingMarkers, _currentMap, _lastScale, _lastImagePosition, _lastImageSize);
+                _pendingMarkers = null;
+            }
+        }
+
+        public void SetOverlayCanvas(Canvas canvas)
+        {
+            _overlayCanvas = canvas;
+        }
+
         public void UpdateRealm(ARealmReversed realm)
         {
             _realm = realm;
-            // Clear the icon cache when realm changes
-            _iconCache.Clear();
         }
 
-        // Display map markers on the canvas
-        public void DisplayMapMarkers(List<MapMarker> markers, double scale, WpfPoint imagePosition, WpfSize imageSize)
+        public void UpdateMap(Map map)
         {
-            // Clear existing markers
-            ClearMarkers();
+            _currentMap = map;
+        }
 
-            if (markers == null || markers.Count == 0)
+        public void ClearMarkers()
+        {
+            if (_overlayCanvas != null)
             {
-                System.Diagnostics.Debug.WriteLine("No markers to display");
-                return;
+                Application.Current.Dispatcher.InvokeAsync(() =>
+                {
+                    _overlayCanvas.Children.Clear();
+                    _markerElements.Clear();
+                }, DispatcherPriority.Background);
             }
+        }
 
-            System.Diagnostics.Debug.WriteLine($"Processing {markers.Count} markers to display");
-
-            // Process markers in batches for better performance
-            const int batchSize = 10;
-            int totalMarkers = markers.Count;
-            int processedCount = 0;
-            int displayCount = 0;
-
-            // Get visible markers
-            var visibleMarkers = markers.Where(m => m.IsVisible).ToList();
-
-            // Process markers in batches
-            for (int i = 0; i < visibleMarkers.Count; i += batchSize)
+        public void DisplayMapMarkers(List<MapMarker> markers, Map map, double scale,
+                                      WpfPoint imagePosition, WpfSize imageSize)
+        {
+            // Add this line to verify image parameters
+            VerifyImageParameters(imagePosition, imageSize);
+            
+            lock (_updateLock)
             {
-                var batch = visibleMarkers.Skip(i).Take(batchSize);
+                // Store latest values
+                _lastImagePosition = imagePosition;
+                _lastImageSize = imageSize;
+                _lastScale = scale;
+                
+                // Store markers and map
+                _pendingMarkers = new List<MapMarker>(markers);
+                _currentMap = map;
 
-                foreach (var marker in batch)
+                // If we're already updating markers, skip this update request
+                if (_isUpdatingMarkers)
+                {
+                    return;
+                }
+
+                // Throttle updates to no more than 3 per second during panning/zooming
+                long currentTime = Environment.TickCount64;
+                if (currentTime - _lastUpdateTimestamp < 333) // ~3 updates per second max
+                {
+                    // Schedule update via timer instead
+                    if (_markerUpdateTimer != null && !_markerUpdateTimer.IsEnabled)
+                    {
+                        _markerUpdateTimer.Start();
+                    }
+                    return;
+                }
+
+                _lastUpdateTimestamp = currentTime;
+
+                // Process the update
+                Application.Current.Dispatcher.BeginInvoke(() => {
+                    UpdateMarkersInternal(markers, map, scale, imagePosition, imageSize);
+                }, DispatcherPriority.Background);
+            }
+        }
+
+        private void UpdateMarkersInternal(List<MapMarker> markers, Map map, double scale, 
+                                          WpfPoint imagePosition, WpfSize imageSize)
+        {
+            try
+            {
+                _isUpdatingMarkers = true;
+
+                // Only log basic info for performance
+                System.Diagnostics.Debug.WriteLine($"Updating {markers.Count} markers at scale {scale:F2}");
+
+                // Clear markers on UI thread but don't wait
+                Application.Current.Dispatcher.InvokeAsync(() =>
+                {
+                    if (_overlayCanvas != null)
+                    {
+                        _overlayCanvas.Children.Clear();
+                        _markerElements.Clear();
+                    }
+                }, DispatcherPriority.Background);
+
+                if (_overlayCanvas == null || markers == null || !markers.Any())
+                {
+                    return;
+                }
+
+                // Filter to visible markers first for efficiency
+                var visibleMarkers = markers.Where(m => m.IsVisible).ToList();
+                
+                // Prepare a batch of elements to add
+                var elementsToAdd = new List<UIElement>();
+                int displayCount = 0;
+
+                // Create markers but limit the number during extreme zooms
+                int maxMarkers = scale < 0.5 ? Math.Min(visibleMarkers.Count, 50) : visibleMarkers.Count;
+                foreach (var marker in visibleMarkers.Take(maxMarkers))
                 {
                     try
                     {
                         var markerElement = CreateMarkerElement(marker, scale, imagePosition, imageSize);
                         if (markerElement != null)
                         {
-                            _canvas.Children.Add(markerElement);
+                            elementsToAdd.Add(markerElement);
                             _markerElements.Add(markerElement);
                             displayCount++;
                         }
                     }
                     catch (Exception ex)
                     {
-                        System.Diagnostics.Debug.WriteLine($"Error displaying marker {marker.Id}: {ex.Message}");
-                    }
-
-                    processedCount++;
-                }
-
-                // Allow UI to refresh between batches (not needed if already on background thread)
-                // System.Windows.Forms.Application.DoEvents();
-            }
-
-            System.Diagnostics.Debug.WriteLine($"Displayed {displayCount}/{totalMarkers} markers on canvas");
-        }
-
-        // Display map markers on the canvas with map data
-        public void DisplayMapMarkers(List<MapMarker> markers, Map map, double scale, WpfPoint imagePosition, WpfSize imageSize)
-        {
-            // Clear existing markers
-            ClearMarkers();
-
-            if (markers == null || markers.Count == 0)
-            {
-                System.Diagnostics.Debug.WriteLine("No markers to display");
-                return;
-            }
-
-            System.Diagnostics.Debug.WriteLine($"Processing {markers.Count} markers to display");
-
-            // Get visible markers
-            var visibleMarkers = markers.Where(m => m.IsVisible).ToList();
-            int displayCount = 0;
-
-            // Process all markers
-            foreach (var marker in visibleMarkers)
-            {
-                try
-                {
-                    var markerElement = CreateMarkerElement(marker, scale, imagePosition, imageSize, map);
-                    if (markerElement != null)
-                    {
-                        _canvas.Children.Add(markerElement);
-                        _markerElements.Add(markerElement);
-                        displayCount++;
+                        System.Diagnostics.Debug.WriteLine($"Error with marker {marker.Id}: {ex.Message}");
                     }
                 }
-                catch (Exception ex)
+
+                // Add all elements in a single UI batch
+                Application.Current.Dispatcher.InvokeAsync(() =>
                 {
-                    System.Diagnostics.Debug.WriteLine($"Error displaying marker {marker.Id}: {ex.Message}");
-                }
-            }
-
-            System.Diagnostics.Debug.WriteLine($"Displayed {displayCount}/{markers.Count} markers on canvas");
-        }
-
-        // Create a visual element for a map marker
-        private UIElement? CreateMarkerElement(MapMarker marker, double scale, WpfPoint imagePosition, WpfSize imageSize)
-        {
-            // Assume marker.X/Y are in 0-100 map units, scale to image size
-            double canvasX = imagePosition.X + (marker.X / 100.0 * imageSize.Width * scale);
-            double canvasY = imagePosition.Y + (marker.Y / 100.0 * imageSize.Height * scale);
-
-            System.Diagnostics.Debug.WriteLine($"Creating marker: ID={marker.Id}, Type={marker.Type}, X={marker.X}, Y={marker.Y}, IconPath={marker.IconPath}");
-            System.Diagnostics.Debug.WriteLine($"  Mapped to canvas: X={canvasX}, Y={canvasY}");
-
-            // Try to load icon from game data if available
-            UIElement markerElement;
-            if (_realm != null && !string.IsNullOrEmpty(marker.IconPath))
-            {
-                markerElement = TryLoadIconFromGameData(marker.IconPath, marker.IconId) ??
-                                CreateFallbackMarker(marker.Type, marker.IconId);
-            }
-            else
-            {
-                markerElement = CreateFallbackMarker(marker.Type, marker.IconId);
-            }
-
-            // Set position and tooltip
-            Canvas.SetLeft(markerElement, canvasX - 12); // Center the marker (icon size is 24x24)
-            Canvas.SetTop(markerElement, canvasY - 12);
-            Canvas.SetZIndex(markerElement, 100);
-
-            if (markerElement is FrameworkElement fe)
-            {
-                fe.ToolTip = $"{marker.PlaceName}\nID: {marker.Id}\nIcon: {marker.IconId}\nX: {marker.X:F1}, Y: {marker.Y:F1}";
-                fe.MouseLeftButtonDown += (s, e) =>
-                {
-                    OnMarkerClicked(marker, new WpfPoint(canvasX, canvasY));
-                    e.Handled = true;
-                };
-            }
-
-            return markerElement;
-        }
-
-        // Create a visual element for a map marker with map data
-        private UIElement? CreateMarkerElement(MapMarker marker, double scale, WpfPoint imagePosition, WpfSize imageSize, Map map)
-        {
-            double pixelX = marker.X * map.SizeFactor / 100.0;
-            double pixelY = marker.Y * map.SizeFactor / 100.0;
-            double canvasX = imagePosition.X + (pixelX * scale);
-            double canvasY = imagePosition.Y + (pixelY * scale);
-
-            UIElement markerElement;
-            if (_realm != null && !string.IsNullOrEmpty(marker.IconPath))
-            {
-                markerElement = TryLoadIconFromGameData(marker.IconPath, marker.IconId) ??
-                                CreateFallbackMarker(marker.Type, marker.IconId);
-            }
-            else
-            {
-                markerElement = CreateFallbackMarker(marker.Type, marker.IconId);
-            }
-
-            Canvas.SetLeft(markerElement, canvasX - 12);
-            Canvas.SetTop(markerElement, canvasY - 12);
-            Canvas.SetZIndex(markerElement, 100);
-
-            if (markerElement is FrameworkElement fe)
-            {
-                fe.ToolTip = $"{marker.PlaceName}\nID: {marker.Id}\nIcon: {marker.IconId}\nX: {marker.X:F1}, Y: {marker.Y:F1}";
-                fe.MouseLeftButtonDown += (s, e) =>
-                {
-                    OnMarkerClicked(marker, new WpfPoint(canvasX, canvasY));
-                    e.Handled = true;
-                };
-            }
-
-            return markerElement;
-        }
-
-        // Try to load icon from game data
-        private UIElement? TryLoadIconFromGameData(string iconPath, uint iconId)
-        {
-            try
-            {
-                // Check global cache first for the iconId
-                if (_globalIconCache.TryGetValue(iconId, out var cachedIcon))
-                {
-                    System.Diagnostics.Debug.WriteLine($"Using globally cached icon for {iconId}");
-                    return CreateImageElement(cachedIcon);
-                }
-                
-                // Then check the local path cache
-                if (_iconCache.TryGetValue(iconPath, out var cachedImage))
-                {
-                    System.Diagnostics.Debug.WriteLine($"Using cached icon for {iconPath}");
-                    return CreateImageElement(cachedImage);
-                }
-
-                if (_realm == null)
-                {
-                    System.Diagnostics.Debug.WriteLine("Realm is null, can't load icons");
-                    return null;
-                }
-
-                // Use the path format we know works based on diagnostics
-                string correctPath = $"ui/icon/{iconId / 1000 * 1000:D6}/{iconId:D6}.tex";
-                System.Diagnostics.Debug.WriteLine($"Trying to load icon from path: {correctPath}");
-
-                if (_realm.Packs.FileExists(correctPath))
-                {
-                    System.Diagnostics.Debug.WriteLine($"Found icon file at: {correctPath}");
-                    var file = _realm.Packs.GetFile(correctPath);
-
-                    // Try to get image via GetImage method (which we know exists from the diagnostics)
-                    var imageMethod = file.GetType().GetMethod("GetImage");
-                    if (imageMethod != null)
+                    if (_overlayCanvas != null)
                     {
-                        var gameImage = imageMethod.Invoke(file, null) as System.Drawing.Image;
-                        if (gameImage != null)
+                        foreach (var element in elementsToAdd)
                         {
-                            System.Diagnostics.Debug.WriteLine($"Successfully loaded icon from {correctPath} using GetImage method");
-                            return ConvertToImageElementAndCache(gameImage, correctPath, iconId);
+                            _overlayCanvas.Children.Add(element);
                         }
                     }
-                }
-
-                System.Diagnostics.Debug.WriteLine($"Failed to load icon with ID {iconId}");
-                return null;
+                    System.Diagnostics.Debug.WriteLine($"Added {displayCount} markers to overlay");
+                }, DispatcherPriority.Background);
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"Error loading icon {iconPath}: {ex.Message}");
-                System.Diagnostics.Debug.WriteLine($"Stack trace: {ex.StackTrace}");
-                return null;
+                System.Diagnostics.Debug.WriteLine($"Error updating markers: {ex.Message}");
+            }
+            finally
+            {
+                _isUpdatingMarkers = false;
             }
         }
 
-        // New method to both convert and cache icons
-        private UIElement ConvertToImageElementAndCache(System.Drawing.Image gameImage, string path, uint iconId)
+        private UIElement? CreateMarkerElement(MapMarker marker, double displayScale,
+         WpfPoint imagePosition, WpfSize imageSize)
         {
             try
             {
-                using (var memStream = new MemoryStream())
+                // Get map-specific scale values and offsets from FFXIV data
+                float sizeFactor = 200.0f;
+                float offsetX = 0;
+                float offsetY = 0;
+
+                if (_currentMap != null)
                 {
-                    gameImage.Save(memStream, System.Drawing.Imaging.ImageFormat.Png);
-                    memStream.Position = 0;
-
-                    var bitmapImage = new BitmapImage();
-                    bitmapImage.BeginInit();
-                    bitmapImage.CacheOption = BitmapCacheOption.OnLoad;
-                    bitmapImage.StreamSource = memStream;
-                    bitmapImage.EndInit();
-                    bitmapImage.Freeze(); // Make it thread-safe
-
-                    // Cache by both path and ID
-                    _iconCache[path] = bitmapImage;
-                    _globalIconCache[iconId] = bitmapImage;
-
-                    return CreateImageElement(bitmapImage);
+                    try
+                    {
+                        var type = _currentMap.GetType();
+                        var indexer = type.GetProperty("Item", new[] { typeof(string) });
+                        
+                        if (indexer != null)
+                        {
+                            sizeFactor = (float)Convert.ChangeType(indexer.GetValue(_currentMap, new object[] { "SizeFactor" }), typeof(float));
+                            offsetX = (float)Convert.ChangeType(indexer.GetValue(_currentMap, new object[] { "OffsetX" }), typeof(float));
+                            offsetY = (float)Convert.ChangeType(indexer.GetValue(_currentMap, new object[] { "OffsetY" }), typeof(float));
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"Property access error: {ex.Message}");
+                    }
                 }
+
+                // Corrected Coordinate Calculation
+                // 1. Normalize raw coordinates to a 0-1 range based on the map's texture size (2048).
+                double normalizedX = (marker.X + offsetX) / 2048.0;
+                double normalizedY = (marker.Y + offsetY) / 2048.0;
+
+                // 2. Scale normalized coordinates to the image's dimensions.
+                double pixelX = normalizedX * imageSize.Width;
+                double pixelY = normalizedY * imageSize.Height;
+
+                // 3. Add the image's position on the canvas to get the final coordinates.
+                double canvasX = imagePosition.X + pixelX;
+                double canvasY = imagePosition.Y + pixelY;
+
+                // Also, calculate game coordinates for the tooltip using the correct formula.
+                double c = sizeFactor / 100.0;
+                double gameX = (41.0 / c) * (normalizedX) + 1.0;
+                double gameY = (41.0 / c) * (normalizedY) + 1.0;
+
+                System.Diagnostics.Debug.WriteLine(
+                    $"Marker {marker.Id}: Raw({marker.X},{marker.Y}), " +
+                    $"Game({gameX:F2},{gameY:F2}), " +
+                    $"Norm({normalizedX:F3},{normalizedY:F3}), " +
+                    $"Canvas({canvasX:F1},{canvasY:F1})");
+        
+                // Create visible marker
+                double markerSize = Math.Max(20, 30 * displayScale);
+        
+                var markerElement = new Ellipse
+                {
+                    Width = markerSize,
+                    Height = markerSize,
+                    Fill = WpfBrushes.Red,
+                    Stroke = WpfBrushes.Yellow, 
+                    StrokeThickness = 2,
+                    Tag = marker,
+                    Opacity = 0.9
+                };
+        
+                // Position centered on coordinates
+                Canvas.SetLeft(markerElement, canvasX - (markerSize / 2));
+                Canvas.SetTop(markerElement, canvasY - (markerSize / 2));
+                Canvas.SetZIndex(markerElement, 3000);
+        
+                // Add tooltip with game coordinates
+                if (markerElement is FrameworkElement fe)
+                {
+                    fe.ToolTip = $"{marker.PlaceName}\nID: {marker.Id}\nIcon: {marker.IconId}\nX: {gameX:F1}, Y: {gameY:F1}";
+                }
+        
+                return markerElement;
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"Error converting image: {ex.Message}");
+                System.Diagnostics.Debug.WriteLine($"Error creating marker {marker.Id}: {ex.Message}");
                 return null;
             }
         }
 
-        // Helper method to convert System.Drawing.Image to WPF image element
-        private UIElement ConvertToImageElement(System.Drawing.Image gameImage, string path)
+        // Fix SafeGetProperty to handle nullable objects
+        private T SafeGetProperty<T>(object? obj, string propertyName, T defaultValue = default)
         {
+            if (obj == null) return defaultValue;
+            
             try
             {
-                using (var memStream = new MemoryStream())
+                // First try using reflection to get the property value directly
+                var property = obj.GetType().GetProperty(propertyName);
+                if (property != null)
                 {
-                    gameImage.Save(memStream, System.Drawing.Imaging.ImageFormat.Png);
-                    memStream.Position = 0;
-
-                    var bitmapImage = new BitmapImage();
-                    bitmapImage.BeginInit();
-                    bitmapImage.CacheOption = BitmapCacheOption.OnLoad;
-                    bitmapImage.StreamSource = memStream;
-                    bitmapImage.EndInit();
-                    bitmapImage.Freeze(); // Make it thread-safe
-
-                    // Cache the image
-                    _iconCache[path] = bitmapImage;
-
-                    return CreateImageElement(bitmapImage);
+                    var value = property.GetValue(obj);
+                    if (value != null)
+                    {
+                        return (T)Convert.ChangeType(value, typeof(T));
+                    }
+                }
+                
+                // If that fails, try using the indexer (for dictionary-like objects)
+                var indexerMethod = obj.GetType().GetMethod("get_Item", new[] { typeof(string) });
+                if (indexerMethod != null)
+                {
+                    var value = indexerMethod.Invoke(obj, new object[] { propertyName });
+                    if (value != null)
+                    {
+                        return (T)Convert.ChangeType(value, typeof(T));
+                    }
                 }
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"Error converting image: {ex.Message}");
-                return null;
+                System.Diagnostics.Debug.WriteLine($"Error getting property {propertyName}: {ex.Message}");
             }
+            
+            return defaultValue;
         }
 
-        private UIElement CreateImageElement(BitmapImage image)
+        public void ShowCoordinateInfo(MapCoordinate coordinates, WpfPoint clickPoint)
         {
-            return new WpfImage
+            // Display the coordinates in a textblock
+            var textBlock = new TextBlock
             {
-                Source = image,
-                Width = 24,
-                Height = 24,
-                Cursor = System.Windows.Input.Cursors.Hand,
-                RenderTransformOrigin = new WpfPoint(0.5, 0.5) // Use WpfPoint to avoid ambiguity
-            };
-        }
-
-        // Create fallback marker visuals based on type
-        private UIElement CreateFallbackMarker(MarkerType markerType, uint iconId)
-        {
-            return markerType switch
-            {
-                MarkerType.Aetheryte => CreateAetheryteMarker(),
-                MarkerType.Quest => CreateQuestMarker(),
-                MarkerType.Shop => CreateShopMarker(),
-                MarkerType.Landmark => CreateLandmarkMarker(),
-                MarkerType.Entrance => CreateEntranceMarker(),
-                MarkerType.Custom => CreateCustomMarker(),
-                MarkerType.Symbol => CreateSymbolMarker(iconId),
-                _ => CreateGenericMarker(iconId)
-            };
-        }
-
-        // Create a specific marker for symbols
-        private UIElement CreateSymbolMarker(uint iconId)
-        {
-            return new Ellipse
-            {
-                Width = 14,
-                Height = 14,
-                Fill = new SolidColorBrush(WpfColor.FromRgb(255, 215, 0)), // Use WpfColor to avoid ambiguity
-                Stroke = WpfBrushes.DarkGoldenrod,
-                StrokeThickness = 2,
-                Cursor = System.Windows.Input.Cursors.Hand
-            };
-        }
-
-        // Create different marker types
-        private UIElement CreateGenericMarker(uint iconId)
-        {
-            // Use different colors based on icon ID ranges for better visibility
-            WpfBrush fill;
-            WpfBrush stroke;
-
-            if (iconId < 10)
-            {
-                fill = WpfBrushes.Red;
-                stroke = WpfBrushes.White;
-            }
-            else if (iconId < 100)
-            {
-                fill = WpfBrushes.Orange;
-                stroke = WpfBrushes.White;
-            }
-            else if (iconId < 1000)
-            {
-                fill = WpfBrushes.Yellow;
-                stroke = WpfBrushes.Black;
-            }
-            else
-            {
-                fill = WpfBrushes.Cyan;
-                stroke = WpfBrushes.Black;
-            }
-
-            return new Ellipse
-            {
-                Width = 12,
-                Height = 12,
-                Fill = fill,
-                Stroke = stroke,
-                StrokeThickness = 1,
-                Cursor = System.Windows.Input.Cursors.Hand
-            };
-        }
-
-        private UIElement CreateAetheryteMarker()
-        {
-            return new Ellipse
-            {
-                Width = 16,
-                Height = 16,
-                Fill = WpfBrushes.Blue,
-                Stroke = WpfBrushes.LightBlue,
-                StrokeThickness = 2,
-                Cursor = System.Windows.Input.Cursors.Hand
-            };
-        }
-
-        private UIElement CreateQuestMarker()
-        {
-            var polygon = new Polygon
-            {
-                Points = new PointCollection { new WpfPoint(6, 0), new WpfPoint(12, 12), new WpfPoint(0, 12) },
-                Fill = WpfBrushes.Gold,
-                Stroke = WpfBrushes.Orange,
-                StrokeThickness = 1,
-                Cursor = System.Windows.Input.Cursors.Hand
-            };
-            return polygon;
-        }
-
-        private UIElement CreateShopMarker()
-        {
-            return new WpfRectangle
-            {
-                Width = 12,
-                Height = 12,
-                Fill = WpfBrushes.Green,
-                Stroke = WpfBrushes.DarkGreen,
-                StrokeThickness = 1,
-                Cursor = System.Windows.Input.Cursors.Hand
-            };
-        }
-
-        private UIElement CreateLandmarkMarker()
-        {
-            return new Ellipse
-            {
-                Width = 14,
-                Height = 14,
-                Fill = WpfBrushes.Purple,
-                Stroke = WpfBrushes.MediumPurple,
-                StrokeThickness = 2,
-                Cursor = System.Windows.Input.Cursors.Hand
-            };
-        }
-
-        private UIElement CreateEntranceMarker()
-        {
-            var polygon = new Polygon
-            {
-                Points = new PointCollection {
-                    new WpfPoint(0, 12),
-                    new WpfPoint(6, 0),
-                    new WpfPoint(12, 12),
-                    new WpfPoint(6, 8)
-                },
-                Fill = WpfBrushes.DarkBlue,
-                Stroke = WpfBrushes.LightBlue,
-                StrokeThickness = 1,
-                Cursor = System.Windows.Input.Cursors.Hand
-            };
-            return polygon;
-        }
-
-        private UIElement CreateCustomMarker()
-        {
-            var ellipse = new Ellipse
-            {
-                Width = 10,
-                Height = 10,
-                Fill = WpfBrushes.Magenta,
-                Stroke = WpfBrushes.White,
-                StrokeThickness = 2,
-                Cursor = System.Windows.Input.Cursors.Hand
-            };
-            return ellipse;
-        }
-
-        // Clear all markers from canvas
-        public void ClearMarkers()
-        {
-            foreach (var element in _markerElements)
-            {
-                _canvas.Children.Remove(element);
-            }
-            _markerElements.Clear();
-        }
-
-        // Handle marker click events
-        private void OnMarkerClicked(MapMarker marker, WpfPoint position)
-        {
-            System.Diagnostics.Debug.WriteLine($"Marker clicked: {marker.PlaceName} at {position}");
-
-            // Show more detailed information
-            var contextMenu = new ContextMenu();
-
-            var idMenuItem = new MenuItem
-            {
-                Header = $"Marker ID: {marker.Id}",
-                IsEnabled = false,
+                Text = $"X: {coordinates.MapX:F1}, Y: {coordinates.MapY:F1}",
+                Background = new SolidColorBrush(System.Windows.Media.Color.FromArgb(200, 255, 255, 255)),
+                Padding = new Thickness(5),
                 FontWeight = FontWeights.Bold
             };
-            contextMenu.Items.Add(idMenuItem);
 
-            var nameMenuItem = new MenuItem
+            if (_overlayCanvas != null)
             {
-                Header = $"Name: {marker.PlaceName}",
-                IsEnabled = false
-            };
-            contextMenu.Items.Add(nameMenuItem);
+                Canvas.SetLeft(textBlock, clickPoint.X + 10);
+                Canvas.SetTop(textBlock, clickPoint.Y - 30);
+                Canvas.SetZIndex(textBlock, 1000);
 
-            var iconMenuItem = new MenuItem
-            {
-                Header = $"Icon: {marker.IconId}",
-                IsEnabled = false
-            };
-            contextMenu.Items.Add(iconMenuItem);
+                _overlayCanvas.Children.Add(textBlock);
 
-            var coordsMenuItem = new MenuItem
-            {
-                Header = $"Position: X={marker.X:F1}, Y={marker.Y:F1}",
-                IsEnabled = false
-            };
-            contextMenu.Items.Add(coordsMenuItem);
+                // Remove the coordinate display after 3 seconds
+                var timer = new System.Windows.Threading.DispatcherTimer
+                {
+                    Interval = TimeSpan.FromSeconds(3)
+                };
 
-            // Add the context menu to the clicked element and open it
-            if (_canvas.ContextMenu != null)
+                timer.Tick += (s, e) =>
+                {
+                    _overlayCanvas.Children.Remove(textBlock);
+                    timer.Stop();
+                };
+
+                timer.Start();
+            }
+        }
+
+        // Add this new method to MapRenderer.cs
+        public void AddCoordinateGrid()
+        {
+            if (_overlayCanvas == null) return;
+
+            // Add a reference grid to help with debugging
+            for (int x = 0; x <= 40; x += 10)
             {
-                _canvas.ContextMenu = null;
+                for (int y = 0; y <= 40; y += 10)
+                {
+                    // Create a small point marker at each 10-unit interval
+                    var gridMarker = new Ellipse
+                    {
+                        Width = 5,
+                        Height = 5,
+                        Fill = WpfBrushes.Blue,
+                        Opacity = 0.5
+                    };
+
+                    double pixelX = (x / 41.0) * _overlayCanvas.ActualWidth;
+                    double pixelY = (y / 41.0) * _overlayCanvas.ActualHeight;
+
+                    Canvas.SetLeft(gridMarker, pixelX - 2.5);
+                    Canvas.SetTop(gridMarker, pixelY - 2.5);
+
+                    _overlayCanvas.Children.Add(gridMarker);
+
+                    // Add coordinate label
+                    var label = new TextBlock
+                    {
+                        Text = $"{x},{y}",
+                        FontSize = 10,
+                        Foreground = WpfBrushes.Blue,
+                        Background = new SolidColorBrush(Colors.White) { Opacity = 0.7 }
+                    };
+
+                    Canvas.SetLeft(label, pixelX + 3);
+                    Canvas.SetTop(label, pixelY + 3);
+                    Canvas.SetZIndex(label, 100);
+
+                    _overlayCanvas.Children.Add(label);
+                }
             }
 
-            _canvas.ContextMenu = contextMenu;
-            _canvas.ContextMenu.IsOpen = true;
+            System.Diagnostics.Debug.WriteLine("Added coordinate grid to overlay");
         }
 
-        // Show coordinate information
-        public void ShowCoordinateInfo(MapCoordinate coordinate, WpfPoint canvasPosition)
+        // Add this method to MapRenderer
+        public void AddDebugGridAndBorders()
         {
-            var contextMenu = new ContextMenu();
+            if (_overlayCanvas == null) return;
 
-            var coordMenuItem = new MenuItem
-            {
-                Header = "Coordinates",
-                IsEnabled = false
-            };
-            contextMenu.Items.Add(coordMenuItem);
+            // Clear existing elements
+            var debugElements = _overlayCanvas.Children.OfType<UIElement>()
+                .Where(e => e is Line || e is TextBlock)
+                .ToList();
 
-            var mapCoordMenuItem = new MenuItem
+            foreach (var element in debugElements)
             {
-                Header = $"Map: {coordinate.MapX:F1}, {coordinate.MapY:F1}",
-                IsEnabled = false
-            };
-            contextMenu.Items.Add(mapCoordMenuItem);
+                _overlayCanvas.Children.Remove(element);
+            }
 
-            var clientCoordMenuItem = new MenuItem
+            // Add border around the canvas
+            var border = new System.Windows.Shapes.Rectangle
             {
-                Header = $"Client: {coordinate.ClientX:F1}, {coordinate.ClientY:F1}",
-                IsEnabled = false
+                Width = _overlayCanvas.ActualWidth,
+                Height = _overlayCanvas.ActualHeight,
+                Stroke = WpfBrushes.Lime,
+                StrokeThickness = 4,
+                StrokeDashArray = new DoubleCollection { 4, 4 }
             };
-            contextMenu.Items.Add(clientCoordMenuItem);
 
-            contextMenu.Items.Add(new Separator());
+            Canvas.SetLeft(border, 0);
+            Canvas.SetTop(border, 0);
+            Canvas.SetZIndex(border, 500);
+            _overlayCanvas.Children.Add(border);
 
-            var copyMenuItem = new MenuItem
-            {
-                Header = "Copy Coordinates"
-            };
-            copyMenuItem.Click += (s, args) =>
-            {
-                var coordText = $"Map: {coordinate.MapX:F1}, {coordinate.MapY:F1} | Client: {coordinate.ClientX:F1}, {coordinate.ClientY:F1}";
-                WpfClipboard.SetText(coordText);
-            };
-            contextMenu.Items.Add(copyMenuItem);
+            // Add a cross at the center of the canvas
+            double centerX = _overlayCanvas.ActualWidth / 2;
+            double centerY = _overlayCanvas.ActualHeight / 2;
 
-            // Add custom marker option
-            var addMarkerMenuItem = new MenuItem
+            var hLine = new Line
             {
-                Header = "Add Custom Marker"
+                X1 = centerX - 50,
+                Y1 = centerY,
+                X2 = centerX + 50,
+                Y2 = centerY,
+                Stroke = WpfBrushes.Magenta,
+                StrokeThickness = 3
             };
-            addMarkerMenuItem.Click += (s, args) =>
-            {
-                OnAddCustomMarker(coordinate, canvasPosition);
-            };
-            contextMenu.Items.Add(addMarkerMenuItem);
 
-            _canvas.ContextMenu = contextMenu;
+            var vLine = new Line
+            {
+                X1 = centerX,
+                Y1 = centerY - 50,
+                X2 = centerX,
+                Y2 = centerY + 50,
+                Stroke = WpfBrushes.Magenta,
+                StrokeThickness = 3
+            };
+
+            Canvas.SetZIndex(hLine, 500);
+            Canvas.SetZIndex(vLine, 500);
+            _overlayCanvas.Children.Add(hLine);
+            _overlayCanvas.Children.Add(vLine);
+
+            // Add text label at center
+            var centerLabel = new TextBlock
+            {
+                Text = "CENTER",
+                Foreground = WpfBrushes.Magenta,
+                FontWeight = FontWeights.Bold,
+                Background = new SolidColorBrush(System.Windows.Media.Color.FromArgb(128, 0, 0, 0))
+            };
+
+            Canvas.SetLeft(centerLabel, centerX + 5);
+            Canvas.SetTop(centerLabel, centerY + 5);
+            Canvas.SetZIndex(centerLabel, 500);
+            _overlayCanvas.Children.Add(centerLabel);
+
+            System.Diagnostics.Debug.WriteLine("Added debug grid and borders to overlay");
         }
 
-        // Handle adding custom markers
-        private void OnAddCustomMarker(MapCoordinate coordinate, WpfPoint canvasPosition)
+        public void VerifyImageParameters(WpfPoint imagePosition, WpfSize imageSize)
         {
-            // Use a default icon ID for custom markers
-            uint defaultIconId = 60453; // Using a known working icon ID
-
-            var customMarker = new MapMarker
+            System.Diagnostics.Debug.WriteLine("=== MAP IMAGE PARAMETERS ===");
+            System.Diagnostics.Debug.WriteLine($"Image Position: ({imagePosition.X:F1}, {imagePosition.Y:F1})");
+            System.Diagnostics.Debug.WriteLine($"Image Size: {imageSize.Width:F1}x{imageSize.Height:F1}");
+            
+            if (_overlayCanvas != null)
             {
-                Id = (uint)DateTime.Now.Ticks, // Simple ID generation
-                X = coordinate.MapX,
-                Y = coordinate.MapY,
-                Z = coordinate.ClientZ,
-                PlaceName = "Custom Marker",
-                Type = MarkerType.Custom,
-                IsVisible = true,
-                IconId = defaultIconId,
-                IconPath = $"ui/icon/{defaultIconId / 1000 * 1000:D6}/{defaultIconId:D6}.tex"
-            };
-
-            System.Diagnostics.Debug.WriteLine($"Would add custom marker at {coordinate.MapX:F1}, {coordinate.MapY:F1}");
-            // You can fire an event here to notify the main window to add this marker
+                System.Diagnostics.Debug.WriteLine($"Canvas Size: {_overlayCanvas.ActualWidth:F1}x{_overlayCanvas.ActualHeight:F1}");
+            }
+            
+            // Add visual indicator at image corners to verify position
+            if (_overlayCanvas != null)
+            {
+                // Top-left corner
+                AddCornerMarker(imagePosition.X, imagePosition.Y, WpfBrushes.Green);
+                
+                // Top-right corner
+                AddCornerMarker(imagePosition.X + imageSize.Width, imagePosition.Y, WpfBrushes.Blue);
+                
+                // Bottom-left corner
+                AddCornerMarker(imagePosition.X, imagePosition.Y + imageSize.Height, WpfBrushes.Yellow);
+                
+                // Bottom-right corner
+                AddCornerMarker(imagePosition.X + imageSize.Width, imagePosition.Y + imageSize.Height, WpfBrushes.Red);
+            }
         }
 
-        // Fire map click event
-        public void OnMapClicked(MapClickEventArgs args)
+        private void AddCornerMarker(double x, double y, System.Windows.Media.Brush color)
         {
-            MapClicked?.Invoke(this, args);
+            var marker = new Ellipse
+            {
+                     
+                Width = 10,                     
+                Height = 10,
+                Fill = color,
+                Stroke = WpfBrushes.White,
+                StrokeThickness = 2
+            };
+            
+            Canvas.SetLeft(marker, x - 5);
+            Canvas.SetTop(marker, y - 5);
+            Canvas.SetZIndex(marker, 5000);
+            
+            _overlayCanvas?.Children.Add(marker);
         }
     }
 }

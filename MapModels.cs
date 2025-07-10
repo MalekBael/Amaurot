@@ -1,8 +1,7 @@
-﻿using System.Collections.Generic;
+﻿using System;
 
 namespace map_editor
 {
-    // Map marker data structure
     public class MapMarker
     {
         public uint Id { get; set; }
@@ -18,7 +17,6 @@ namespace map_editor
         public MarkerType Type { get; set; } = MarkerType.Generic;
     }
 
-    // Coordinate conversion data structure
     public class MapCoordinate
     {
         public double MapX { get; set; }
@@ -28,21 +26,6 @@ namespace map_editor
         public double ClientZ { get; set; }
     }
 
-    // Map information extended from the CSV data
-    public class MapInfo
-    {
-        public uint Id { get; set; }
-        public string Name { get; set; } = string.Empty;
-        public uint TerritoryType { get; set; }
-        public double SizeFactor { get; set; }
-        public double OffsetX { get; set; }
-        public double OffsetY { get; set; }
-        public uint PlaceNameId { get; set; }
-        public string PlaceName { get; set; } = string.Empty;
-        public List<MapMarker> Markers { get; set; } = new();
-    }
-
-    // Types of map markers
     public enum MarkerType
     {
         Generic,
@@ -51,15 +34,20 @@ namespace map_editor
         Shop,
         Landmark,
         Entrance,
-        Custom,
-        Symbol // Add this new value for map symbols
+        Symbol,
+        Custom
     }
 
-    // Click event data
-    public class MapClickEventArgs
+    public class MapInfo
     {
-        public MapCoordinate Coordinate { get; set; } = new();
-        public System.Windows.Point CanvasPosition { get; set; }
-        public System.Windows.Input.MouseButtonEventArgs OriginalEventArgs { get; set; } = null!;
+        public uint Id { get; set; }
+        public string Name { get; set; } = string.Empty;
+        public string PlaceName { get; set; } = string.Empty;
+        public uint PlaceNameId { get; set; }
+        public uint TerritoryType { get; set; }
+        public float SizeFactor { get; set; }
+        public float OffsetX { get; set; }
+        public float OffsetY { get; set; }
+        public List<MapMarker> Markers { get; set; } = new List<MapMarker>();
     }
 }

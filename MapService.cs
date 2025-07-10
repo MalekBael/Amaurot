@@ -1108,7 +1108,7 @@ public MapCoordinate ConvertMapToGameCoordinates(
         }
 
         // Add this method to MapService.cs to help diagnose canvas alignment issues
-        public void DiagnoseCanvasAlignment(WpfSize mapCanvasSize, WpfSize overlayCanvasSize, 
+        public void DiagnoseCanvasAlignment(WpfSize mapCanvasSize, WpfSize overlayCanvasSize,
                                            WpfPoint mapPosition, WpfPoint overlayPosition,
                                            double mapScale, double overlayScale)
         {
@@ -1117,13 +1117,13 @@ public MapCoordinate ConvertMapToGameCoordinates(
                             $"Position=({mapPosition.X},{mapPosition.Y}), Scale={mapScale}");
             Debug.WriteLine($"Overlay Canvas: Size={overlayCanvasSize.Width}x{overlayCanvasSize.Height}, " +
                             $"Position=({overlayPosition.X},{overlayPosition.Y}), Scale={overlayScale}");
-            
-            bool sizeMismatch = Math.Abs(mapCanvasSize.Width - overlayCanvasSize.Width) > 0.01 || 
+
+            bool sizeMismatch = Math.Abs(mapCanvasSize.Width - overlayCanvasSize.Width) > 0.01 ||
                                 Math.Abs(mapCanvasSize.Height - overlayCanvasSize.Height) > 0.01;
-            bool positionMismatch = Math.Abs(mapPosition.X - overlayPosition.X) > 0.01 || 
+            bool positionMismatch = Math.Abs(mapPosition.X - overlayPosition.X) > 0.01 ||
                                Math.Abs(mapPosition.Y - overlayPosition.Y) > 0.01;
             bool scaleMismatch = Math.Abs(mapScale - overlayScale) > 0.01;
-            
+
             if (sizeMismatch || positionMismatch || scaleMismatch)
             {
                 Debug.WriteLine("MISALIGNMENT DETECTED:");
@@ -1138,6 +1138,10 @@ public MapCoordinate ConvertMapToGameCoordinates(
             {
                 Debug.WriteLine("Canvas alignment appears correct");
             }
+
+            // Add this line to check the actual transforms
+            Debug.WriteLine($"MapImageControl transform: Scale={mapScale:F2}, Position=({mapPosition.X:F1},{mapPosition.Y:F1})");
+            Debug.WriteLine($"OverlayCanvas transform: Scale={overlayScale:F2}, Position=({overlayPosition.X:F1},{overlayPosition.Y:F1})");
         }
     }
 }

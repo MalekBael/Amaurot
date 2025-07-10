@@ -1,23 +1,27 @@
-﻿using System;
-using System.IO;
-using System.Linq;
-using System.Windows;
-using System.Windows.Controls;
-using System.Collections.ObjectModel;
-using WinForms = System.Windows.Forms;
-using WpfSaveFileDialog = Microsoft.Win32.SaveFileDialog;
-using WpfMessageBox = System.Windows.MessageBox;
-using SaintCoinach;
+﻿using SaintCoinach;
 using SaintCoinach.Ex;
 using SaintCoinach.Xiv;
+using SaintCoinach.Xiv.Items;
+using System;
+using System.Collections.Generic;
+using System.Collections.ObjectModel;
+using System.IO;
+using System.Linq;
 using System.Reflection;
-using System.Drawing;
-using System.Windows.Input; // Add this for MouseWheelEventArgs
-using System.Windows.Media; // Add this for ScaleTransform
+using System.Threading.Tasks; // Add this for Task.Run
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Input;
+using System.Windows.Media;
+using System.Windows.Media.Imaging;
+using WinForms = System.Windows.Forms;
+using WpfMessageBox = System.Windows.MessageBox;
+using WpfSaveFileDialog = Microsoft.Win32.SaveFileDialog;
 
-using Lumina;
-using Lumina.Excel;
-using Lumina.Excel.GeneratedSheets;
+using WpfPanel = System.Windows.Controls.Panel;
+using WpfColor = System.Windows.Media.Color;
+using System.Drawing.Imaging;
+using Bitmap = System.Drawing.Bitmap;
 
 namespace map_editor
 {
@@ -26,64 +30,47 @@ namespace map_editor
     /// </summary>
     public partial class MainWindow : Window
     {
+        // Update class fields
         private ARealmReversed? _realm;
-        public ObservableCollection<TerritoryInfo> Territories { get; set; } = new();
-        
-        // Add these new fields for map functionality
         private MapService? _mapService;
         private MapRenderer? _mapRenderer;
         private SaintCoinach.Xiv.Map? _currentMap;
         private TerritoryInfo? _currentTerritory;
         private List<MapMarker> _currentMapMarkers = new();
-
         private double _currentScale = 1.0;
-        private const double _zoomIncrement = 0.1;
-        private const double _minZoom = 0.5;
-        private const double _maxZoom = 5.0;
-
         private System.Windows.Point _lastMousePosition;
         private bool _isDragging = false;
 
-        // Maximum number of lines to keep in the log
-        private const int MaxLogLines = 1000;
+        public ObservableCollection<TerritoryInfo> Territories { get; set; } = new ObservableCollection<TerritoryInfo>();
+        private Canvas? OverlayCanvas;
 
-        private Canvas OverlayCanvas;
+        private const int MaxLogLines = 1000; // Maximum number of log lines to keep
 
         public MainWindow()
         {
             InitializeComponent();
             DataContext = this;
 
-            // Don't create OverlayCanvas here - initialize it in Loaded event instead
-            
-            // Subscribe to the canvas size changed event to recalculate scale if needed
-            MapCanvas.SizeChanged += MapCanvas_SizeChanged;
-
-            // Subscribe to the Loaded event to ensure initial scaling works
-            this.Loaded += MainWindow_Loaded;
-
-            // Initialize map renderer with realm (will be null initially)
-            _mapRenderer = new MapRenderer(MapCanvas, MapImageControl, _realm);
+            // Fix constructor to use the XAML elements correctly
+            _mapRenderer = new MapRenderer(_realm);
 
             // Set up debug logging
             RedirectDebugOutput();
             LogDebug("Application started");
+
+            // Subscribe to the Loaded event
+            this.Loaded += MainWindow_Loaded;
         }
 
         private void MainWindow_Loaded(object sender, RoutedEventArgs e)
         {
-            // Initialize the overlay canvas after the visual tree is loaded
+            // Initialize the overlay canvas
             InitializeOverlayCanvas();
 
-            // This ensures the window and all its controls are fully loaded
-            // If we have a pending image that needs scaling, apply it now
-            if (MapImageControl.Source != null)
+            // If a map was somehow loaded before this point, ensure it's scaled correctly
+            if (MapImageControl.Source is BitmapSource bitmapSource)
             {
-                var bitmapSource = MapImageControl.Source as System.Windows.Media.Imaging.BitmapSource;
-                if (bitmapSource != null)
-                {
-                    CalculateAndApplyInitialScale(bitmapSource);
-                }
+                CalculateAndApplyInitialScale(bitmapSource);
             }
         }
 
@@ -91,43 +78,111 @@ namespace map_editor
         {
             try
             {
-                // Create and add the overlay canvas
-                OverlayCanvas = new Canvas();
-                
-                // Match size with MapCanvas
-                OverlayCanvas.Width = MapCanvas.Width;
-                OverlayCanvas.Height = MapCanvas.Height;
-                OverlayCanvas.HorizontalAlignment = MapCanvas.HorizontalAlignment;
-                OverlayCanvas.VerticalAlignment = MapCanvas.VerticalAlignment;
-                
-                // Make sure parent exists
-                var parent = MapCanvas.Parent as System.Windows.Controls.Panel;
-                if (parent != null)
+                if (OverlayCanvas != null)
                 {
-                    // Set ZIndex to ensure it's above the map canvas but below UI elements
-                    System.Windows.Controls.Panel.SetZIndex(OverlayCanvas, 5);
-                    
-                    // Add it to the same parent as MapCanvas
-                    parent.Children.Add(OverlayCanvas);
-                    
-                    LogDebug("OverlayCanvas successfully initialized");
+                    // Already exists, just update
+                    LogDebug("OverlayCanvas already exists, updating properties");
+                    OverlayCanvas.Width = MapCanvas.ActualWidth;
+                    OverlayCanvas.Height = MapCanvas.ActualHeight;
+                    return;
+                }
+
+                // Create new overlay with exact MapCanvas dimensions
+                OverlayCanvas = new Canvas
+                {
+                    Width = MapCanvas.ActualWidth > 0 ? MapCanvas.ActualWidth : 800,
+                    Height = MapCanvas.ActualHeight > 0 ? MapCanvas.ActualHeight : 600,
+                    Background = System.Windows.Media.Brushes.Transparent,
+                    IsHitTestVisible = true
+                };
+
+                // Find the parent Grid of the Border that contains MapCanvas
+                if (MapCanvas.Parent is Border border && border.Parent is Grid gridParent)
+                {
+                    // Set correct Z-index order
+                    WpfPanel.SetZIndex(MapImageControl, 0); // Image at bottom
+                    WpfPanel.SetZIndex(MapCanvas, 1);       // Canvas in middle
+                    WpfPanel.SetZIndex(OverlayCanvas, 2);   // Overlay on top
+
+                    // Position overlay at same position as MapCanvas's parent Border
+                    OverlayCanvas.SetValue(Grid.RowProperty, border.GetValue(Grid.RowProperty));
+                    OverlayCanvas.SetValue(Grid.ColumnProperty, border.GetValue(Grid.ColumnProperty));
+                    OverlayCanvas.Margin = border.Margin;
+                    OverlayCanvas.HorizontalAlignment = border.HorizontalAlignment;
+                    OverlayCanvas.VerticalAlignment = border.VerticalAlignment;
+
+                    // Add to the parent grid
+                    gridParent.Children.Add(OverlayCanvas);
+
+                    _mapRenderer?.SetOverlayCanvas(OverlayCanvas);
+
+                    LogDebug($"OverlayCanvas initialized with size: {OverlayCanvas.Width}x{OverlayCanvas.Height}");
+
+                    // Listen for size changes on MapCanvas
+                    MapCanvas.SizeChanged += (s, e) => {
+                        OverlayCanvas.Width = MapCanvas.ActualWidth;
+                        OverlayCanvas.Height = MapCanvas.ActualHeight;
+                        LogDebug($"Canvas resized: MapCanvas={MapCanvas.ActualWidth}x{MapCanvas.ActualHeight}, " +
+                                 $"OverlayCanvas={OverlayCanvas.Width}x{OverlayCanvas.Height}");
+                    };
                 }
                 else
                 {
-                    LogDebug("ERROR: MapCanvas.Parent is not a Panel or is null");
+                    LogDebug($"ERROR: Unexpected parent hierarchy. MapCanvas.Parent is {MapCanvas.Parent?.GetType().Name}, " +
+                            $"grandparent is {(MapCanvas.Parent as Border)?.Parent?.GetType().Name}");
+
+                    // Fallback option: Modify the MapCanvas directly to include our markers
+                    _mapRenderer?.SetOverlayCanvas(MapCanvas);
+                    LogDebug("Fallback: Using MapCanvas directly for markers");
                 }
             }
             catch (Exception ex)
             {
-                LogDebug($"ERROR initializing OverlayCanvas: {ex.Message}");
+                LogDebug($"ERROR in InitializeOverlayCanvas: {ex.Message}");
+                LogDebug($"Stack trace: {ex.StackTrace}");
             }
         }
 
-        // Simplified canvas size changed handler - no longer needed but kept for compatibility
-        private void MapCanvas_SizeChanged(object sender, SizeChangedEventArgs e)
+        private void SyncOverlayWithMap()
         {
-            // Since we're using a fixed canvas size, we don't need to recalculate on size changes
-            // This method can be empty or removed entirely
+            if (OverlayCanvas == null || MapImageControl == null) return;
+
+            // Get the current transforms from the MapImageControl
+            var mapTransformGroup = MapImageControl.RenderTransform as TransformGroup;
+            if (mapTransformGroup == null) return;
+
+            // Create a new TransformGroup for the overlay to avoid reference issues
+            var overlayTransformGroup = new TransformGroup();
+
+            // Clone each transform to ensure they're separate objects
+            foreach (var transform in mapTransformGroup.Children)
+            {
+                if (transform is ScaleTransform scaleTransform)
+                {
+                    overlayTransformGroup.Children.Add(new ScaleTransform(
+                        scaleTransform.ScaleX, scaleTransform.ScaleY,
+                        scaleTransform.CenterX, scaleTransform.CenterY));
+                }
+                else if (transform is TranslateTransform translateTransform)
+                {
+                    overlayTransformGroup.Children.Add(new TranslateTransform(
+                        translateTransform.X, translateTransform.Y));
+                }
+                else
+                {
+                    // Clone any other transform types if needed
+                    overlayTransformGroup.Children.Add(transform.Clone());
+                }
+            }
+
+            // Apply the transform group to the overlay canvas
+            OverlayCanvas.RenderTransform = overlayTransformGroup;
+
+            // Match the render transform origin as well
+            OverlayCanvas.RenderTransformOrigin = MapImageControl.RenderTransformOrigin;
+
+            // Log diagnostic information
+            LogDebug("Overlay synchronized with map");
         }
 
         private void LoadGameData_Click(object sender, RoutedEventArgs e)
@@ -153,7 +208,6 @@ namespace map_editor
             }
         }
 
-        // Add right-click handler for coordinates
         private void MapCanvas_MouseRightButtonDown(object sender, MouseButtonEventArgs e)
         {
             if (MapImageControl.Source == null || _mapService == null || _mapRenderer == null)
@@ -186,7 +240,6 @@ namespace map_editor
             {
                 StatusText.Text = "Loading FFXIV data...";
 
-                // Validate that this is actually an FFXIV installation directory
                 if (!ValidateGameDirectory(gameDirectory))
                 {
                     WpfMessageBox.Show(
@@ -196,783 +249,70 @@ namespace map_editor
                     return;
                 }
 
-                // Initialize SaintCoinach with the game directory
                 _realm = new ARealmReversed(gameDirectory, SaintCoinach.Ex.Language.English);
                 LogDebug($"Initialized realm: {(_realm != null ? "Success" : "Failed")}");
 
-                // Initialize map service
                 _mapService = new MapService(_realm);
                 LogDebug("Initialized map service");
 
-                // Run diagnostics on a few common icon IDs
-                LogDebug("Running icon path diagnostics...");
-                _mapService.DiagnoseIconPaths(60453); // Aetheryte
-                _mapService.DiagnoseIconPaths(60442); // Another common icon
-
-                // Update MapRenderer with realm
-                if (_mapRenderer != null)
-                {
-                    LogDebug("Updating MapRenderer with realm reference");
-                    _mapRenderer.UpdateRealm(_realm);
-                }
-
-                // Load territory data
+                _mapRenderer?.UpdateRealm(_realm);
                 LogDebug("Loading territories...");
                 LoadTerritories();
 
-                // Update status bar with directory information
                 StatusText.Text = $"Loaded {Territories.Count} territories from: {gameDirectory}";
             }
             catch (Exception ex)
             {
                 StatusText.Text = $"Error loading data: {ex.Message}";
-                LogDebug($"Error loading FFXIV data: {ex.Message}");
-                LogDebug($"Stack trace: {ex.StackTrace}");
+                LogDebug($"Error loading FFXIV data: {ex.Message}\n{ex.StackTrace}");
                 WpfMessageBox.Show($"Failed to load FFXIV data: {ex.Message}", "Error",
                     MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
-        private bool ValidateGameDirectory(string directory)
-        {
-            // Add detailed logging
-            System.Diagnostics.Debug.WriteLine($"Validating directory: '{directory}'");
-
-            try
-            {
-                // Check for alternative folder names and structures
-                string[] possibleGameFolders = { "game", "Game", "GAME", "ffxivgame" };
-                string[] possibleBootFolders = { "boot", "Boot", "BOOT" };
-
-                // Look for any valid game/boot folder combination
-                string? foundGameFolder = null;  // Add ? to make nullable
-                string? foundBootFolder = null;  // Add ? to make nullable
-
-                foreach (var gameFolder in possibleGameFolders)
-                {
-                    string gamePath = Path.Combine(directory, gameFolder);
-                    if (Directory.Exists(gamePath))
-                    {
-                        foundGameFolder = gamePath;
-                        System.Diagnostics.Debug.WriteLine($"Found game folder at: '{gamePath}'");
-                        break;
-                    }
-                }
-
-                foreach (var bootFolder in possibleBootFolders)
-                {
-                    string bootPath = Path.Combine(directory, bootFolder);
-                    if (Directory.Exists(bootPath))
-                    {
-                        foundBootFolder = bootPath;
-                        System.Diagnostics.Debug.WriteLine($"Found boot folder at: '{bootPath}'");
-                        break;
-                    }
-                }
-
-                // Check all directory contents at the root level
-                System.Diagnostics.Debug.WriteLine("Directory contents:");
-                foreach (var dir in Directory.GetDirectories(directory))
-                {
-                    System.Diagnostics.Debug.WriteLine($"- {Path.GetFileName(dir)}");
-                }
-
-                bool isValid = foundGameFolder != null && foundBootFolder != null;
-
-                System.Diagnostics.Debug.WriteLine($"Directory validation result: {isValid}");
-                return isValid;
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"Error during directory validation: {ex.Message}");
-                return false;
-            }
-        }
-
-        private void LoadTerritories()
-        {
-            LogDebug("Starting to load territories...");
-            Territories.Clear();
-
-            try
-            {
-                // First, try loading from SaintCoinach if available
-                if (_realm != null)
-                {
-                    LogDebug("Loading territories from SaintCoinach...");
-
-                    try
-                    {
-                        var territorySheet = _realm.GameData.GetSheet<SaintCoinach.Xiv.TerritoryType>();
-                        if (territorySheet != null)
-                        {
-                            LogDebug($"Found SaintCoinach territory sheet with {territorySheet.Count()} entries");
-
-                            // Let's examine what properties TerritoryType actually has
-                            var firstTerritory = territorySheet.FirstOrDefault();
-                            if (firstTerritory != null)
-                            {
-                                var properties = firstTerritory.GetType().GetProperties();
-                                LogDebug($"TerritoryType properties: {string.Join(", ", properties.Select(p => p.Name))}");
-                            }
-
-                            foreach (var propertyName in new[] { "PlaceName", "RegionPlaceName", "ZonePlaceName", "Map", "Name" })
-                            {
-                                var prop = firstTerritory.GetType().GetProperty(propertyName);
-                                LogDebug($"{propertyName}: {(prop != null ? "FOUND" : "NOT FOUND")}");
-                            }
-
-                            int processed = 0;
-                            int added = 0;
-
-                            foreach (var territory in territorySheet)
-                            {
-                                processed++;
-                                try
-                                {
-                                    // Defensive: PlaceName
-                                    string placeName = "Unknown";
-                                    uint placeNameId = 0;
-                                    try
-                                    {
-                                        var placeNameObj = territory.GetType().GetProperty("PlaceName")?.GetValue(territory);
-                                        if (placeNameObj is SaintCoinach.Xiv.PlaceName pn)
-                                        {
-                                            placeName = SafeGetPlaceName(pn);
-                                            placeNameId = (uint)pn.Key;
-                                        }
-                                        else if (placeNameObj != null)
-                                        {
-                                            var nameProp = placeNameObj.GetType().GetProperty("Name");
-                                            var keyProp = placeNameObj.GetType().GetProperty("Key");
-                                            if (nameProp != null)
-                                                placeName = nameProp.GetValue(placeNameObj)?.ToString() ?? "Unknown";
-                                            object? keyValue = keyProp?.GetValue(placeNameObj);
-                                            if (keyValue is int intKey)
-                                                placeNameId = (uint)intKey;
-                                            else if (keyValue is uint uintKey)
-                                                placeNameId = uintKey;
-                                            else
-                                                placeNameId = 0;
-                                        }
-                                    }
-                                    catch (TargetInvocationException ex) when (ex.InnerException is KeyNotFoundException)
-                                    {
-                                        LogDebug($"Territory {territory.Key} has missing PlaceName: {ex.InnerException.Message}");
-                                        continue; // Skip this territory
-                                    }
-                                    catch (KeyNotFoundException ex)
-                                    {
-                                        LogDebug($"Territory {territory.Key} has missing PlaceName: {ex.Message}");
-                                        continue; // Skip this territory
-                                    }
-
-                                    // Defestring territoryNameId = territory.GetType().GetProperty("Name")?.GetValue(territory)?.ToString() ?? "";nsive: RegionPlaceName by index (index 3)
-                                    string regionName = "Unknown";
-                                    uint regionId = 0;
-                                    try
-                                    {
-                                        // Try to get the value by index directly
-                                        var regionObj = (territory as SaintCoinach.Ex.Relational.IRelationalRow)?[3];
-                                        if (regionObj is SaintCoinach.Xiv.PlaceName rpn)
-                                        {
-                                            regionName = SafeGetPlaceName(rpn);
-                                            regionId = (uint)rpn.Key;
-                                        }
-                                        else if (regionObj != null)
-                                        {
-                                            var nameProp = regionObj.GetType().GetProperty("Name");
-                                            var keyProp = regionObj.GetType().GetProperty("Key");
-                                            if (nameProp != null)
-                                                regionName = nameProp.GetValue(regionObj)?.ToString() ?? "Unknown";
-                                            object? regionKeyValue = keyProp?.GetValue(regionObj);
-                                            if (regionKeyValue is int intKey2)
-                                                regionId = (uint)intKey2;
-                                            else if (regionKeyValue is uint uintKey2)
-                                                regionId = uintKey2;
-                                            else
-                                                regionId = 0;
-                                        }
-                                    }
-                                    catch (Exception ex)
-                                    {
-                                        // Log the available keys/columns for this row
-                                        if (territory is SaintCoinach.Ex.Relational.IRelationalRow relRow)
-                                        {
-                                            var keys = string.Join(", ", relRow.Sheet.Header.Columns.Select(c => $"{c.Index}:{c.Name}"));
-                                            LogDebug($"Territory {territory.Key} has missing RegionPlaceName at index 3: {ex.InnerException.Message}. Available columns: {keys}");
-                                        }
-                                        else
-                                        {
-                                            LogDebug($"Territory {territory.Key} has missing RegionPlaceName at index 3: {ex.InnerException.Message}");
-                                        }
-                                        continue; // Skip this territory
-                                    }
-
-                                    // Map
-                                    uint mapId = 0;
-                                    var mapObj = territory.GetType().GetProperty("Map")?.GetValue(territory);
-                                    if (mapObj != null)
-                                    {
-                                        var keyProp = mapObj.GetType().GetProperty("Key");
-                                        if (keyProp != null)
-                                        {
-                                            object? mapKeyValue = keyProp.GetValue(mapObj);
-                                            if (mapKeyValue is int intMapKey)
-                                                mapId = (uint)intMapKey;
-                                            else if (mapKeyValue is uint uintMapKey)
-                                                mapId = uintMapKey;
-                                            else
-                                                mapId = 0;
-                                        }
-                                    }
-
-                                    // Territory Name ID
-                                    string territoryNameId = "";
-                                    try
-                                    {
-                                        var relRow = territory as SaintCoinach.Ex.Relational.IRelationalRow;
-                                        if (relRow != null)
-                                            territoryNameId = relRow[0]?.ToString() ?? "";
-                                    }
-                                    catch (Exception ex)
-                                    {
-                                        if (territory is SaintCoinach.Ex.Relational.IRelationalRow row)
-                                        {
-                                            var keys = string.Join(", ", row.Sheet.Header.Columns.Select(c => $"{c.Index}:{c.Name}"));
-                                            LogDebug($"Territory {territory.Key} has missing Name at index 0: {ex.Message}. Available columns: {keys}");
-                                        }
-                                        else
-                                        {
-                                            LogDebug($"Territory {territory.Key} has missing Name at index 0: {ex.Message}");
-                                        }
-                                    }
-
-                                    Territories.Add(new TerritoryInfo
-                                    {
-                                        Id = (uint)territory.Key,
-                                        Name = placeName,
-                                        TerritoryNameId = territoryNameId,
-                                        PlaceNameId = placeNameId,
-                                        PlaceName = placeName,
-                                        RegionId = regionId,
-                                        RegionName = regionName,
-                                        Region = regionName,
-                                        MapId = mapId,
-                                        Source = "SaintCoinach"
-                                    });
-
-                                    added++;
-                                }
-                                catch (Exception ex)
-                                {
-                                    LogDebug($"Error processing territory {territory.Key}: {ex.Message}");
-                                    if (ex.InnerException != null)
-                                        LogDebug($"Inner exception: {ex.InnerException.Message}\n{ex.InnerException.StackTrace}");
-                                    LogDebug($"Stack trace: {ex.StackTrace}");
-                                }
-                            }
-                            LogDebug($"Processed {processed} territories, added {added} to list");
-                        }
-                        else
-                        {
-                            LogDebug("SaintCoinach territory sheet is null");
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        LogDebug($"Error loading territories from SaintCoinach: {ex.Message}");
-                        LogDebug($"Stack trace: {ex.StackTrace}");
-                    }
-                }
-                else
-                {
-                    LogDebug("Realm is null, falling back to CSV loading");
-                }
-
-                // If we couldn't load territories from SaintCoinach, try CSV loading
-                if (Territories.Count == 0)
-                {
-                    LogDebug("No territories loaded from SaintCoinach, trying CSV files...");
-                    LoadTerritoriesFromCsv();
-                }
-
-                // Sort and update UI
-                if (Territories.Count > 0)
-                {
-                    var sorted = Territories.OrderBy(t => t.Id).ToList();
-                    Territories.Clear();
-                    foreach (var item in sorted)
-                    {
-                        Territories.Add(item);
-                    }
-
-                    // Force UI refresh
-                    TerritoryList.ItemsSource = null;
-                    TerritoryList.ItemsSource = Territories;
-
-                    LogDebug($"Territory list updated with {Territories.Count} entries");
-                }
-                else
-                {
-                    LogDebug("WARNING: No territories loaded from any source!");
-                }
-            }
-            catch (Exception ex)
-            {
-                LogDebug($"Critical error loading territories: {ex.Message}");
-                LogDebug($"Stack trace: {ex.StackTrace}");
-            }
-        }
-
-        private void LoadTerritoriesFromCsv()
-        {
-            try
-            {
-                // Load CSV files directly from Sheets directory
-                var territoryData = LoadCsvFile("Sheets/TerritoryType.csv");
-                var placeNameData = LoadCsvFile("Sheets/PlaceName.csv");
-
-                if (territoryData != null && placeNameData != null)
-                {
-                    LogDebug($"Loaded TerritoryType.csv with {territoryData.Count} rows");
-                    LogDebug($"Loaded PlaceName.csv with {placeNameData.Count} rows");
-                    
-                    // Create lookup dictionary for place names for faster access
-                    var placeNameLookup = new Dictionary<uint, string>();
-                    foreach (var row in placeNameData.Skip(3)) // Skip header rows
-                    {
-                        if (row.Length > 1 && uint.TryParse(row[0], out uint id) && !string.IsNullOrEmpty(row[1]))
-                        {
-                            placeNameLookup[id] = row[1];
-                        }
-                    }
-                    
-                    LogDebug($"Created place name lookup with {placeNameLookup.Count} entries");
-
-                    // Process territories
-                    int added = 0;
-                    foreach (var row in territoryData.Skip(3)) // Skip header rows
-                    {
-                        try
-                        {
-                            if (row.Length < 8 || !uint.TryParse(row[0], out uint territoryId))
-                                continue;
-
-                            string territoryNameId = row.Length > 1 ? row[1] : "";
-
-                            // Get Region PlaceName ID from column 5 (index 4)
-                            uint regionNameId = 0;
-                            if (row.Length > 4 && uint.TryParse(row[4], out regionNameId)) { }
-
-                            // Get PlaceNameId from column 7 (index 6)
-                            uint placeNameId = 0;
-                            if (row.Length > 6 && uint.TryParse(row[6], out placeNameId)) { }
-
-                            // Get Map ID from column 8 (index 7)
-                            uint mapId = 0;
-                            if (row.Length > 7 && uint.TryParse(row[7], out mapId)) { }
-
-                            // Look up place name
-                            string placeName = "Unknown";
-                            if (placeNameLookup.TryGetValue(placeNameId, out string? name) && name != null)
-                            {
-                                placeName = name;
-                            }
-
-                            // Look up region name
-                            string regionName = "Unknown";
-                            if (placeNameLookup.TryGetValue(regionNameId, out string? region) && region != null)
-                            {
-                                regionName = region;
-                            }
-
-                            // Add territory to collection
-                            Territories.Add(new TerritoryInfo
-                            {
-                                Id = territoryId,
-                                Name = placeName,
-                                TerritoryNameId = territoryNameId,
-                                PlaceNameId = placeNameId,
-                                PlaceName = placeName,
-                                RegionId = regionNameId,
-                                RegionName = regionName,
-                                Region = regionName,
-                                MapId = mapId,
-                                Source = "CSV",
-                                PlaceNameIdTerr = mapId
-                            });
-                            
-                            added++;
-                        }
-                        catch (Exception ex)
-                        {
-                            LogDebug($"Error processing territory row: {ex.Message}");
-                        }
-                    }
-                    
-                    LogDebug($"Added {added} territories from CSV files");
-                }
-                else
-                {
-                    LogDebug("Failed to load CSV files");
-                    if (territoryData == null) LogDebug("TerritoryType.csv could not be loaded");
-                    if (placeNameData == null) LogDebug("PlaceName.csv could not be loaded");
-                }
-            }
-            catch (Exception ex)
-            {
-                LogDebug($"Error loading territories from CSV: {ex.Message}");
-            }
-        }
-
-        // Helper method to load CSV file - Fix for CS8603 warning
-        private List<string[]>? LoadCsvFile(string filePath)
-        {
-            try
-            {
-                var result = new List<string[]>();
-
-                // Get full path from application directory
-                string fullPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, filePath);
-                if (!File.Exists(fullPath))
-                {
-                    // Try relative path
-                    fullPath = filePath;
-                    if (!File.Exists(fullPath))
-                    {
-                        StatusText.Text = $"CSV file not found: {filePath}";
-                        return null; // This is intentionally returning null
-                    }
-                }
-
-                using (var reader = new StreamReader(fullPath))
-                {
-                    string? line; // Add nullable annotation
-                    while ((line = reader.ReadLine()) != null)
-                    {
-                        // Handle special case for CSV with quoted fields containing commas
-                        List<string> fields = new List<string>();
-                        bool inQuotes = false;
-                        int startIndex = 0;
-
-                        for (int i = 0; i < line.Length; i++)
-                        {
-                            if (line[i] == '"')
-                                inQuotes = !inQuotes;
-                            else if (line[i] == ',' && !inQuotes)
-                            {
-                                fields.Add(line.Substring(startIndex, i - startIndex).Trim('"'));
-                                startIndex = i + 1;
-                            }
-                        }
-
-                        // Add the last field
-                        fields.Add(line.Substring(startIndex).Trim('"'));
-
-                        result.Add(fields.ToArray());
-                    }
-                }
-
-                return result;
-            }
-            catch (Exception ex)
-            {
-                StatusText.Text = $"Error loading CSV file {filePath}: {ex.Message}";
-                System.Diagnostics.Debug.WriteLine($"Error loading CSV file {filePath}: {ex.Message}");
-                return null; // This is intentionally returning null
-            }
-        }
-
-        private void TerritoryList_SelectionChanged(object sender, SelectionChangedEventArgs e)
-        {
-            if (TerritoryList.SelectedItem is TerritoryInfo selectedTerritory)
-            {
-                LoadTerritoryMap(selectedTerritory);
-            }
-        }
-
-        // Fix for the LoadTerritoryMap method to handle nullable variables properly
-        // Update the LoadTerritoryMap method to include marker loading
-        private bool LoadTerritoryMap(TerritoryInfo territory)
-        {
-            try
-            {
-                _currentTerritory = territory;
-
-                // Display territory information from our CSV-loaded data
-                MapInfoText.Text = $"Region: {territory.Region}\n" +
-                                  $"Place Name: {territory.PlaceName}\n" +
-                                  $"Territory ID: {territory.Id}\n" +
-                                  $"Territory Name ID: {territory.TerritoryNameId}\n" +
-                                  $"Place Name ID: {territory.PlaceNameId}\n" +
-                                  $"Map ID: {territory.MapId}\n" +
-                                  $"Territory Place Name ID: {territory.PlaceNameIdTerr}";
-
-                // Clear any previous image
-                MapImageControl.Source = null;
-                _currentMap = null;
-
-                // If SaintCoinach is available, try to display the map image
-                if (_realm != null)
-                {
-                    try
-                    {
-                        // First try standard SaintCoinach Map approach
-                        var mapSheet = _realm.GameData.GetSheet<SaintCoinach.Xiv.Map>();
-                        var map = mapSheet.FirstOrDefault(m => m.Key == territory.MapId);
-
-                        if (map == null)
-                        {
-                            var availableKeys = string.Join(", ", mapSheet.Select(m => m.Key));
-                            LogDebug($"Map with ID {territory.MapId} not found. Available Map keys: {availableKeys}");
-                            StatusText.Text = $"Map not found for MapId: {territory.MapId}";
-                            return false;
-                        }
-
-                        if (map is SaintCoinach.Ex.Relational.IRelationalRow relRow)
-                        {
-                            var columns = string.Join(", ", relRow.Sheet.Header.Columns.Select(c => $"{c.Index}:{c.Name}"));
-                            LogDebug($"Map columns: {columns}");
-                        }
-
-                        System.Drawing.Image? mapImage = null;
-                        try
-                        {
-                            MethodInfo? imageMethod = map.GetType().GetMethod("GetImage",
-                                BindingFlags.Public | BindingFlags.Instance,
-                                null, Type.EmptyTypes, null);
-
-                            if (imageMethod != null)
-                            {
-                                mapImage = imageMethod.Invoke(map, null) as System.Drawing.Image;
-                                System.Diagnostics.Debug.WriteLine("Got image from Map.GetImage()");
-                            }
-                        }
-                        catch (Exception ex)
-                        {
-                            LogDebug($"Error invoking GetImage for map {map.Key}: {ex.Message}");
-                        }
-
-                        // If we still don't have an image, try direct texture loading
-                        if (mapImage == null && !string.IsNullOrEmpty(territory.TerritoryNameId))
-                        {
-                            System.Diagnostics.Debug.WriteLine($"Trying to load texture directly for {territory.TerritoryNameId}");
-                            mapImage = LoadMapTexture(territory.TerritoryNameId);
-                        }
-
-                        // Display the image if we found it
-                        if (mapImage != null)
-                        {
-                            // Convert Image to Bitmap to use GetHbitmap
-                            using (var bitmap = new System.Drawing.Bitmap(mapImage))
-                            {
-                                IntPtr handle = bitmap.GetHbitmap();
-                                try
-                                {
-                                    var bitmapSource = System.Windows.Interop.Imaging.CreateBitmapSourceFromHBitmap(
-                                        handle,
-                                        IntPtr.Zero,
-                                        System.Windows.Int32Rect.Empty,
-                                        System.Windows.Media.Imaging.BitmapSizeOptions.FromEmptyOptions());
-
-                                    MapImageControl.Source = bitmapSource;
-                                    StatusText.Text = $"Map loaded for {territory.PlaceName}";
-
-                                    // Apply initial scale immediately to display the map
-                                    CalculateAndApplyInitialScale(bitmapSource);
-
-                                    // Show loading indicator
-                                    StatusText.Text = $"Map loaded for {territory.PlaceName} - Loading markers...";
-
-                                    // Load markers asynchronously
-                                    Task.Run(() =>
-                                    {
-                                        // Load markers in background
-                                        var markers = _mapService?.LoadMapMarkers(territory.MapId) ?? new List<MapMarker>();
-
-                                        // Switch to UI thread to update display
-                                        Dispatcher.BeginInvoke(() =>
-                                        {
-                                            _currentMapMarkers = markers;
-
-                                            var imagePosition = new System.Windows.Point(
-                                                Canvas.GetLeft(MapImageControl),
-                                                Canvas.GetTop(MapImageControl)
-                                            );
-
-                                            var bitmapSource = MapImageControl.Source as System.Windows.Media.Imaging.BitmapSource;
-                                            if (bitmapSource == null)
-                                                return; // Fixed: just return, don't return false
-
-                                            var imageSize = new System.Windows.Size(
-                                                bitmapSource.PixelWidth,
-                                                bitmapSource.PixelHeight
-                                            );
-
-                                            // Use the markers loaded above
-                                            _mapRenderer?.DisplayMapMarkers(_currentMapMarkers, map, _currentScale, imagePosition, imageSize);
-
-                                            // Update status
-                                            StatusText.Text = $"Map loaded for {territory.PlaceName} - {_currentMapMarkers.Count} markers";
-                                        });
-                                    });
-                                }
-                                finally
-                                {
-                                    DeleteObject(handle);
-                                }
-                            }
-                        }
-                        else
-                        {
-                            StatusText.Text = $"Could not load map for {territory.TerritoryNameId}";
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        System.Diagnostics.Debug.WriteLine($"Error loading map image: {ex.Message}");
-                        StatusText.Text = $"Error loading map: {ex.Message}";
-                    }
-                }
-
-                return true;
-            }
-            catch (Exception ex)
-            {
-                MapInfoText.Text = $"Error loading map: {ex.Message}";
-                return false;
-            }
-        }
-
-        // Simplified method to calculate and apply initial scale to fit the fixed canvas
-        private void CalculateAndApplyInitialScale(System.Windows.Media.Imaging.BitmapSource bitmapSource)
-        {
-            // Reset dragging state
-            _isDragging = false;
-
-            // Fixed canvas dimensions
-            const double canvasWidth = 800;
-            const double canvasHeight = 600;
-
-            // Get image dimensions
-            double imageWidth = bitmapSource.PixelWidth;
-            double imageHeight = bitmapSource.PixelHeight;
-
-            System.Diagnostics.Debug.WriteLine($"Fixed Canvas: {canvasWidth}x{canvasHeight}, Image: {imageWidth}x{imageHeight}");
-
-            // Calculate scale factors for both dimensions
-            double scaleX = canvasWidth / imageWidth;
-            double scaleY = canvasHeight / imageHeight;
-
-            // Use the smaller scale to ensure the image fits entirely within the canvas
-            double fitScale = Math.Min(scaleX, scaleY);
-
-            // Apply padding (90% of fit scale) to ensure image fits comfortably
-            _currentScale = fitScale * 0.9;
-
-            System.Diagnostics.Debug.WriteLine($"ScaleX: {scaleX:F3}, ScaleY: {scaleY:F3}, FitScale: {fitScale:F3}, Applied: {_currentScale:F3}");
-
-            // Create a new transform group with the calculated scale
-            var transformGroup = new TransformGroup();
-            var scaleTransform = new ScaleTransform(_currentScale, _currentScale);
-            var translateTransform = new TranslateTransform(0, 0);
-            transformGroup.Children.Add(scaleTransform);
-            transformGroup.Children.Add(translateTransform);
-            MapImageControl.RenderTransform = transformGroup;
-
-            // Clear any explicit sizing
-            MapImageControl.Width = double.NaN;
-            MapImageControl.Height = double.NaN;
-
-            // Center the image in the fixed canvas
-            CenterImageInFixedCanvas(bitmapSource, canvasWidth, canvasHeight);
-
-            // Update status to show the initial scale
-            StatusText.Text = $"Map loaded - Zoom: {_currentScale:P0} (Fit: {fitScale:P0})";
-        }
-
-        // Simplified method to center the image in the fixed canvas
-        private void CenterImageInFixedCanvas(System.Windows.Media.Imaging.BitmapSource bitmapSource, double canvasWidth, double canvasHeight)
-        {
-            // Calculate the actual image dimensions (not scaled)
-            double imageWidth = bitmapSource.PixelWidth;
-            double imageHeight = bitmapSource.PixelHeight;
-            
-            // Calculate the scaled image dimensions
-            double scaledImageWidth = imageWidth * _currentScale;
-            double scaledImageHeight = imageHeight * _currentScale;
-            
-            // Calculate center position within the canvas
-            double centerX = (canvasWidth - scaledImageWidth) / 2;
-            double centerY = (canvasHeight - scaledImageHeight) / 2;
-            
-            System.Diagnostics.Debug.WriteLine($"Canvas: {canvasWidth}x{canvasHeight}");
-            System.Diagnostics.Debug.WriteLine($"Image: {imageWidth}x{imageHeight}, Scaled: {scaledImageWidth:F1}x{scaledImageHeight:F1}");
-            System.Diagnostics.Debug.WriteLine($"Center position: {centerX:F1}, {centerY:F1}");
-            
-            // Update Canvas position - this positions the top-left corner of the image
-            Canvas.SetLeft(MapImageControl, Math.Max(0, centerX));
-            Canvas.SetTop(MapImageControl, Math.Max(0, centerY));
-            
-            // ADD THIS: Ensure overlay canvas is positioned identically
-            Canvas.SetLeft(OverlayCanvas, Canvas.GetLeft(MapImageControl));
-            Canvas.SetTop(OverlayCanvas, Canvas.GetTop(MapImageControl));
-            
-            System.Diagnostics.Debug.WriteLine($"Final position: Left={Math.Max(0, centerX):F1}, Top={Math.Max(0, centerY):F1}");
-        }
-
-        // Simplified mouse wheel method for fixed canvas
         private void MapCanvas_MouseWheel(object sender, MouseWheelEventArgs e)
         {
-            if (MapImageControl.Source == null)
-                return;
+            if (MapImageControl.Source == null) return;
 
-            // Calculate new scale based on wheel direction
-            double zoomFactor = e.Delta > 0 ? _zoomIncrement : -_zoomIncrement;
-            double newScale = _currentScale + zoomFactor;
+            double zoomFactor = e.Delta > 0 ? 1.1 : 1 / 1.1;
+            _currentScale = _currentScale * zoomFactor;
+            _currentScale = Math.Clamp(_currentScale, 0.1, 10.0);
 
-            // Apply bounds to the scale - allow zooming out to 5% and up to 500%
-            newScale = Math.Max(0.05, Math.Min(5.0, newScale));
-
-            // If scale hasn't changed (due to min/max bounds), return
-            if (Math.Abs(newScale - _currentScale) < 0.01)
-                return;
-
-            // Update the current scale
-            _currentScale = newScale;
-            
-            // Use the ApplyZoomAndPan method to keep canvases in sync
-            if (newScale <= 1.0)
+            // Apply the new scale
+            var transformGroup = MapImageControl.RenderTransform as TransformGroup;
+            if (transformGroup == null)
             {
-                // Re-center the image when zoomed out
-                if (MapImageControl.Source is System.Windows.Media.Imaging.BitmapSource bitmapSource)
-                {
-                    CenterImageInFixedCanvas(bitmapSource, 800, 600);
-                }
-            }
-            else
-            {
-                // Just update transforms for both canvases
-                ApplyZoomAndPan(_currentScale, new System.Windows.Point(0, 0));
-                
-                // Ensure overlay canvas position matches map canvas
-                Canvas.SetLeft(OverlayCanvas, Canvas.GetLeft(MapImageControl));
-                Canvas.SetTop(OverlayCanvas, Canvas.GetTop(MapImageControl));
+                transformGroup = new TransformGroup();
+                transformGroup.Children.Add(new ScaleTransform());
+                transformGroup.Children.Add(new TranslateTransform());
+                MapImageControl.RenderTransform = transformGroup;
             }
 
-            // Update status text to show current zoom level
+            var scaleTransform = transformGroup.Children.OfType<ScaleTransform>().FirstOrDefault();
+            if (scaleTransform != null)
+            {
+                scaleTransform.ScaleX = _currentScale;
+                scaleTransform.ScaleY = _currentScale;
+            }
+
             StatusText.Text = $"Zoom: {_currentScale:P0}";
-
+            SyncOverlayWithMap(); // Add this line
             e.Handled = true;
+
+            // Refresh markers if needed
+            if (_currentMap != null && _currentMapMarkers != null)
+            {
+                RefreshMarkers();
+            }
         }
 
         private void MapCanvas_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
         {
-            if (MapImageControl.Source != null && _currentScale > 0.15)
+            if (MapImageControl.Source != null)
             {
                 _lastMousePosition = e.GetPosition(MapCanvas);
                 _isDragging = true;
+                // Explicitly use System.Windows.Input.Cursors to resolve ambiguity
                 MapCanvas.Cursor = System.Windows.Input.Cursors.Hand;
                 MapCanvas.CaptureMouse();
                 e.Handled = true;
@@ -984,6 +324,7 @@ namespace map_editor
             if (_isDragging)
             {
                 _isDragging = false;
+                // Explicitly use System.Windows.Input.Cursors to resolve ambiguity
                 MapCanvas.Cursor = System.Windows.Input.Cursors.Arrow;
                 MapCanvas.ReleaseMouseCapture();
                 e.Handled = true;
@@ -995,186 +336,649 @@ namespace map_editor
             if (_isDragging && e.LeftButton == MouseButtonState.Pressed)
             {
                 System.Windows.Point currentPosition = e.GetPosition(MapCanvas);
-
-                // Calculate the movement delta
                 Vector delta = currentPosition - _lastMousePosition;
 
-                // Get the TranslateTransform from the transform group
-                if (MapImageControl.RenderTransform is TransformGroup transformGroup)
+                // Update the translation
+                var transformGroup = MapImageControl.RenderTransform as TransformGroup;
+                if (transformGroup != null)
                 {
                     var translateTransform = transformGroup.Children.OfType<TranslateTransform>().FirstOrDefault();
                     if (translateTransform != null)
                     {
-                        // Apply the translation
                         translateTransform.X += delta.X;
                         translateTransform.Y += delta.Y;
                     }
                 }
-                else if (MapImageControl.RenderTransform is TranslateTransform translateTransform)
-                {
-                    // Apply the translation directly if it's a single transform
-                    translateTransform.X += delta.X;
-                    translateTransform.Y += delta.Y;
-                }
 
-                // ADD THIS: Ensure overlay canvas position/transform matches the map
-                if (OverlayCanvas.RenderTransform is TransformGroup overlayTransformGroup)
-                {
-                    var overlayTranslateTransform = overlayTransformGroup.Children.OfType<TranslateTransform>().FirstOrDefault();
-                    if (overlayTranslateTransform != null)
-                    {
-                        overlayTranslateTransform.X += delta.X;
-                        overlayTranslateTransform.Y += delta.Y;
-                    }
-                }
-                else if (OverlayCanvas.RenderTransform is TranslateTransform overlayTranslateTransform)
-                {
-                    overlayTranslateTransform.X += delta.X;
-                    overlayTranslateTransform.Y += delta.Y;
-                }
-                
-                // Also synchronize the Canvas.Left/Top properties
-                Canvas.SetLeft(OverlayCanvas, Canvas.GetLeft(MapImageControl));
-                Canvas.SetTop(OverlayCanvas, Canvas.GetTop(MapImageControl));
-                
-                // Save the current position for the next move
                 _lastMousePosition = currentPosition;
-                e.Handled = true;
+                SyncOverlayWithMap(); // Add this line
+
+                // Refresh markers if needed
+                if (_currentMap != null && _currentMapMarkers.Any() && _mapRenderer != null)
+                {
+                    RefreshMarkers();
+                }
             }
         }
 
-        // Fix for CS8603 warnings in LoadMapTexture
-        private System.Drawing.Image? LoadMapTexture(string territoryNameId)
+        private void LoadTerritories()
         {
-            if (_realm == null) return null;
+            LogDebug("Starting to load territories...");
+            Territories.Clear();
 
             try
             {
-                // Define the possible subdirectories to check
-                string[] subDirectories = { "00", "01", "02" };
-
-                // Try each subdirectory systematically
-                foreach (string subDir in subDirectories)
+                if (_realm != null)
                 {
-                    string mapPath = $"ui/map/{territoryNameId}/{subDir}/{territoryNameId}{subDir}_m.tex";
-                    System.Diagnostics.Debug.WriteLine($"Trying to load map texture from: {mapPath}");
-
-                    // Check if file exists and try to load it
-                    if (_realm.Packs.FileExists(mapPath))
+                    LogDebug("Loading territories from SaintCoinach...");
+                    var territorySheet = _realm.GameData.GetSheet<SaintCoinach.Xiv.TerritoryType>();
+                    foreach (var territory in territorySheet)
                     {
-                        var file = _realm.Packs.GetFile(mapPath);
-                        System.Diagnostics.Debug.WriteLine($"Found map file: {file}");
-
-                        // SaintCoinach should handle the conversion of the texture
-                        var imageField = file.GetType().GetProperty("Image") ??
-                                        file.GetType().GetProperty("GetImage");
-
-                        if (imageField != null)
+                        try
                         {
-                            var image = imageField.GetValue(file) as System.Drawing.Image;
-                            if (image != null)
-                            {
-                                System.Diagnostics.Debug.WriteLine($"Successfully loaded texture from {mapPath}");
-                                return image;
-                            }
-                        }
+                            // Defensively get all required properties.
+                            string placeName;
+                            uint placeNameId = 0;
 
-                        // Try using GetImage method instead of a property
-                        var imageMethod = file.GetType().GetMethod("GetImage");
-                        if (imageMethod != null)
+                            if (territory.PlaceName != null && !string.IsNullOrWhiteSpace(territory.PlaceName.Name))
+                            {
+                                placeName = territory.PlaceName.Name.ToString();
+                                placeNameId = (uint)territory.PlaceName.Key;
+                            }
+                            else
+                            {
+                                // Provide a fallback for territories without a proper name
+                                placeName = $"[Territory ID: {territory.Key}]";
+                                // placeNameId remains 0
+                            }
+
+                            string territoryNameId = territory.Name?.ToString() ?? string.Empty;
+
+                            // This is the critical fix: Defensively access RegionPlaceName,
+                            // and fall back to ZonePlaceName for instanced content.
+                            string regionName = "Unknown";
+                            uint regionId = 0;
+                            bool regionFound = false;
+
+                            // 1. Try to get RegionPlaceName first.
+                            try
+                            {
+                                if (territory.RegionPlaceName != null && territory.RegionPlaceName.Key != 0)
+                                {
+                                    string? name = territory.RegionPlaceName.Name?.ToString();
+                                    if (!string.IsNullOrEmpty(name))
+                                    {
+                                        regionName = name;
+                                        regionId = (uint)territory.RegionPlaceName.Key;
+                                        regionFound = true;
+                                    }
+                                }
+                            }
+                            catch (KeyNotFoundException) { /* This is expected, so we continue to the fallback. */ }
+
+                            // 2. If no region was found, fall back to ZonePlaceName.
+                            if (!regionFound)
+                            {
+                                try
+                                {
+                                    if (territory.ZonePlaceName != null && territory.ZonePlaceName.Key != 0)
+                                    {
+                                        string? name = territory.ZonePlaceName.Name?.ToString();
+                                        if (!string.IsNullOrEmpty(name))
+                                        {
+                                            regionName = name;
+                                            regionId = (uint)territory.ZonePlaceName.Key;
+                                            LogDebug($"Territory {territory.Key} ('{placeName}') using ZonePlaceName '{regionName}' as fallback.");
+                                        }
+                                    }
+                                }
+                                catch (KeyNotFoundException)
+                                {
+                                    // This can also fail, in which case we stick with "Unknown".
+                                    LogDebug($"Territory {territory.Key} ('{placeName}') has no Region or Zone. Defaulting to 'Unknown'.");
+                                }
+                            }
+
+                            // Defensively get the map key.
+                            uint mapId = 0;
+                            try
+                            {
+                                if (territory.Map != null)
+                                {
+                                    mapId = (uint)territory.Map.Key;
+                                }
+                            }
+                            catch (KeyNotFoundException)
+                            {
+                                LogDebug($"Territory {territory.Key} ('{placeName}') has no Map. Defaulting to 0.");
+                            }
+
+                            Territories.Add(new TerritoryInfo
+                            {
+                                Id = (uint)territory.Key,
+                                Name = placeName,
+                                TerritoryNameId = territoryNameId,
+                                PlaceNameId = placeNameId,
+                                PlaceName = placeName,
+                                RegionId = regionId,
+                                RegionName = regionName,
+                                Region = regionName,
+                                MapId = mapId,
+                                Source = "SaintCoinach"
+                            });
+                        }
+                        catch (Exception ex)
                         {
-                            var image = imageMethod.Invoke(file, null) as System.Drawing.Image;
-                            if (image != null)
-                            {
-                                System.Diagnostics.Debug.WriteLine($"Successfully loaded texture from {mapPath}");
-                                return image;
-                            }
+                            LogDebug($"Failed to process territory with key {territory.Key}. Error: {ex.Message}");
                         }
-
-                        System.Diagnostics.Debug.WriteLine("Could not find Image property or GetImage method");
-                    }
-                    else
-                    {
-                        System.Diagnostics.Debug.WriteLine($"Map texture file not found at: {mapPath}");
                     }
                 }
 
-                // If no texture found in the standard directories, try alternative fallback paths
-                System.Diagnostics.Debug.WriteLine("Trying fallback alternative paths...");
-                string[] alternativePaths = {
-                    $"ui/map/{territoryNameId}/{territoryNameId}_m.tex",
-                    $"ui/map/{territoryNameId}.tex",
-                    $"ui/map/{territoryNameId}/m.tex"
-                };
-
-                foreach (var path in alternativePaths)
+                if (Territories.Count == 0)
                 {
-                    System.Diagnostics.Debug.WriteLine($"Trying alternative path: {path}");
-                    if (_realm.Packs.FileExists(path))
-                    {
-                        var file = _realm.Packs.GetFile(path);
-                        System.Diagnostics.Debug.WriteLine($"Found file at alternative path: {file}");
-
-                        // Try getting image
-                        var imageMethod = file.GetType().GetMethod("GetImage");
-                        if (imageMethod != null)
-                        {
-                            var image = imageMethod.Invoke(file, null) as System.Drawing.Image;
-                            if (image != null)
-                            {
-                                System.Diagnostics.Debug.WriteLine($"Successfully loaded texture from alternative path {path}");
-                                return image;
-                            }
-                        }
-                    }
+                    LogDebug("No territories loaded from SaintCoinach, trying CSV files...");
+                    LoadTerritoriesFromCsv();
                 }
 
-                System.Diagnostics.Debug.WriteLine($"No texture found for territory: {territoryNameId}");
-                return null;
+                if (Territories.Any())
+                {
+                    var sortedTerritories = Territories.OrderBy(t => t.Id).ToList();
+                    Territories.Clear();
+                    foreach (var t in sortedTerritories)
+                    {
+                        Territories.Add(t);
+                    }
+
+                    TerritoryList.ItemsSource = Territories;
+                    LogDebug($"Territory list updated with {Territories.Count} entries");
+                }
+                else
+                {
+                    LogDebug("WARNING: No territories loaded from any source!");
+                }
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"Error loading map texture: {ex.Message}");
+                LogDebug($"Critical error loading territories: {ex.Message}\n{ex.StackTrace}");
+            }
+        }
+
+        private void LoadTerritoriesFromCsv()
+        {
+            try
+            {
+                var territoryData = LoadCsvFile("Sheets/TerritoryType.csv");
+                var placeNameData = LoadCsvFile("Sheets/PlaceName.csv");
+
+                if (territoryData == null || placeNameData == null)
+                {
+                    LogDebug("Failed to load CSV files.");
+                    return;
+                }
+
+                var placeNameLookup = placeNameData.Skip(3)
+                    .Where(row => row.Length > 1 && uint.TryParse(row[0], out _))
+                    .ToDictionary(row => uint.Parse(row[0]), row => row[1]);
+
+                foreach (var row in territoryData.Skip(3))
+                {
+                    if (row.Length < 8 || !uint.TryParse(row[0], out uint territoryId)) continue;
+
+                    uint.TryParse(row.ElementAtOrDefault(4), out uint regionNameId);
+                    uint.TryParse(row.ElementAtOrDefault(6), out uint placeNameId);
+                    uint.TryParse(row.ElementAtOrDefault(7), out uint mapId);
+
+                    Territories.Add(new TerritoryInfo
+                    {
+                        Id = territoryId,
+                        Name = placeNameLookup.GetValueOrDefault(placeNameId, "Unknown"),
+                        TerritoryNameId = row.ElementAtOrDefault(1) ?? "",
+                        PlaceNameId = placeNameId,
+                        PlaceName = placeNameLookup.GetValueOrDefault(placeNameId, "Unknown"),
+                        RegionId = regionNameId,
+                        RegionName = placeNameLookup.GetValueOrDefault(regionNameId, "Unknown"),
+                        Region = placeNameLookup.GetValueOrDefault(regionNameId, "Unknown"),
+                        MapId = mapId,
+                        Source = "CSV"
+                    });
+                }
+            }
+            catch (Exception ex)
+            {
+                LogDebug($"Error loading territories from CSV: {ex.Message}");
+            }
+        }
+
+        private List<string[]>? LoadCsvFile(string filePath)
+        {
+            try
+            {
+                string fullPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, filePath);
+                if (!File.Exists(fullPath))
+                {
+                    StatusText.Text = $"CSV file not found: {filePath}";
+                    return null;
+                }
+                return File.ReadAllLines(fullPath).Select(line => line.Split(',')).ToList();
+            }
+            catch (Exception ex)
+            {
+                StatusText.Text = $"Error loading CSV file {filePath}: {ex.Message}";
                 return null;
             }
         }
 
-        // Add this P/Invoke declaration at the class level
+        private async void TerritoryList_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (TerritoryList.SelectedItem is TerritoryInfo selectedTerritory)
+            {
+                try
+                {
+                    // Show loading indication
+                    StatusText.Text = $"Loading map for {selectedTerritory.PlaceName}...";
+
+                    // Use the async version
+                    bool success = await LoadTerritoryMapAsync(selectedTerritory);
+
+                    if (!success)
+                    {
+                        StatusText.Text = $"Failed to load map for {selectedTerritory.PlaceName}";
+                    }
+                }
+                catch (Exception ex)
+                {
+                    LogDebug($"Error loading territory: {ex.Message}");
+                    StatusText.Text = "Error loading territory map";
+                }
+            }
+        }
+
+        // Replace this method entirely to use the correct XAML elements
+        private void LoadMapImage(System.Drawing.Image mapImage)
+        {
+            if (mapImage == null) return;
+
+            using (var bitmap = new System.Drawing.Bitmap(mapImage))
+            {
+                IntPtr handle = bitmap.GetHbitmap();
+                try
+                {
+                    var bitmapSource = System.Windows.Interop.Imaging.CreateBitmapSourceFromHBitmap(
+                        handle, IntPtr.Zero, Int32Rect.Empty, System.Windows.Media.Imaging.BitmapSizeOptions.FromEmptyOptions());
+
+                    // Set the source directly to MapImageControl
+                    MapImageControl.Source = bitmapSource;
+
+                    // Apply scaling and positioning
+                    CalculateAndApplyInitialScale(bitmapSource);
+
+                    // Hide the placeholder text
+                    MapPlaceholderText.Visibility = Visibility.Collapsed;
+                }
+                finally
+                {
+                    DeleteObject(handle);
+                }
+            }
+        }
+
+        // Replace this method entirely too
+        private void ApplyInitialScaleAndPosition(System.Windows.Media.Imaging.BitmapSource bitmapSource)
+        {
+            if (MapCanvas == null) return;
+
+            double canvasWidth = MapCanvas.ActualWidth;
+            double canvasHeight = MapCanvas.ActualHeight;
+
+            double imageWidth = bitmapSource.PixelWidth;
+            double imageHeight = bitmapSource.PixelHeight;
+
+            // Calculate scale to fit
+            double scaleX = canvasWidth / imageWidth;
+            double scaleY = canvasHeight / imageHeight;
+            _currentScale = Math.Min(scaleX, scaleY) * 0.9; // 90% to leave some margin
+
+            // Calculate centered position
+            double centerX = (canvasWidth - (imageWidth * _currentScale)) / 2;
+            double centerY = (canvasHeight - (imageHeight * _currentScale)) / 2;
+
+            LogDebug($"Map positioned at {centerX:F1},{centerY:F1} with scale {_currentScale:F2}");
+
+            // Apply directly to MapImageControl
+            Canvas.SetLeft(MapImageControl, centerX);
+            Canvas.SetTop(MapImageControl, centerY);
+
+            // Set up transform
+            var transformGroup = new TransformGroup();
+            transformGroup.Children.Add(new ScaleTransform(_currentScale, _currentScale));
+            transformGroup.Children.Add(new TranslateTransform(0, 0));
+            MapImageControl.RenderTransform = transformGroup;
+            MapImageControl.RenderTransformOrigin = new System.Windows.Point(0, 0);
+        }
+
+        // Update LoadTerritoryMap to use the new approach
+        private bool LoadTerritoryMap(TerritoryInfo territory)
+        {
+            try
+            {
+                _currentTerritory = territory;
+                _currentMap = null;
+
+                MapInfoText.Text = $"Region: {territory.Region}\n" +
+                                   $"Place Name: {territory.PlaceName}\n" +
+                                   $"Territory ID: {territory.Id}\n" +
+                                   $"Map ID: {territory.MapId}";
+
+                MapImageControl.Source = null;
+                _mapRenderer?.ClearMarkers();
+
+                if (_realm == null)
+                {
+                    StatusText.Text = "Game data not loaded.";
+                    return false;
+                }
+
+                var mapSheet = _realm.GameData.GetSheet<SaintCoinach.Xiv.Map>();
+                _currentMap = mapSheet.FirstOrDefault(m => m.Key == territory.MapId);
+
+                if (_currentMap == null)
+                {
+                    StatusText.Text = $"Map not found for MapId: {territory.MapId}";
+                    return false;
+                }
+
+                // Load the map image
+                LogDebug($"Loading map image for Map ID: {_currentMap.Key}");
+                var mapImage = _currentMap.MediumImage;
+                if (mapImage == null)
+                {
+                    StatusText.Text = $"Could not load map image for {territory.PlaceName}.";
+                    LogDebug($"FAILURE: mapImage is null for Map ID: {_currentMap.Key}");
+                    return false;
+                }
+
+                using (var bitmap = new System.Drawing.Bitmap(mapImage))
+                {
+                    IntPtr handle = bitmap.GetHbitmap();
+                    try
+                    {
+                        var bitmapSource = System.Windows.Interop.Imaging.CreateBitmapSourceFromHBitmap(
+                            handle, IntPtr.Zero, Int32Rect.Empty, BitmapSizeOptions.FromEmptyOptions());
+
+                        // Set image source and ensure it's part of the canvas
+                        MapImageControl.Source = bitmapSource;
+
+                        if (!MapCanvas.Children.Contains(MapImageControl))
+                        {
+                            MapCanvas.Children.Insert(0, MapImageControl);
+                            LogDebug("Added MapImageControl to MapCanvas");
+                        }
+
+                        // Apply scaling and positioning
+                        CalculateAndApplyInitialScale(bitmapSource);
+
+                        // Hide placeholder text
+                        MapPlaceholderText.Visibility = Visibility.Collapsed;
+
+                        StatusText.Text = $"Map loaded for {territory.PlaceName}. Loading markers...";
+
+                        // Load and display markers
+                        Task.Run(() => {
+                            var markers = _mapService?.LoadMapMarkers(territory.MapId) ?? new List<MapMarker>();
+                            Dispatcher.BeginInvoke(() => {
+                                _currentMapMarkers = markers;
+
+                                // Get current image position and scale for marker placement
+                                var imagePosition = new System.Windows.Point(
+                                    Canvas.GetLeft(MapImageControl),
+                                    Canvas.GetTop(MapImageControl));
+                                var imageSize = new System.Windows.Size(
+                                    bitmapSource.PixelWidth,
+                                    bitmapSource.PixelHeight);
+
+                                // Display markers
+                                _mapRenderer?.DisplayMapMarkers(_currentMapMarkers, _currentMap, _currentScale, imagePosition, imageSize);
+                                SyncOverlayWithMap();
+                                _mapRenderer?.AddDebugGridAndBorders(); // Add debug visuals
+                                DiagnoseOverlayCanvas(); // Diagnose overlay status
+                                StatusText.Text = $"Map loaded for {territory.PlaceName} - {_currentMapMarkers.Count} markers found.";
+                            });
+                        });
+
+                        return true;
+                    }
+                    finally
+                    {
+                        DeleteObject(handle);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                MapInfoText.Text = $"Error loading map: {ex.Message}";
+                LogDebug($"Error in LoadTerritoryMap: {ex}");
+                return false;
+            }
+        }
+
+        private async Task<bool> LoadTerritoryMapAsync(TerritoryInfo territory)
+        {
+            try
+            {
+                _currentTerritory = territory;
+                _currentMap = null;
+
+                MapInfoText.Text = $"Region: {territory.Region}\n" +
+                                   $"Place Name: {territory.PlaceName}\n" +
+                                   $"Territory ID: {territory.Id}\n" +
+                                   $"Map ID: {territory.MapId}";
+
+                MapImageControl.Source = null;
+                _mapRenderer?.ClearMarkers();
+
+                if (_realm == null)
+                {
+                    StatusText.Text = "Game data not loaded.";
+                    return false;
+                }
+
+                var mapSheet = _realm.GameData.GetSheet<SaintCoinach.Xiv.Map>();
+                _currentMap = mapSheet.FirstOrDefault(m => m.Key == territory.MapId);
+
+                if (_currentMap == null)
+                {
+                    StatusText.Text = $"Map not found for MapId: {territory.MapId}";
+                    return false;
+                }
+
+                // Load the map image
+                LogDebug($"Loading map image for Map ID: {_currentMap.Key}");
+                var mapImage = _currentMap.MediumImage;
+                if (mapImage == null)
+                {
+                    StatusText.Text = $"Could not load map image for {territory.PlaceName}.";
+                    LogDebug($"FAILURE: mapImage is null for Map ID: {_currentMap.Key}");
+                    return false;
+                }
+
+                using (var bitmap = new Bitmap(mapImage))
+                {
+                    IntPtr handle = bitmap.GetHbitmap();
+                    try
+                    {
+                        var bitmapSource = System.Windows.Interop.Imaging.CreateBitmapSourceFromHBitmap(
+                            handle, IntPtr.Zero, Int32Rect.Empty, BitmapSizeOptions.FromEmptyOptions());
+
+                        // Set image source and ensure it's part of the canvas
+                        MapImageControl.Source = bitmapSource;
+
+                        if (!MapCanvas.Children.Contains(MapImageControl))
+                        {
+                            MapCanvas.Children.Insert(0, MapImageControl);
+                            LogDebug("Added MapImageControl to MapCanvas");
+                        }
+
+                        // Apply scaling and positioning
+                        CalculateAndApplyInitialScale(bitmapSource);
+
+                        // Hide placeholder text
+                        MapPlaceholderText.Visibility = Visibility.Collapsed;
+
+                        StatusText.Text = $"Map loaded for {territory.PlaceName}. Loading markers...";
+
+                        // Load markers on a background thread
+                        List<MapMarker> markers = await Task.Run(() =>
+                            _mapService?.LoadMapMarkers(territory.MapId) ?? new List<MapMarker>()
+                        );
+
+                        // Back on UI thread
+                        _currentMapMarkers = markers;
+
+                        // Get current image position and scale for marker placement
+                        var imagePosition = new System.Windows.Point(0, 0);
+                        var imageSize = new System.Windows.Size(
+                            bitmapSource.PixelWidth,
+                            bitmapSource.PixelHeight);
+
+                        // Display markers
+                        _mapRenderer?.DisplayMapMarkers(_currentMapMarkers, _currentMap, _currentScale, imagePosition, imageSize);
+                        SyncOverlayWithMap();
+                        _mapRenderer?.AddDebugGridAndBorders();
+                        DiagnoseOverlayCanvas();
+
+                        StatusText.Text = $"Map loaded for {territory.PlaceName} - {_currentMapMarkers.Count} markers found.";
+                        return true;
+                    }
+                    finally
+                    {
+                        DeleteObject(handle);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                MapInfoText.Text = $"Error loading map: {ex.Message}";
+                LogDebug($"Error in LoadTerritoryMapAsync: {ex.Message}");
+                LogDebug($"Stack trace: {ex.StackTrace}");
+                return false;
+            }
+        }
+
         [System.Runtime.InteropServices.DllImport("gdi32.dll")]
         private static extern bool DeleteObject(IntPtr hObject);
 
-        // Add right-click handler for coordinates
-        public void LogDebug(string message)
+        private void CalculateAndApplyInitialScale(System.Windows.Media.Imaging.BitmapSource bitmapSource)
         {
-            // Ensure we're on the UI thread
-            if (!Dispatcher.CheckAccess())
+            _isDragging = false;
+
+            double canvasWidth = MapCanvas.ActualWidth;
+            double canvasHeight = MapCanvas.ActualHeight;
+
+            if (canvasWidth <= 1 || canvasHeight <= 1)
             {
-                Dispatcher.Invoke(() => LogDebug(message));
+                LogDebug("Invalid canvas dimensions, using fallback values");
+                canvasWidth = 800;
+                canvasHeight = 600;
+            }
+
+            double imageWidth = bitmapSource.PixelWidth;
+            double imageHeight = bitmapSource.PixelHeight;
+
+            // Calculate scale to fit the image within the canvas
+            double scaleX = canvasWidth / imageWidth;
+            double scaleY = canvasHeight / imageHeight;
+            double fitScale = Math.Min(scaleX, scaleY);
+            _currentScale = fitScale * 0.9; // Slightly smaller to leave margin
+
+            // Center the image within the canvas
+            double centeredX = (canvasWidth - (imageWidth * _currentScale)) / 2;
+            double centeredY = (canvasHeight - (imageHeight * _currentScale)) / 2;
+
+            // Configure map image
+            MapImageControl.Width = imageWidth;
+            MapImageControl.Height = imageHeight;
+            Canvas.SetLeft(MapImageControl, centeredX);
+            Canvas.SetTop(MapImageControl, centeredY);
+            Canvas.SetZIndex(MapImageControl, 0); // Ensure map is behind markers
+            MapImageControl.Visibility = Visibility.Visible;
+
+            // Create transform for scaling
+            var transformGroup = new TransformGroup();
+            transformGroup.Children.Add(new ScaleTransform(_currentScale, _currentScale));
+            transformGroup.Children.Add(new TranslateTransform(0, 0));
+            MapImageControl.RenderTransform = transformGroup;
+            MapImageControl.RenderTransformOrigin = new System.Windows.Point(0, 0);
+
+            LogDebug($"Map scaled to {_currentScale:F2} and positioned at ({centeredX:F1}, {centeredY:F1})");
+        }
+
+        // Add this method to diagnose map display issues
+        private void DiagnoseMapDisplay()
+        {
+            LogDebug("=== MAP DISPLAY DIAGNOSTIC ===");
+
+            // Check map image
+            if (MapImageControl.Source is BitmapSource bmp)
+            {
+                LogDebug($"Map image: {bmp.PixelWidth}x{bmp.PixelHeight} pixels");
+
+                var transformGroup = MapImageControl.RenderTransform as TransformGroup;
+                if (transformGroup != null)
+                {
+                    var scaleTransform = transformGroup.Children.OfType<ScaleTransform>().FirstOrDefault();
+                    var translateTransform = transformGroup.Children.OfType<TranslateTransform>().FirstOrDefault();
+
+                    LogDebug($"Map transforms: Scale={scaleTransform?.ScaleX:F2}, " +
+                             $"Position=({translateTransform?.X:F1},{translateTransform?.Y:F1})");
+                }
+            }
+            else
+            {
+                LogDebug("Map image source is null");
+            }
+
+            // Check markers
+            LogDebug($"Canvas size: {MapCanvas.ActualWidth}x{MapCanvas.ActualHeight}");
+            LogDebug($"Canvas children count: {MapCanvas.Children.Count}");
+            LogDebug($"Current scale: {_currentScale:F2}");
+
+            LogDebug("==============================");
+        }
+
+        private void DiagnoseMapVisibility()
+        {
+            if (MapImageControl.Source == null)
+            {
+                LogDebug("Map image source is null!");
                 return;
             }
 
-            // Add timestamp to message
-            string timestampedMessage = $"[{DateTime.Now:HH:mm:ss.fff}] {message}";
-            
-            // Append the message with a newline
-            DebugTextBox.AppendText(timestampedMessage + Environment.NewLine);
-            
-            // Trim log if it gets too large
-            if (DebugTextBox.LineCount > MaxLogLines)
+            LogDebug($"Map image visibility: {MapImageControl.Visibility}");
+            LogDebug($"Map image opacity: {MapImageControl.Opacity}");
+            LogDebug($"Map image actual size: {MapImageControl.ActualWidth}x{MapImageControl.ActualHeight}");
+            LogDebug($"Map image position: Left={Canvas.GetLeft(MapImageControl)}, Top={Canvas.GetTop(MapImageControl)}");
+
+            // Check if the transform is applied correctly
+            var transform = MapImageControl.RenderTransform as TransformGroup;
+            if (transform != null)
             {
-                int linesToRemove = DebugTextBox.LineCount - MaxLogLines;
-                int charsToRemove = DebugTextBox.GetCharacterIndexFromLineIndex(linesToRemove);
-                DebugTextBox.Text = DebugTextBox.Text.Substring(charsToRemove);
+                var scaleTransform = transform.Children.OfType<ScaleTransform>().FirstOrDefault();
+                var translateTransform = transform.Children.OfType<TranslateTransform>().FirstOrDefault();
+
+                LogDebug($"Map image scale: {(scaleTransform != null ? $"{scaleTransform.ScaleX},{scaleTransform.ScaleY}" : "none")}");
+                LogDebug($"Map image translate: {(translateTransform != null ? $"{translateTransform.X},{translateTransform.Y}" : "none")}");
             }
-            
-            // Auto-scroll to the end if enabled
-            if (AutoScrollCheckBox != null && AutoScrollCheckBox.IsChecked == true)
+            else
             {
-                DebugScrollViewer.ScrollToEnd();
+                LogDebug("Map image has no transform!");
             }
+
+            // Fix the ambiguous Panel references in DiagnoseMapVisibility method
+            LogDebug($"Z-Index: MapImageControl={System.Windows.Controls.Panel.GetZIndex(MapImageControl)}, " +
+                     $"MapCanvas={System.Windows.Controls.Panel.GetZIndex(MapCanvas)}, " +
+                     $"OverlayCanvas={System.Windows.Controls.Panel.GetZIndex(OverlayCanvas ?? new Canvas())}");
         }
-        
-        // Button handlers
+
         private void ClearLogButton_Click(object sender, RoutedEventArgs e)
         {
             DebugTextBox.Clear();
@@ -1203,90 +1007,241 @@ namespace map_editor
             }
         }
 
-        // Add this method to hook into Debug.WriteLine calls
         private void RedirectDebugOutput()
         {
-            // Create a trace listener that logs to our debug box
             System.Diagnostics.Trace.Listeners.Add(new TextBoxTraceListener(this));
         }
 
-        string SafeGetPlaceName(SaintCoinach.Xiv.PlaceName? pn)
+        private void DebugCanvasHierarchy()
         {
-            if (pn == null) return "Unknown";
+            LogDebug("=== CANVAS HIERARCHY DEBUG ===");
+            LogDebug($"MapCanvas in visual tree: {MapCanvas != null}");
+            LogDebug($"MapImageControl in visual tree: {MapImageControl != null}");
+            LogDebug($"OverlayCanvas in visual tree: {OverlayCanvas != null}");
+
+            if (MapCanvas != null)
+            {
+                LogDebug($"MapCanvas children count: {MapCanvas.Children.Count}");
+                LogDebug($"MapCanvas contains MapImageControl: {MapCanvas.Children.Contains(MapImageControl)}");
+
+                for (int i = 0; i < MapCanvas.Children.Count; i++)
+                {
+                    var child = MapCanvas.Children[i];
+                    LogDebug($"  Child {i}: Type={child.GetType().Name}, Z-Index={System.Windows.Controls.Panel.GetZIndex(child)}");
+                }
+            }
+
+            if (MapCanvas?.Parent is Grid parentGrid)
+            {
+                LogDebug($"Parent Grid children count: {parentGrid.Children.Count}");
+                LogDebug($"Parent contains MapCanvas: {parentGrid.Children.Contains(MapCanvas)}");
+                LogDebug($"Parent contains OverlayCanvas: {parentGrid.Children.Contains(OverlayCanvas)}");
+
+                for (int i = 0; i < parentGrid.Children.Count; i++)
+                {
+                    var child = parentGrid.Children[i];
+                    LogDebug($"  Child {i}: Type={child.GetType().Name}, Z-Index={System.Windows.Controls.Panel.GetZIndex(child)}");
+                }
+            }
+
+            LogDebug("==============================");
+        }
+
+        private void VerifyMapImageState()
+        {
+            LogDebug("VERIFYING MAP IMAGE STATE:");
+            LogDebug($"- MapImageControl source null? {MapImageControl.Source == null}");
+            LogDebug($"- MapImageControl dimensions: {MapImageControl.Width}x{MapImageControl.Height}");
+            LogDebug($"- MapImageControl actual size: {MapImageControl.ActualWidth}x{MapImageControl.ActualHeight}");
+            LogDebug($"- MapImageControl position: Left={Canvas.GetLeft(MapImageControl)}, Top={Canvas.GetTop(MapImageControl)}");
+            LogDebug($"- MapImageControl in Canvas: {MapCanvas.Children.Contains(MapImageControl)}");
+            LogDebug($"- MapImageControl visibility: {MapImageControl.Visibility}");
+            LogDebug($"- MapImageControl z-index: {Canvas.GetZIndex(MapImageControl)}");
+
+            // Force MapImageControl to be visible if it isn't already
+            if (MapImageControl.Visibility != Visibility.Visible)
+            {
+                MapImageControl.Visibility = Visibility.Visible;
+                LogDebug("- Visibility forced to Visible");
+            }
+        }
+
+        private void RefreshMarkers()
+        {
+            if (_mapRenderer == null || _currentMap == null) return;
+
+            // Important: We need to correctly calculate the image position
+            // When using transforms, we don't need Canvas.GetLeft/Top
+            var imagePosition = new System.Windows.Point(0, 0);
+
+            if (MapImageControl.Source is BitmapSource bitmapSource)
+            {
+                var imageSize = new System.Windows.Size(
+                    bitmapSource.PixelWidth,
+                    bitmapSource.PixelHeight
+                );
+
+                _mapRenderer?.DisplayMapMarkers(_currentMapMarkers, _currentMap, _currentScale, imagePosition, imageSize);
+                SyncOverlayWithMap();
+
+                // Add this to help visualize coordinates
+                //_mapRenderer.AddCoordinateGrid();
+
+                // Add a debug message to confirm markers were refreshed
+                LogDebug($"Refreshed {_currentMapMarkers.Count} markers on map");
+            }
+        }
+
+        public void LogDebug(string message)
+        {
+            if (!Dispatcher.CheckAccess())
+            {
+                Dispatcher.Invoke(() => LogDebug(message));
+                return;
+            }
+
+            string timestampedMessage = $"[{DateTime.Now:HH:mm:ss.fff}] {message}";
+            DebugTextBox.AppendText(timestampedMessage + Environment.NewLine);
+
+            if (DebugTextBox.LineCount > MaxLogLines)
+            {
+                int charsToRemove = DebugTextBox.GetCharacterIndexFromLineIndex(DebugTextBox.LineCount - MaxLogLines);
+                DebugTextBox.Text = DebugTextBox.Text.Substring(charsToRemove);
+            }
+
+            if (AutoScrollCheckBox?.IsChecked == true)
+            {
+                DebugScrollViewer.ScrollToEnd();
+            }
+        }
+
+        // Add this method
+        private bool ValidateGameDirectory(string directory)
+        {
+            LogDebug($"Validating directory: '{directory}'");
             try
             {
-                // Access the name by index 0 in the PlaceName sheet
-                if (pn is SaintCoinach.Ex.Relational.IRelationalRow relRow)
-                {
-                    var nameValue = relRow[0];
-                    return nameValue?.ToString() ?? "Unknown";
-                }
-                // Fallback to property if not a relational row
-                return pn.Name ?? "Unknown";
+                bool gameFolderExists = Directory.Exists(Path.Combine(directory, "game"));
+                bool bootFolderExists = Directory.Exists(Path.Combine(directory, "boot"));
+                return gameFolderExists && bootFolderExists;
             }
             catch (Exception ex)
             {
-                if (pn is SaintCoinach.Ex.Relational.IRelationalRow relRow)
-                {
-                    var columns = string.Join(", ", relRow.Sheet.Header.Columns.Select(c => $"{c.Index}:{c.Name}"));
-                    LogDebug($"Map columns: {columns}");
-                }
-                return $"[Missing Name for PlaceName {pn.Key}]";
+                LogDebug($"Error during directory validation: {ex.Message}");
+                return false;
             }
         }
-         
-        private void ApplyZoomAndPan(double scale, System.Windows.Point position)
+
+        private void DiagnoseOverlayCanvas()
         {
-            // Apply same transform to both canvases
-            ScaleTransform scaleTransform = new ScaleTransform(scale, scale);
-            TranslateTransform translateTransform = new TranslateTransform(position.X, position.Y);
-            
-            TransformGroup transformGroup = new TransformGroup();
-            transformGroup.Children.Add(scaleTransform);
-            transformGroup.Children.Add(translateTransform);
-            
-            MapCanvas.RenderTransform = transformGroup;
-            OverlayCanvas.RenderTransform = transformGroup;
+            if (OverlayCanvas == null)
+            {
+                LogDebug("ERROR: OverlayCanvas is NULL!");
+                return;
+            }
+
+            LogDebug("=== OVERLAY CANVAS DIAGNOSTIC ===");
+            LogDebug($"OverlayCanvas exists: Yes");
+            LogDebug($"OverlayCanvas size: {OverlayCanvas.ActualWidth}x{OverlayCanvas.ActualHeight}");
+            LogDebug($"OverlayCanvas visibility: {OverlayCanvas.Visibility}");
+            LogDebug($"OverlayCanvas z-index: {WpfPanel.GetZIndex(OverlayCanvas)}");
+            LogDebug($"OverlayCanvas children count: {OverlayCanvas.Children.Count}");
+
+            // Check if overlay is attached to the visual tree
+            bool isAttachedToVisualTree = false;
+            DependencyObject parent = OverlayCanvas;
+            while (parent != null)
+            {
+                if (parent is Window)
+                {
+                    isAttachedToVisualTree = true;
+                    break;
+                }
+                parent = VisualTreeHelper.GetParent(parent);
+            }
+
+            LogDebug($"OverlayCanvas attached to window: {isAttachedToVisualTree}");
+
+            // Check transform
+            var transform = OverlayCanvas.RenderTransform as TransformGroup;
+            if (transform != null)
+            {
+                var scaleTransform = transform.Children.OfType<ScaleTransform>().FirstOrDefault();
+                var translateTransform = transform.Children.OfType<TranslateTransform>().FirstOrDefault();
+
+                LogDebug($"OverlayCanvas scale transform: {(scaleTransform != null ? $"{scaleTransform.ScaleX:F2}" : "none")}");
+                LogDebug($"OverlayCanvas translate transform: {(translateTransform != null ? $"({translateTransform.X:F1}, {translateTransform.Y:F1})" : "none")}");
+            }
+            else
+            {
+                LogDebug("OverlayCanvas has no transform!");
+            }
+
+            LogDebug("Children types:");
+            foreach (var child in OverlayCanvas.Children)
+            {
+                LogDebug($"  - {child.GetType().Name}, Z-Index={WpfPanel.GetZIndex((UIElement)child)}");
+            }
+
+            LogDebug("==============================");
+        }
+
+        // Add this method to implement the LoadMapMarkers functionality that was referenced but missing
+        public List<MapMarker> LoadMapMarkers(uint mapId)
+        {
+            System.Diagnostics.Debug.WriteLine($"START LoadMapMarkers for map {mapId}");
+            System.Diagnostics.Stopwatch sw = new System.Diagnostics.Stopwatch();
+            sw.Start();
+
+            // Create a list to hold the markers
+            List<MapMarker> markers = new List<MapMarker>();
+
+            // Your implementation code would go here
+            // For now, just return an empty list
+
+            sw.Stop();
+            System.Diagnostics.Debug.WriteLine($"COMPLETED LoadMapMarkers in {sw.ElapsedMilliseconds}ms, returning {markers.Count} markers");
+            return markers;
         }
     }
 
-    // Custom trace listener to redirect Debug.WriteLine to our TextBox
     public class TextBoxTraceListener : System.Diagnostics.TraceListener
     {
         private readonly MainWindow _window;
-        
+
         public TextBoxTraceListener(MainWindow window)
         {
             _window = window;
         }
-        
-        public override void Write(string message)
+
+        public override void Write(string? message)
         {
-            // Accumulate message (will be written on WriteLine)
+            // Intentionally left blank
         }
-        
-        public override void WriteLine(string message)
+
+        public override void WriteLine(string? message)
         {
-            _window.LogDebug(message);
+            if (message != null)
+            {
+                _window.LogDebug(message);
+            }
         }
     }
 
-    // Helper class to represent territory information
     public class TerritoryInfo
     {
         public uint Id { get; set; }
         public string Name { get; set; } = string.Empty;
         public string TerritoryNameId { get; set; } = string.Empty;
-        public uint PlaceNameId { get; set; }  // New property to store the numeric ID
+        public uint PlaceNameId { get; set; }
         public string PlaceName { get; set; } = string.Empty;
         public uint MapId { get; set; }
         public string Region { get; set; } = string.Empty;
         public string Source { get; set; } = string.Empty;
-        public uint PlaceNameIdTerr { get; set; } // Territory's place name ID from column 7
-        public uint RegionId { get; set; } // Add region ID
-        public string RegionName { get; set; } = string.Empty; // Add region name
+        public uint PlaceNameIdTerr { get; set; }
+        public uint RegionId { get; set; }
+        public string RegionName { get; set; } = string.Empty;
 
-        // Format with territory ID and territory name ID for the list
         public override string ToString() => $"{Id} {TerritoryNameId} {PlaceName}";
     }
 }

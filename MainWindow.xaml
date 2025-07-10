@@ -67,29 +67,30 @@
 
                 <!-- Map Canvas with fixed size -->
                 <Border Grid.Row="0" Background="LightGray" Margin="5">
-                    <Canvas x:Name="MapCanvas" Width="{Binding ElementName=OverlayCanvas, Path=Width}" 
-                            Height="{Binding ElementName=OverlayCanvas, Path=Height}" 
-                            Background="White"
-                            ClipToBounds="True"
+                    <Canvas x:Name="MapCanvas" Background="White" ClipToBounds="True" 
                             MouseWheel="MapCanvas_MouseWheel" 
                             MouseLeftButtonDown="MapCanvas_MouseLeftButtonDown"
                             MouseLeftButtonUp="MapCanvas_MouseLeftButtonUp"
                             MouseRightButtonDown="MapCanvas_MouseRightButtonDown"
                             MouseMove="MapCanvas_MouseMove">
-                        <TextBlock Text="Select a territory to view its map" 
-                                   Canvas.Left="10" Canvas.Top="10"
-                                   Foreground="Gray"
-                                   x:Name="MapPlaceholderText"/>
+                            
+                        <!-- Image must be the first element to be drawn behind everything else -->
                         <Image x:Name="MapImageControl" 
                                Canvas.Left="0" Canvas.Top="0"
                                RenderTransformOrigin="0,0">
                             <Image.RenderTransform>
                                 <TransformGroup>
-                                    <ScaleTransform x:Name="MapScale" ScaleX="1" ScaleY="1" />
-                                    <TranslateTransform x:Name="MapTranslate" X="0" Y="0" />
+                                    <ScaleTransform ScaleX="1" ScaleY="1" />
+                                    <TranslateTransform X="0" Y="0" />
                                 </TransformGroup>
                             </Image.RenderTransform>
                         </Image>
+                        
+                        <!-- Placeholder text for when no map is selected -->
+                        <TextBlock Text="Select a territory to view its map" 
+                                   Canvas.Left="10" Canvas.Top="10"
+                                   Foreground="Gray"
+                                   x:Name="MapPlaceholderText"/>
                     </Canvas>
                 </Border>
 
