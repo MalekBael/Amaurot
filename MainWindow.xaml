@@ -65,33 +65,49 @@
                     <RowDefinition Height="200"/>
                 </Grid.RowDefinitions>
 
-                <!-- Map Canvas with fixed size -->
+                <!-- Map Canvas with Overlay - Using Grid to stack them perfectly -->
                 <Border Grid.Row="0" Background="LightGray" Margin="5">
-                    <Canvas x:Name="MapCanvas" Background="White" ClipToBounds="True" 
-                            MouseWheel="MapCanvas_MouseWheel" 
-                            MouseLeftButtonDown="MapCanvas_MouseLeftButtonDown"
-                            MouseLeftButtonUp="MapCanvas_MouseLeftButtonUp"
-                            MouseRightButtonDown="MapCanvas_MouseRightButtonDown"
-                            MouseMove="MapCanvas_MouseMove">
-                            
-                        <!-- Image must be the first element to be drawn behind everything else -->
-                        <Image x:Name="MapImageControl" 
-                               Canvas.Left="0" Canvas.Top="0"
-                               RenderTransformOrigin="0,0">
-                            <Image.RenderTransform>
+                    <Grid ClipToBounds="True">
+                        <!-- Map Canvas - Bottom Layer -->
+                        <Canvas x:Name="MapCanvas" Background="White"
+                                MouseWheel="MapCanvas_MouseWheel" 
+                                MouseLeftButtonDown="MapCanvas_MouseLeftButtonDown"
+                                MouseLeftButtonUp="MapCanvas_MouseLeftButtonUp"
+                                MouseRightButtonDown="MapCanvas_MouseRightButtonDown"
+                                MouseMove="MapCanvas_MouseMove">
+
+                            <!-- Image must be the first element to be drawn behind everything else -->
+                            <Image x:Name="MapImageControl" 
+                                   Canvas.Left="0" Canvas.Top="0"
+                                   RenderTransformOrigin="0,0">
+                                <Image.RenderTransform>
+                                    <TransformGroup>
+                                        <ScaleTransform ScaleX="1" ScaleY="1" />
+                                        <TranslateTransform X="0" Y="0" />
+                                    </TransformGroup>
+                                </Image.RenderTransform>
+                            </Image>
+
+                            <!-- Placeholder text for when no map is selected -->
+                            <TextBlock Text="Select a territory to view its map" 
+                                       Canvas.Left="10" Canvas.Top="10"
+                                       Foreground="Gray"
+                                       x:Name="MapPlaceholderText"/>
+                        </Canvas>
+
+                        <!-- Overlay Canvas - Top Layer for Markers -->
+                        <Canvas x:Name="OverlayCanvas" 
+                                Background="Transparent" 
+                                IsHitTestVisible="False"
+                                RenderTransformOrigin="0,0">
+                            <Canvas.RenderTransform>
                                 <TransformGroup>
                                     <ScaleTransform ScaleX="1" ScaleY="1" />
                                     <TranslateTransform X="0" Y="0" />
                                 </TransformGroup>
-                            </Image.RenderTransform>
-                        </Image>
-                        
-                        <!-- Placeholder text for when no map is selected -->
-                        <TextBlock Text="Select a territory to view its map" 
-                                   Canvas.Left="10" Canvas.Top="10"
-                                   Foreground="Gray"
-                                   x:Name="MapPlaceholderText"/>
-                    </Canvas>
+                            </Canvas.RenderTransform>
+                        </Canvas>
+                    </Grid>
                 </Border>
 
                 <!-- Map Info Panel -->
@@ -114,13 +130,13 @@
                     <RowDefinition Height="*"/>
                     <RowDefinition Height="Auto"/>
                 </Grid.RowDefinitions>
-                
+
                 <ScrollViewer Grid.Row="0" Name="DebugScrollViewer" MaxHeight="250" VerticalScrollBarVisibility="Auto">
                     <TextBox x:Name="DebugTextBox" IsReadOnly="True" TextWrapping="Wrap" 
                              FontFamily="Consolas" FontSize="12" Background="#FFFCFCFC"
                              VerticalAlignment="Stretch"/>
                 </ScrollViewer>
-                
+
                 <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,5,0,0">
                     <Button x:Name="ClearLogButton" Content="Clear Log" Width="80" Margin="0,0,5,0" Click="ClearLogButton_Click"/>
                     <Button x:Name="SaveLogButton" Content="Save Log" Width="80" Margin="0,0,5,0" Click="SaveLogButton_Click"/>

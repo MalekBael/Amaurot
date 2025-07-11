@@ -8,7 +8,7 @@ using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
 using System.Reflection;
-using System.Threading.Tasks; // Add this for Task.Run
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -42,7 +42,6 @@ namespace map_editor
         private bool _isDragging = false;
 
         public ObservableCollection<TerritoryInfo> Territories { get; set; } = new ObservableCollection<TerritoryInfo>();
-        private Canvas? OverlayCanvas;
 
         private const int MaxLogLines = 1000; // Maximum number of log lines to keep
 
@@ -64,8 +63,12 @@ namespace map_editor
 
         private void MainWindow_Loaded(object sender, RoutedEventArgs e)
         {
-            // Initialize the overlay canvas
-            InitializeOverlayCanvas();
+            // Simply pass the overlay canvas from the XAML to the renderer
+            if (_mapRenderer != null)
+            {
+                _mapRenderer.SetOverlayCanvas(OverlayCanvas);
+                LogDebug("OverlayCanvas from XAML is now set in MapRenderer.");
+            }
 
             // If a map was somehow loaded before this point, ensure it's scaled correctly
             if (MapImageControl.Source is BitmapSource bitmapSource)
@@ -74,115 +77,14 @@ namespace map_editor
             }
         }
 
-        private void InitializeOverlayCanvas()
-        {
-            try
-            {
-                if (OverlayCanvas != null)
-                {
-                    // Already exists, just update
-                    LogDebug("OverlayCanvas already exists, updating properties");
-                    OverlayCanvas.Width = MapCanvas.ActualWidth;
-                    OverlayCanvas.Height = MapCanvas.ActualHeight;
-                    return;
-                }
-
-                // Create new overlay with exact MapCanvas dimensions
-                OverlayCanvas = new Canvas
-                {
-                    Width = MapCanvas.ActualWidth > 0 ? MapCanvas.ActualWidth : 800,
-                    Height = MapCanvas.ActualHeight > 0 ? MapCanvas.ActualHeight : 600,
-                    Background = System.Windows.Media.Brushes.Transparent,
-                    IsHitTestVisible = true
-                };
-
-                // Find the parent Grid of the Border that contains MapCanvas
-                if (MapCanvas.Parent is Border border && border.Parent is Grid gridParent)
-                {
-                    // Set correct Z-index order
-                    WpfPanel.SetZIndex(MapImageControl, 0); // Image at bottom
-                    WpfPanel.SetZIndex(MapCanvas, 1);       // Canvas in middle
-                    WpfPanel.SetZIndex(OverlayCanvas, 2);   // Overlay on top
-
-                    // Position overlay at same position as MapCanvas's parent Border
-                    OverlayCanvas.SetValue(Grid.RowProperty, border.GetValue(Grid.RowProperty));
-                    OverlayCanvas.SetValue(Grid.ColumnProperty, border.GetValue(Grid.ColumnProperty));
-                    OverlayCanvas.Margin = border.Margin;
-                    OverlayCanvas.HorizontalAlignment = border.HorizontalAlignment;
-                    OverlayCanvas.VerticalAlignment = border.VerticalAlignment;
-
-                    // Add to the parent grid
-                    gridParent.Children.Add(OverlayCanvas);
-
-                    _mapRenderer?.SetOverlayCanvas(OverlayCanvas);
-
-                    LogDebug($"OverlayCanvas initialized with size: {OverlayCanvas.Width}x{OverlayCanvas.Height}");
-
-                    // Listen for size changes on MapCanvas
-                    MapCanvas.SizeChanged += (s, e) => {
-                        OverlayCanvas.Width = MapCanvas.ActualWidth;
-                        OverlayCanvas.Height = MapCanvas.ActualHeight;
-                        LogDebug($"Canvas resized: MapCanvas={MapCanvas.ActualWidth}x{MapCanvas.ActualHeight}, " +
-                                 $"OverlayCanvas={OverlayCanvas.Width}x{OverlayCanvas.Height}");
-                    };
-                }
-                else
-                {
-                    LogDebug($"ERROR: Unexpected parent hierarchy. MapCanvas.Parent is {MapCanvas.Parent?.GetType().Name}, " +
-                            $"grandparent is {(MapCanvas.Parent as Border)?.Parent?.GetType().Name}");
-
-                    // Fallback option: Modify the MapCanvas directly to include our markers
-                    _mapRenderer?.SetOverlayCanvas(MapCanvas);
-                    LogDebug("Fallback: Using MapCanvas directly for markers");
-                }
-            }
-            catch (Exception ex)
-            {
-                LogDebug($"ERROR in InitializeOverlayCanvas: {ex.Message}");
-                LogDebug($"Stack trace: {ex.StackTrace}");
-            }
-        }
-
         private void SyncOverlayWithMap()
         {
-            if (OverlayCanvas == null || MapImageControl == null) return;
-
-            // Get the current transforms from the MapImageControl
-            var mapTransformGroup = MapImageControl.RenderTransform as TransformGroup;
-            if (mapTransformGroup == null) return;
-
-            // Create a new TransformGroup for the overlay to avoid reference issues
-            var overlayTransformGroup = new TransformGroup();
-
-            // Clone each transform to ensure they're separate objects
-            foreach (var transform in mapTransformGroup.Children)
+            if (OverlayCanvas != null && MapImageControl != null)
             {
-                if (transform is ScaleTransform scaleTransform)
-                {
-                    overlayTransformGroup.Children.Add(new ScaleTransform(
-                        scaleTransform.ScaleX, scaleTransform.ScaleY,
-                        scaleTransform.CenterX, scaleTransform.CenterY));
-                }
-                else if (transform is TranslateTransform translateTransform)
-                {
-                    overlayTransformGroup.Children.Add(new TranslateTransform(
-                        translateTransform.X, translateTransform.Y));
-                }
-                else
-                {
-                    // Clone any other transform types if needed
-                    overlayTransformGroup.Children.Add(transform.Clone());
-                }
+                OverlayCanvas.RenderTransform = MapImageControl.RenderTransform;
+                OverlayCanvas.RenderTransformOrigin = MapImageControl.RenderTransformOrigin;
+                LogDebug("Overlay synchronized with map transform");
             }
-
-            // Apply the transform group to the overlay canvas
-            OverlayCanvas.RenderTransform = overlayTransformGroup;
-
-            // Match the render transform origin as well
-            OverlayCanvas.RenderTransformOrigin = MapImageControl.RenderTransformOrigin;
-
-            // Log diagnostic information
-            LogDebug("Overlay synchronized with map");
         }
 
         private void LoadGameData_Click(object sender, RoutedEventArgs e)
@@ -214,10 +116,7 @@ namespace map_editor
                 return;
 
             System.Windows.Point clickPoint = e.GetPosition(MapCanvas);
-            var imagePosition = new System.Windows.Point(
-                Canvas.GetLeft(MapImageControl),
-                Canvas.GetTop(MapImageControl)
-            );
+            var imagePosition = new System.Windows.Point(0, 0); // Always (0,0) since we use transforms
 
             var bitmapSource = MapImageControl.Source as System.Windows.Media.Imaging.BitmapSource;
             if (bitmapSource == null) return;
@@ -274,11 +173,14 @@ namespace map_editor
         {
             if (MapImageControl.Source == null) return;
 
-            double zoomFactor = e.Delta > 0 ? 1.1 : 1 / 1.1;
-            _currentScale = _currentScale * zoomFactor;
-            _currentScale = Math.Clamp(_currentScale, 0.1, 10.0);
+            // Get mouse position relative to the canvas
+            var mousePos = e.GetPosition(MapCanvas);
 
-            // Apply the new scale
+            double zoomFactor = e.Delta > 0 ? 1.1 : 1 / 1.1;
+            double newScale = _currentScale * zoomFactor;
+            newScale = Math.Clamp(newScale, 0.1, 10.0);
+
+            // Get the current transform
             var transformGroup = MapImageControl.RenderTransform as TransformGroup;
             if (transformGroup == null)
             {
@@ -289,14 +191,25 @@ namespace map_editor
             }
 
             var scaleTransform = transformGroup.Children.OfType<ScaleTransform>().FirstOrDefault();
-            if (scaleTransform != null)
+            var translateTransform = transformGroup.Children.OfType<TranslateTransform>().FirstOrDefault();
+
+            if (scaleTransform != null && translateTransform != null)
             {
-                scaleTransform.ScaleX = _currentScale;
-                scaleTransform.ScaleY = _currentScale;
+                // Calculate zoom to mouse position
+                double scaleDelta = newScale / _currentScale;
+
+                // Adjust translation to zoom towards mouse position
+                translateTransform.X = mousePos.X - (mousePos.X - translateTransform.X) * scaleDelta;
+                translateTransform.Y = mousePos.Y - (mousePos.Y - translateTransform.Y) * scaleDelta;
+
+                // Apply new scale
+                scaleTransform.ScaleX = newScale;
+                scaleTransform.ScaleY = newScale;
             }
 
+            _currentScale = newScale;
             StatusText.Text = $"Zoom: {_currentScale:P0}";
-            SyncOverlayWithMap(); // Add this line
+            SyncOverlayWithMap();
             e.Handled = true;
 
             // Refresh markers if needed
@@ -312,7 +225,6 @@ namespace map_editor
             {
                 _lastMousePosition = e.GetPosition(MapCanvas);
                 _isDragging = true;
-                // Explicitly use System.Windows.Input.Cursors to resolve ambiguity
                 MapCanvas.Cursor = System.Windows.Input.Cursors.Hand;
                 MapCanvas.CaptureMouse();
                 e.Handled = true;
@@ -324,7 +236,6 @@ namespace map_editor
             if (_isDragging)
             {
                 _isDragging = false;
-                // Explicitly use System.Windows.Input.Cursors to resolve ambiguity
                 MapCanvas.Cursor = System.Windows.Input.Cursors.Arrow;
                 MapCanvas.ReleaseMouseCapture();
                 e.Handled = true;
@@ -351,7 +262,7 @@ namespace map_editor
                 }
 
                 _lastMousePosition = currentPosition;
-                SyncOverlayWithMap(); // Add this line
+                SyncOverlayWithMap();
 
                 // Refresh markers if needed
                 if (_currentMap != null && _currentMapMarkers.Any() && _mapRenderer != null)
@@ -593,174 +504,6 @@ namespace map_editor
             }
         }
 
-        // Replace this method entirely to use the correct XAML elements
-        private void LoadMapImage(System.Drawing.Image mapImage)
-        {
-            if (mapImage == null) return;
-
-            using (var bitmap = new System.Drawing.Bitmap(mapImage))
-            {
-                IntPtr handle = bitmap.GetHbitmap();
-                try
-                {
-                    var bitmapSource = System.Windows.Interop.Imaging.CreateBitmapSourceFromHBitmap(
-                        handle, IntPtr.Zero, Int32Rect.Empty, System.Windows.Media.Imaging.BitmapSizeOptions.FromEmptyOptions());
-
-                    // Set the source directly to MapImageControl
-                    MapImageControl.Source = bitmapSource;
-
-                    // Apply scaling and positioning
-                    CalculateAndApplyInitialScale(bitmapSource);
-
-                    // Hide the placeholder text
-                    MapPlaceholderText.Visibility = Visibility.Collapsed;
-                }
-                finally
-                {
-                    DeleteObject(handle);
-                }
-            }
-        }
-
-        // Replace this method entirely too
-        private void ApplyInitialScaleAndPosition(System.Windows.Media.Imaging.BitmapSource bitmapSource)
-        {
-            if (MapCanvas == null) return;
-
-            double canvasWidth = MapCanvas.ActualWidth;
-            double canvasHeight = MapCanvas.ActualHeight;
-
-            double imageWidth = bitmapSource.PixelWidth;
-            double imageHeight = bitmapSource.PixelHeight;
-
-            // Calculate scale to fit
-            double scaleX = canvasWidth / imageWidth;
-            double scaleY = canvasHeight / imageHeight;
-            _currentScale = Math.Min(scaleX, scaleY) * 0.9; // 90% to leave some margin
-
-            // Calculate centered position
-            double centerX = (canvasWidth - (imageWidth * _currentScale)) / 2;
-            double centerY = (canvasHeight - (imageHeight * _currentScale)) / 2;
-
-            LogDebug($"Map positioned at {centerX:F1},{centerY:F1} with scale {_currentScale:F2}");
-
-            // Apply directly to MapImageControl
-            Canvas.SetLeft(MapImageControl, centerX);
-            Canvas.SetTop(MapImageControl, centerY);
-
-            // Set up transform
-            var transformGroup = new TransformGroup();
-            transformGroup.Children.Add(new ScaleTransform(_currentScale, _currentScale));
-            transformGroup.Children.Add(new TranslateTransform(0, 0));
-            MapImageControl.RenderTransform = transformGroup;
-            MapImageControl.RenderTransformOrigin = new System.Windows.Point(0, 0);
-        }
-
-        // Update LoadTerritoryMap to use the new approach
-        private bool LoadTerritoryMap(TerritoryInfo territory)
-        {
-            try
-            {
-                _currentTerritory = territory;
-                _currentMap = null;
-
-                MapInfoText.Text = $"Region: {territory.Region}\n" +
-                                   $"Place Name: {territory.PlaceName}\n" +
-                                   $"Territory ID: {territory.Id}\n" +
-                                   $"Map ID: {territory.MapId}";
-
-                MapImageControl.Source = null;
-                _mapRenderer?.ClearMarkers();
-
-                if (_realm == null)
-                {
-                    StatusText.Text = "Game data not loaded.";
-                    return false;
-                }
-
-                var mapSheet = _realm.GameData.GetSheet<SaintCoinach.Xiv.Map>();
-                _currentMap = mapSheet.FirstOrDefault(m => m.Key == territory.MapId);
-
-                if (_currentMap == null)
-                {
-                    StatusText.Text = $"Map not found for MapId: {territory.MapId}";
-                    return false;
-                }
-
-                // Load the map image
-                LogDebug($"Loading map image for Map ID: {_currentMap.Key}");
-                var mapImage = _currentMap.MediumImage;
-                if (mapImage == null)
-                {
-                    StatusText.Text = $"Could not load map image for {territory.PlaceName}.";
-                    LogDebug($"FAILURE: mapImage is null for Map ID: {_currentMap.Key}");
-                    return false;
-                }
-
-                using (var bitmap = new System.Drawing.Bitmap(mapImage))
-                {
-                    IntPtr handle = bitmap.GetHbitmap();
-                    try
-                    {
-                        var bitmapSource = System.Windows.Interop.Imaging.CreateBitmapSourceFromHBitmap(
-                            handle, IntPtr.Zero, Int32Rect.Empty, BitmapSizeOptions.FromEmptyOptions());
-
-                        // Set image source and ensure it's part of the canvas
-                        MapImageControl.Source = bitmapSource;
-
-                        if (!MapCanvas.Children.Contains(MapImageControl))
-                        {
-                            MapCanvas.Children.Insert(0, MapImageControl);
-                            LogDebug("Added MapImageControl to MapCanvas");
-                        }
-
-                        // Apply scaling and positioning
-                        CalculateAndApplyInitialScale(bitmapSource);
-
-                        // Hide placeholder text
-                        MapPlaceholderText.Visibility = Visibility.Collapsed;
-
-                        StatusText.Text = $"Map loaded for {territory.PlaceName}. Loading markers...";
-
-                        // Load and display markers
-                        Task.Run(() => {
-                            var markers = _mapService?.LoadMapMarkers(territory.MapId) ?? new List<MapMarker>();
-                            Dispatcher.BeginInvoke(() => {
-                                _currentMapMarkers = markers;
-
-                                // Get current image position and scale for marker placement
-                                var imagePosition = new System.Windows.Point(
-                                    Canvas.GetLeft(MapImageControl),
-                                    Canvas.GetTop(MapImageControl));
-                                var imageSize = new System.Windows.Size(
-                                    bitmapSource.PixelWidth,
-                                    bitmapSource.PixelHeight);
-
-                                // Display markers
-                                _mapRenderer?.DisplayMapMarkers(_currentMapMarkers, _currentMap, _currentScale, imagePosition, imageSize);
-                                SyncOverlayWithMap();
-                                _mapRenderer?.AddDebugGridAndBorders(); // Add debug visuals
-                                DiagnoseOverlayCanvas(); // Diagnose overlay status
-                                StatusText.Text = $"Map loaded for {territory.PlaceName} - {_currentMapMarkers.Count} markers found.";
-                            });
-                        });
-
-                        return true;
-                    }
-                    finally
-                    {
-                        DeleteObject(handle);
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                MapInfoText.Text = $"Error loading map: {ex.Message}";
-                LogDebug($"Error in LoadTerritoryMap: {ex}");
-                return false;
-            }
-        }
-
         private async Task<bool> LoadTerritoryMapAsync(TerritoryInfo territory)
         {
             try
@@ -834,7 +577,7 @@ namespace map_editor
                         // Back on UI thread
                         _currentMapMarkers = markers;
 
-                        // Get current image position and scale for marker placement
+                        // Always use (0,0) as image position since positioning is handled by transform
                         var imagePosition = new System.Windows.Point(0, 0);
                         var imageSize = new System.Windows.Size(
                             bitmapSource.PixelWidth,
@@ -890,26 +633,48 @@ namespace map_editor
             double fitScale = Math.Min(scaleX, scaleY);
             _currentScale = fitScale * 0.9; // Slightly smaller to leave margin
 
-            // Center the image within the canvas
+            // Center the image within the canvas using transforms ONLY
             double centeredX = (canvasWidth - (imageWidth * _currentScale)) / 2;
             double centeredY = (canvasHeight - (imageHeight * _currentScale)) / 2;
 
-            // Configure map image
+            // Configure map image - Set position to 0,0 and use transform for centering
             MapImageControl.Width = imageWidth;
             MapImageControl.Height = imageHeight;
-            Canvas.SetLeft(MapImageControl, centeredX);
-            Canvas.SetTop(MapImageControl, centeredY);
+            Canvas.SetLeft(MapImageControl, 0); // Always 0
+            Canvas.SetTop(MapImageControl, 0);  // Always 0
             Canvas.SetZIndex(MapImageControl, 0); // Ensure map is behind markers
             MapImageControl.Visibility = Visibility.Visible;
 
-            // Create transform for scaling
+            // Create transform for scaling AND positioning
             var transformGroup = new TransformGroup();
             transformGroup.Children.Add(new ScaleTransform(_currentScale, _currentScale));
-            transformGroup.Children.Add(new TranslateTransform(0, 0));
+            transformGroup.Children.Add(new TranslateTransform(centeredX, centeredY)); // Use transform for centering
             MapImageControl.RenderTransform = transformGroup;
             MapImageControl.RenderTransformOrigin = new System.Windows.Point(0, 0);
 
-            LogDebug($"Map scaled to {_currentScale:F2} and positioned at ({centeredX:F1}, {centeredY:F1})");
+            LogDebug($"Map scaled to {_currentScale:F2} and positioned via transform at ({centeredX:F1}, {centeredY:F1})");
+        }
+
+        private void RefreshMarkers()
+        {
+            if (_mapRenderer == null || _currentMap == null) return;
+
+            // Always use (0,0) as image position since positioning is handled by transform
+            var imagePosition = new System.Windows.Point(0, 0);
+
+            if (MapImageControl.Source is BitmapSource bitmapSource)
+            {
+                var imageSize = new System.Windows.Size(
+                    bitmapSource.PixelWidth,
+                    bitmapSource.PixelHeight
+                );
+
+                _mapRenderer?.DisplayMapMarkers(_currentMapMarkers, _currentMap, _currentScale, imagePosition, imageSize);
+                SyncOverlayWithMap();
+
+                // Add a debug message to confirm markers were refreshed
+                LogDebug($"Refreshed {_currentMapMarkers.Count} markers on map");
+            }
         }
 
         // Add this method to diagnose map display issues
@@ -1031,16 +796,13 @@ namespace map_editor
                 }
             }
 
-            if (MapCanvas?.Parent is Grid parentGrid)
+            if (MapCanvas?.Parent is Border border && border.Parent is Grid parentGrid)
             {
                 LogDebug($"Parent Grid children count: {parentGrid.Children.Count}");
-                LogDebug($"Parent contains MapCanvas: {parentGrid.Children.Contains(MapCanvas)}");
-                LogDebug($"Parent contains OverlayCanvas: {parentGrid.Children.Contains(OverlayCanvas)}");
-
                 for (int i = 0; i < parentGrid.Children.Count; i++)
                 {
                     var child = parentGrid.Children[i];
-                    LogDebug($"  Child {i}: Type={child.GetType().Name}, Z-Index={System.Windows.Controls.Panel.GetZIndex(child)}");
+                    LogDebug($"  Child {i}: Type={child.GetType().Name}");
                 }
             }
 
@@ -1063,32 +825,6 @@ namespace map_editor
             {
                 MapImageControl.Visibility = Visibility.Visible;
                 LogDebug("- Visibility forced to Visible");
-            }
-        }
-
-        private void RefreshMarkers()
-        {
-            if (_mapRenderer == null || _currentMap == null) return;
-
-            // Important: We need to correctly calculate the image position
-            // When using transforms, we don't need Canvas.GetLeft/Top
-            var imagePosition = new System.Windows.Point(0, 0);
-
-            if (MapImageControl.Source is BitmapSource bitmapSource)
-            {
-                var imageSize = new System.Windows.Size(
-                    bitmapSource.PixelWidth,
-                    bitmapSource.PixelHeight
-                );
-
-                _mapRenderer?.DisplayMapMarkers(_currentMapMarkers, _currentMap, _currentScale, imagePosition, imageSize);
-                SyncOverlayWithMap();
-
-                // Add this to help visualize coordinates
-                //_mapRenderer.AddCoordinateGrid();
-
-                // Add a debug message to confirm markers were refreshed
-                LogDebug($"Refreshed {_currentMapMarkers.Count} markers on map");
             }
         }
 
@@ -1184,24 +920,6 @@ namespace map_editor
             }
 
             LogDebug("==============================");
-        }
-
-        // Add this method to implement the LoadMapMarkers functionality that was referenced but missing
-        public List<MapMarker> LoadMapMarkers(uint mapId)
-        {
-            System.Diagnostics.Debug.WriteLine($"START LoadMapMarkers for map {mapId}");
-            System.Diagnostics.Stopwatch sw = new System.Diagnostics.Stopwatch();
-            sw.Start();
-
-            // Create a list to hold the markers
-            List<MapMarker> markers = new List<MapMarker>();
-
-            // Your implementation code would go here
-            // For now, just return an empty list
-
-            sw.Stop();
-            System.Diagnostics.Debug.WriteLine($"COMPLETED LoadMapMarkers in {sw.ElapsedMilliseconds}ms, returning {markers.Count} markers");
-            return markers;
         }
     }
 
