@@ -8,6 +8,8 @@ using System.IO;
 using System.Linq;
 using WpfPoint = System.Windows.Point;
 using WpfSize = System.Windows.Size;
+using System.Windows.Media;
+using System.Windows.Controls;
 
 namespace map_editor
 {
@@ -480,45 +482,76 @@ namespace map_editor
 }
 
 public MapCoordinate ConvertMapToGameCoordinates(
-    WpfPoint canvasPoint,
-    WpfPoint imagePosition,
-    double imageScale,
-    WpfSize imageSize,
-    Map? map)
+    WpfPoint clickPoint, WpfPoint imagePosition, 
+    double scale, WpfSize imageSize, Map? map)
 {
-    if (map == null)
-        return new MapCoordinate();
-
-    // Step 1: Undo zoom and pan to get pixel coordinates in the image
-    double px = (canvasPoint.X - imagePosition.X) / imageScale;
-    double py = (canvasPoint.Y - imagePosition.Y) / imageScale;
-
-    // Step 2: Convert pixel coordinates to normalized coordinates (0-1)
-    double normalizedX = px / imageSize.Width;
-    double normalizedY = py / imageSize.Height;
+    // Create a default result with zeros
+    var result = new MapCoordinate();
     
-    // Step 3: Scale to FFXIV's 41x41 coordinate system
-    double scaledX = normalizedX * 41.0;
-    double scaledY = normalizedY * 41.0;
-    
-    // Step 4: Apply map's scale factor and offsets
-    double scale = map.SizeFactor / 100.0;
-    double gameX = (scaledX * scale) + map.OffsetX;
-    double gameY = (scaledY * scale) + map.OffsetY;
-
-    Debug.WriteLine($"Canvas ({canvasPoint.X:F1}, {canvasPoint.Y:F1}) -> " +
-                   $"Image Pixel ({px:F1}, {py:F1}) -> " +
-                   $"Normalized ({normalizedX:F4}, {normalizedY:F4}) -> " +
-                   $"Game ({gameX:F1}, {gameY:F1})");
-
-    return new MapCoordinate
+    try
     {
-        MapX = gameX,
-        MapY = gameY,
-        ClientX = gameX,
-        ClientY = gameY,
-        ClientZ = 0
-    };
+        if (map == null) return result;
+        
+        // Get map properties safely
+        float sizeFactor = 100.0f;
+        float offsetX = 0;
+        float offsetY = 0;
+        
+        try
+        {
+            // Use reflection to safely get properties
+            var type = map.GetType();
+            var indexer = type.GetProperty("Item", new[] { typeof(string) });
+            
+            if (indexer != null)
+            {
+                sizeFactor = (float)Convert.ChangeType(
+                    indexer.GetValue(map, new object[] { "SizeFactor" }), typeof(float));
+                offsetX = (float)Convert.ChangeType(
+                    indexer.GetValue(map, new object[] { "OffsetX" }), typeof(float));
+                offsetY = (float)Convert.ChangeType(
+                    indexer.GetValue(map, new object[] { "OffsetY" }), typeof(float));
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Error accessing map properties: {ex.Message}");
+            // Use default values if properties can't be accessed
+        }
+        
+        // The Map from SaintCoinach doesn't have a RenderTransform property
+        // Instead, we'll rely on the imagePosition and scale parameters
+        
+        // Calculate relative position on the image (0-1 range)
+        double relativeX = (clickPoint.X - imagePosition.X) / (imageSize.Width * scale);
+        double relativeY = (clickPoint.Y - imagePosition.Y) / (imageSize.Height * scale);
+        
+        // Clamp to valid range
+        relativeX = Math.Max(0, Math.Min(1, relativeX));
+        relativeY = Math.Max(0, Math.Min(1, relativeY));
+        
+        // Calculate raw map coordinates
+        double rawX = relativeX * 2048.0 - offsetX;
+        double rawY = relativeY * 2048.0 - offsetY;
+        
+        // Calculate game coordinates
+        double c = sizeFactor / 100.0;
+        double gameX = (41.0 / c) * relativeX + 1.0;
+        double gameY = (41.0 / c) * relativeY + 1.0;
+        
+        // Populate result
+        result.MapX = gameX;
+        result.MapY = gameY;
+        result.ClientX = clickPoint.X;
+        result.ClientY = clickPoint.Y;
+        
+        return result;
+    }
+    catch (Exception ex)
+    {
+        System.Diagnostics.Debug.WriteLine($"Error converting coordinates: {ex.Message}");
+        return result;
+    }
 }
 
         public MapInfo? GetMapInfo(uint mapId)
@@ -1142,6 +1175,54 @@ public MapCoordinate ConvertMapToGameCoordinates(
             // Add this line to check the actual transforms
             Debug.WriteLine($"MapImageControl transform: Scale={mapScale:F2}, Position=({mapPosition.X:F1},{mapPosition.Y:F1})");
             Debug.WriteLine($"OverlayCanvas transform: Scale={overlayScale:F2}, Position=({overlayPosition.X:F1},{overlayPosition.Y:F1})");
+        }
+
+        // Add this method to MapService class to help with debugging cursor position issues
+        public void LogCursorPosition(WpfPoint mousePosition, WpfPoint imagePosition, 
+                            double scale, WpfSize imageSize, Map? map)
+        {
+            // Convert screen coordinates to map coordinates
+            var mapCoords = ConvertMapToGameCoordinates(mousePosition, imagePosition, scale, imageSize, map);
+            
+            Debug.WriteLine($"Cursor - Screen: ({mousePosition.X:F1}, {mousePosition.Y:F1}), " +
+                           $"Map: ({mapCoords.MapX:F2}, {mapCoords.MapY:F2})");
+            
+            // Check if cursor is within map bounds
+            bool isInMapBounds = 
+                mousePosition.X >= imagePosition.X && 
+                mousePosition.X <= imagePosition.X + (imageSize.Width * scale) &&
+                mousePosition.Y >= imagePosition.Y && 
+                mousePosition.Y <= imagePosition.Y + (imageSize.Height * scale);
+            
+            Debug.WriteLine($"Cursor is {(isInMapBounds ? "INSIDE" : "OUTSIDE")} map bounds");
+        }
+
+        // Add this method to MapService class
+        public MapMarker? GetMarkerAtPosition(WpfPoint mousePosition, WpfPoint imagePosition, 
+                                     double scale, WpfSize imageSize, List<MapMarker> markers)
+        {
+            // Define a reasonable hit test radius (in pixels at current zoom level)
+            double hitTestRadius = 15 / scale; // Adjust this value as needed for better hit detection
+            
+            foreach (var marker in markers.Where(m => m.IsVisible))
+            {
+                // Get marker position in screen coordinates
+                double screenX = (marker.X / 42.0) * imageSize.Width * scale + imagePosition.X;
+                double screenY = (marker.Y / 42.0) * imageSize.Height * scale + imagePosition.Y;
+                
+                // Calculate distance between mouse and marker
+                double distance = Math.Sqrt(
+                    Math.Pow(mousePosition.X - screenX, 2) + 
+                    Math.Pow(mousePosition.Y - screenY, 2));
+                
+                // If mouse is within hit test radius, return this marker
+                if (distance <= hitTestRadius)
+                {
+                    return marker;
+                }
+            }
+            
+            return null;
         }
     }
 }

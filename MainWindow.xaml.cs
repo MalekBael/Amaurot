@@ -41,9 +41,11 @@ namespace map_editor
         private System.Windows.Point _lastMousePosition;
         private bool _isDragging = false;
 
+        private bool _debugLoggingEnabled = false; // Add this field at the class level
+
         public ObservableCollection<TerritoryInfo> Territories { get; set; } = new ObservableCollection<TerritoryInfo>();
 
-        private const int MaxLogLines = 1000; // Maximum number of log lines to keep
+        private const int MaxLogLines = 100; // Maximum number of log lines to keep
 
         public MainWindow()
         {
@@ -67,7 +69,15 @@ namespace map_editor
             if (_mapRenderer != null)
             {
                 _mapRenderer.SetOverlayCanvas(OverlayCanvas);
+                _mapRenderer.SetMainWindow(this); // Add this line
                 LogDebug("OverlayCanvas from XAML is now set in MapRenderer.");
+            }
+
+            // Ensure the overlay canvas doesn't block mouse events to child elements
+            if (OverlayCanvas != null)
+            {
+                OverlayCanvas.IsHitTestVisible = true;
+                OverlayCanvas.Background = null; // Transparent background
             }
 
             // If a map was somehow loaded before this point, ensure it's scaled correctly
@@ -154,7 +164,10 @@ namespace map_editor
                 _mapService = new MapService(_realm);
                 LogDebug("Initialized map service");
 
-                _mapRenderer?.UpdateRealm(_realm);
+                if (_realm != null)
+                {
+                    _mapRenderer?.UpdateRealm(_realm);
+                }
                 LogDebug("Loading territories...");
                 LoadTerritories();
 
@@ -244,30 +257,55 @@ namespace map_editor
 
         private void MapCanvas_MouseMove(object sender, System.Windows.Input.MouseEventArgs e)
         {
-            if (_isDragging && e.LeftButton == MouseButtonState.Pressed)
+            if (_isDragging && e.LeftButton == MouseButtonState.Pressed && MapImageControl.Source != null)
             {
-                System.Windows.Point currentPosition = e.GetPosition(MapCanvas);
-                Vector delta = currentPosition - _lastMousePosition;
+                var currentPosition = e.GetPosition(MapCanvas);
+                var deltaX = currentPosition.X - _lastMousePosition.X;
+                var deltaY = currentPosition.Y - _lastMousePosition.Y;
 
-                // Update the translation
                 var transformGroup = MapImageControl.RenderTransform as TransformGroup;
                 if (transformGroup != null)
                 {
                     var translateTransform = transformGroup.Children.OfType<TranslateTransform>().FirstOrDefault();
                     if (translateTransform != null)
                     {
-                        translateTransform.X += delta.X;
-                        translateTransform.Y += delta.Y;
+                        translateTransform.X += deltaX;
+                        translateTransform.Y += deltaY;
                     }
                 }
 
                 _lastMousePosition = currentPosition;
                 SyncOverlayWithMap();
-
-                // Refresh markers if needed
-                if (_currentMap != null && _currentMapMarkers.Any() && _mapRenderer != null)
+                RefreshMarkers();
+            }
+            else if (!_isDragging)
+            {
+                // Hover detection logic
+                var mousePosition = e.GetPosition(MapCanvas);
+                
+                // Pass mouse position to MapRenderer for hover detection
+                _mapRenderer?.HandleMouseMove(mousePosition, _currentMap);
+                
+                // For debugging: log cursor position occasionally 
+                if (_debugLoggingEnabled && DateTime.Now.Millisecond < 50) // ~5% of the time
                 {
-                    RefreshMarkers();
+                    // Get the image position from the transform
+                    var transformGroup = MapImageControl.RenderTransform as TransformGroup;
+                    var translateTransform = transformGroup?.Children.OfType<TranslateTransform>().FirstOrDefault();
+                    var imagePosition = new System.Windows.Point(
+                        translateTransform?.X ?? 0, 
+                        translateTransform?.Y ?? 0
+                    );
+                    
+                    if (MapImageControl.Source is BitmapSource bitmapSource)
+                    {
+                        _mapService?.LogCursorPosition(
+                            mousePosition, 
+                            imagePosition, 
+                            _currentScale, 
+                            new System.Windows.Size(bitmapSource.PixelWidth, bitmapSource.PixelHeight), 
+                            _currentMap);
+                    }
                 }
             }
         }
@@ -851,7 +889,17 @@ namespace map_editor
             }
         }
 
-        // Add this method
+        private void ToggleDebugMode_Click(object sender, RoutedEventArgs e)
+        {
+            if (_mapRenderer != null)
+            {
+                bool isEnabled = DebugModeCheckBox.IsChecked == true;
+                _mapRenderer.EnableVerboseLogging(isEnabled);
+                _mapRenderer.EnableDebugVisuals(isEnabled);
+                LogDebug($"Debug mode {(isEnabled ? "enabled" : "disabled")}");
+            }
+        }
+
         private bool ValidateGameDirectory(string directory)
         {
             LogDebug($"Validating directory: '{directory}'");
