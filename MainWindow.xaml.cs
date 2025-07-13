@@ -191,7 +191,7 @@ namespace map_editor
 
             double zoomFactor = e.Delta > 0 ? 1.1 : 1 / 1.1;
             double newScale = _currentScale * zoomFactor;
-            newScale = Math.Clamp(newScale, 0.1, 10.0);
+            newScale = Math.Clamp(newScale, 0.1, 2.0);
 
             // Get the current transform
             var transformGroup = MapImageControl.RenderTransform as TransformGroup;

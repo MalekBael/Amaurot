@@ -294,8 +294,12 @@ namespace map_editor
                         $"Canvas({canvasX:F1},{canvasY:F1})");
                 }
 
-                // Create visible marker - appropriate size based on zoom level
-                double markerSize = Math.Max(30, 15 * displayScale);
+                // Create visible marker - appropriate size based on zoom level with maximum limit
+                const double MAX_MARKER_SIZE = 26.0; // Maximum marker size in pixels
+                const double MIN_MARKER_SIZE = 14.0; // Minimum marker size in pixels
+                const double BASE_MARKER_SIZE = 16.0; // Base size multiplier
+                
+                double markerSize = Math.Max(MIN_MARKER_SIZE, Math.Min(MAX_MARKER_SIZE, BASE_MARKER_SIZE * displayScale));
 
                 // Ensure marker type is determined
                 marker.DetermineType();
@@ -660,11 +664,18 @@ namespace map_editor
 
         private UIElement CreateTextMarker(MapMarker marker, double displayScale, double canvasX, double canvasY)
         {
+            // Add size limits for text markers similar to icon markers
+            const double MAX_TEXT_SIZE = 12.0; // Maximum text font size in pixels
+            const double MIN_TEXT_SIZE = 12.0; // Minimum text font size in pixels
+            const double BASE_TEXT_SIZE = 12.0; // Base size multiplier
+            
+            double fontSize = Math.Max(MIN_TEXT_SIZE, Math.Min(MAX_TEXT_SIZE, BASE_TEXT_SIZE * displayScale));
+
             // Create a TextBlock for the place name
             var textBlock = new TextBlock
             {
                 Text = marker.PlaceName,
-                FontSize = Math.Max(12, 10 * displayScale),
+                FontSize = fontSize, // Use the size-limited font size
                 FontWeight = FontWeights.Bold,
                 Foreground = WpfBrushes.White,
                 Tag = marker,
@@ -677,7 +688,7 @@ namespace map_editor
                 System.Globalization.CultureInfo.CurrentCulture,
                 System.Windows.FlowDirection.LeftToRight,
                 new Typeface(textBlock.FontFamily, textBlock.FontStyle, textBlock.FontWeight, textBlock.FontStretch),
-                textBlock.FontSize,
+                fontSize, // Use the size-limited font size here too
                 WpfBrushes.White,
                 VisualTreeHelper.GetDpi(Application.Current.MainWindow).PixelsPerDip);
 
