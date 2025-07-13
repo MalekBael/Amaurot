@@ -671,26 +671,74 @@ namespace map_editor
                 IsHitTestVisible = true
             };
 
-            // Add a drop shadow effect for better visibility
-            textBlock.Effect = new System.Windows.Media.Effects.DropShadowEffect
+            // Create a more pronounced outline effect using formatted text
+            var formattedText = new FormattedText(
+                marker.PlaceName,
+                System.Globalization.CultureInfo.CurrentCulture,
+                System.Windows.FlowDirection.LeftToRight,
+                new Typeface(textBlock.FontFamily, textBlock.FontStyle, textBlock.FontWeight, textBlock.FontStretch),
+                textBlock.FontSize,
+                WpfBrushes.White,
+                VisualTreeHelper.GetDpi(Application.Current.MainWindow).PixelsPerDip);
+
+            // Create a drawing visual for the outlined text
+            var drawingVisual = new DrawingVisual();
+            using (var drawingContext = drawingVisual.RenderOpen())
             {
-                Color = Colors.Black,
-                Direction = 315,
-                ShadowDepth = 2,
-                Opacity = 0.8,
-                BlurRadius = 4
+                // Draw the black outline
+                var geometry = formattedText.BuildGeometry(new WpfPoint(0, 0));
+                var pen = new System.Windows.Media.Pen(WpfBrushes.Black, 3) { LineJoin = PenLineJoin.Round };
+                drawingContext.DrawGeometry(null, pen, geometry);
+                
+                // Draw the white fill
+                drawingContext.DrawGeometry(WpfBrushes.White, null, geometry);
+            }
+
+            // Convert to UIElement
+            var host = new Border
+            {
+                Tag = marker,
+                IsHitTestVisible = true,
+                Child = new VisualHost { Visual = drawingVisual }
             };
 
-            // Measure the text to center it properly
-            textBlock.Measure(new WpfSize(double.PositiveInfinity, double.PositiveInfinity));
-            var textWidth = textBlock.DesiredSize.Width;
-            var textHeight = textBlock.DesiredSize.Height;
+            // Measure to get size
+            host.Measure(new WpfSize(double.PositiveInfinity, double.PositiveInfinity));
+            var textWidth = host.DesiredSize.Width;
+            var textHeight = host.DesiredSize.Height;
 
             // Position the text centered on the coordinates
-            Canvas.SetLeft(textBlock, canvasX - (textWidth / 2));
-            Canvas.SetTop(textBlock, canvasY - (textHeight / 2));
+            Canvas.SetLeft(host, canvasX - (textWidth / 2));
+            Canvas.SetTop(host, canvasY - (textHeight / 2));
 
-            return textBlock;
+            return host;
+        }
+
+        // Helper class to host a DrawingVisual
+        private class VisualHost : FrameworkElement
+        {
+            public DrawingVisual Visual { get; set; }
+
+            protected override int VisualChildrenCount => Visual != null ? 1 : 0;
+
+            protected override Visual GetVisualChild(int index)
+            {
+                if (index != 0 || Visual == null)
+                    throw new ArgumentOutOfRangeException(nameof(index));
+                return Visual;
+            }
+
+            protected override void OnRender(DrawingContext drawingContext)
+            {
+                if (Visual != null)
+                {
+                    var drawing = VisualTreeHelper.GetDrawing(Visual);
+                    if (drawing != null)
+                    {
+                        drawingContext.DrawDrawing(drawing);
+                    }
+                }
+            }
         }
 
         private UIElement CreateFallbackShape(MapMarker marker, double size)
