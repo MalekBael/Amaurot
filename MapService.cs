@@ -296,7 +296,38 @@ namespace map_editor
                                                 {
                                                     var placeNameValue = indexerMethod.Invoke(subRow, new object[] { "PlaceNameSubtext" });
                                                     if (placeNameValue != null && !(placeNameValue is SaintCoinach.Imaging.ImageFile))
-                                                        placeName = placeNameValue.ToString() ?? "Marker";
+                                                    {
+                                                        // Check if it's a PlaceName object
+                                                        if (placeNameValue is SaintCoinach.Xiv.PlaceName placeNameObj)
+                                                        {
+                                                            placeName = placeNameObj.Name?.ToString() ?? "Marker";
+                                                            placeNameId = (uint)placeNameObj.Key;
+                                                        }
+                                                        else
+                                                        {
+                                                            // Try to get the PlaceName ID and look it up
+                                                            uint placeNameSubtextId = Convert.ToUInt32(placeNameValue);
+                                                            if (placeNameSubtextId > 0)
+                                                            {
+                                                                placeNameId = placeNameSubtextId;
+                                                                // Look up the actual name from PlaceName sheet
+                                                                var placeNameSheet = _realm.GameData.GetSheet<PlaceName>();
+                                                                var placeNameRow = placeNameSheet.FirstOrDefault(p => p.Key == placeNameSubtextId);
+                                                                if (placeNameRow?.Name != null)
+                                                                {
+                                                                    placeName = placeNameRow.Name.ToString();
+                                                                }
+                                                                else
+                                                                {
+                                                                    placeName = placeNameValue.ToString() ?? "Marker";
+                                                                }
+                                                            }
+                                                            else
+                                                            {
+                                                                placeName = placeNameValue.ToString() ?? "Marker";
+                                                            }
+                                                        }
+                                                    }
                                                     else
                                                     {
                                                         // Try alternate column name for place name
@@ -330,11 +361,18 @@ namespace map_editor
                                                 if (x > 0 && y > 0)
                                                 {
                                                     // Log what we found
-                                                    Debug.WriteLine($"SubRow {subRowKey}: IconId from data = {iconId}, PlaceName = '{placeName}'");
+                                                    Debug.WriteLine($"SubRow {subRowKey}: IconId from data = {iconId}, PlaceName = '{placeName}', PlaceNameId = {placeNameId}");
                                                     
-                                                    // Only call GetIconForPlaceName if we didn't get an icon ID from the data
-                                                    if (iconId == 0)
+                                                    // If we have no icon ID but have a PlaceNameId, this is a text-only marker
+                                                    if (iconId == 0 && placeNameId > 0)
                                                     {
+                                                        Debug.WriteLine($"SubRow {subRowKey}: Text-only marker detected for '{placeName}'");
+                                                        // Use a special icon ID to indicate text-only markers
+                                                        iconId = 0; // Keep it as 0 to indicate text-only
+                                                    }
+                                                    else if (iconId == 0)
+                                                    {
+                                                        // Only call GetIconForPlaceName if we didn't get an icon ID and don't have a PlaceNameId
                                                         Debug.WriteLine($"SubRow {subRowKey}: No icon in data, calling GetIconForPlaceName('{placeName}')");
                                                         iconId = GetIconForPlaceName(placeName);
                                                         Debug.WriteLine($"SubRow {subRowKey}: GetIconForPlaceName returned {iconId}");
@@ -355,7 +393,7 @@ namespace map_editor
                                                         PlaceNameId = placeNameId,
                                                         PlaceName = placeName,
                                                         IconId = iconId,
-                                                        Type = DetermineMarkerType(iconId),
+                                                        Type = iconId == 0 ? MarkerType.Symbol : DetermineMarkerType(iconId),
                                                         IsVisible = true,
                                                         IconPath = GetIconPath(iconId)
                                                     };

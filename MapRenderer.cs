@@ -351,7 +351,7 @@ namespace map_editor
                                     iconImage.Source = bitmapImage;
                                     markerElement = iconImage;
                                     iconLoaded = true;
-                                    
+
                                     if (_verboseLogging)
                                     {
                                         System.Diagnostics.Debug.WriteLine($"Successfully loaded icon {marker.IconId} for marker {marker.Id}");
@@ -398,15 +398,27 @@ namespace map_editor
                     markerElement = CreateFallbackShape(marker, markerSize);
                 }
 
-                // Make sure markerElement is always assigned before using it
-                if (markerElement == null)
+                // If this is a text-only marker (no icon but has PlaceNameId), create text instead
+                if (marker.IconId == 0 && marker.PlaceNameId > 0 && !string.IsNullOrEmpty(marker.PlaceName))
+                {
+                    markerElement = CreateTextMarker(marker, displayScale, canvasX, canvasY);
+                }
+                else if (markerElement == null)
                 {
                     markerElement = CreateFallbackShape(marker, markerSize);
                 }
 
-                // Position centered on coordinates
-                Canvas.SetLeft(markerElement, canvasX - (markerSize / 2));
-                Canvas.SetTop(markerElement, canvasY - (markerSize / 2));
+                // Position the element
+                if (markerElement is TextBlock)
+                {
+                    // Text markers are already positioned in CreateTextMarker
+                }
+                else
+                {
+                    // Position centered on coordinates for shapes/images
+                    Canvas.SetLeft(markerElement, canvasX - (markerSize / 2));
+                    Canvas.SetTop(markerElement, canvasY - (markerSize / 2));
+                }
                 Canvas.SetZIndex(markerElement, 3000);
 
                 // Enhanced tooltip with more information
@@ -644,6 +656,41 @@ namespace map_editor
             Grid.SetRow(valueBlock, row);
             Grid.SetColumn(valueBlock, 1);
             grid.Children.Add(valueBlock);
+        }
+
+        private UIElement CreateTextMarker(MapMarker marker, double displayScale, double canvasX, double canvasY)
+        {
+            // Create a TextBlock for the place name
+            var textBlock = new TextBlock
+            {
+                Text = marker.PlaceName,
+                FontSize = Math.Max(12, 10 * displayScale),
+                FontWeight = FontWeights.Bold,
+                Foreground = WpfBrushes.White,
+                Tag = marker,
+                IsHitTestVisible = true
+            };
+
+            // Add a drop shadow effect for better visibility
+            textBlock.Effect = new System.Windows.Media.Effects.DropShadowEffect
+            {
+                Color = Colors.Black,
+                Direction = 315,
+                ShadowDepth = 2,
+                Opacity = 0.8,
+                BlurRadius = 4
+            };
+
+            // Measure the text to center it properly
+            textBlock.Measure(new WpfSize(double.PositiveInfinity, double.PositiveInfinity));
+            var textWidth = textBlock.DesiredSize.Width;
+            var textHeight = textBlock.DesiredSize.Height;
+
+            // Position the text centered on the coordinates
+            Canvas.SetLeft(textBlock, canvasX - (textWidth / 2));
+            Canvas.SetTop(textBlock, canvasY - (textHeight / 2));
+
+            return textBlock;
         }
 
         private UIElement CreateFallbackShape(MapMarker marker, double size)
