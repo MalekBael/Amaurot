@@ -295,7 +295,7 @@ namespace map_editor
                 }
 
                 // Create visible marker - appropriate size based on zoom level
-                double markerSize = Math.Max(38, 38 * displayScale);
+                double markerSize = Math.Max(30, 15 * displayScale);
 
                 // Ensure marker type is determined
                 marker.DetermineType();
@@ -351,6 +351,11 @@ namespace map_editor
                                     iconImage.Source = bitmapImage;
                                     markerElement = iconImage;
                                     iconLoaded = true;
+                                    
+                                    if (_verboseLogging)
+                                    {
+                                        System.Diagnostics.Debug.WriteLine($"Successfully loaded icon {marker.IconId} for marker {marker.Id}");
+                                    }
                                 }
                             }
                         }
@@ -358,13 +363,17 @@ namespace map_editor
                         {
                             if (_verboseLogging)
                             {
-                                System.Diagnostics.Debug.WriteLine($"Icon loading error: {ex.Message}");
+                                System.Diagnostics.Debug.WriteLine($"Icon loading error for marker {marker.Id}: {ex.Message}");
                             }
                         }
 
                         // If icon wasn't loaded, create fallback shape
                         if (!iconLoaded)
                         {
+                            if (_verboseLogging)
+                            {
+                                System.Diagnostics.Debug.WriteLine($"Using fallback shape for marker {marker.Id} (icon {marker.IconId} not found)");
+                            }
                             markerElement = CreateFallbackShape(marker, markerSize);
                         }
                     }
@@ -382,6 +391,10 @@ namespace map_editor
                 else
                 {
                     // No icon ID or realm, use fallback
+                    if (_verboseLogging && marker.IconId == 0)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"Marker {marker.Id} has no icon ID, using fallback shape");
+                    }
                     markerElement = CreateFallbackShape(marker, markerSize);
                 }
 
@@ -399,8 +412,27 @@ namespace map_editor
                 // Enhanced tooltip with more information
                 if (markerElement is FrameworkElement fe)
                 {
-                    // Get the map marker range (first two digits of icon ID)
-                    int markerRange = (int)(marker.IconId / 100);
+                    // Get the actual map marker range from the Map data
+                    uint mapMarkerRange = 0;
+                    if (_currentMap != null)
+                    {
+                        try
+                        {
+                            var type = _currentMap.GetType();
+                            var indexer = type.GetProperty("Item", new[] { typeof(string) });
+                            if (indexer != null)
+                            {
+                                mapMarkerRange = (uint)Convert.ChangeType(indexer.GetValue(_currentMap, new object[] { "MapMarkerRange" }), typeof(uint));
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            if (_verboseLogging)
+                            {
+                                System.Diagnostics.Debug.WriteLine($"Failed to get MapMarkerRange: {ex.Message}");
+                            }
+                        }
+                    }
 
                     // Create rich tooltip content
                     var tooltipContent = new StackPanel { Margin = new Thickness(5) };
@@ -423,7 +455,7 @@ namespace map_editor
                     // Add detailed information
                     tooltipContent.Children.Add(new TextBlock
                     {
-                        Text = $"Map Marker Range: {markerRange}\nPosition: X={marker.X:F0}, Y={marker.Y:F0}\nGame Coords: X={gameX:F1}, Y={gameY:F1}\nIcon ID: {marker.IconId}\nMarker ID: {marker.Id}\nType: {marker.Type}"
+                        Text = $"Map Marker Range: {mapMarkerRange}\nRow: {mapMarkerRange}.{marker.Id}\nPosition: X={marker.X:F0}, Y={marker.Y:F0}\nGame Coords: X={gameX:F1}, Y={gameY:F1}\nIcon ID: {marker.IconId}\nMarker ID: {marker.Id}\nType: {marker.Type}"
                     });
 
                     // Make tooltips appear with mouse - important changes here:
@@ -445,8 +477,6 @@ namespace map_editor
                             _hoveredElement = fe;
                             ApplyHoverEffect(fe);
 
-                            // Don't show popup on hover anymore - only visual effect
-
                             if (_verboseLogging)
                             {
                                 System.Diagnostics.Debug.WriteLine($"Mouse entered marker: {marker.PlaceName}");
@@ -459,8 +489,6 @@ namespace map_editor
                         if (_isHoverEnabled && _hoveredElement == fe)
                         {
                             ClearHoverState();
-
-                            // No need to remove popup since we're not showing it on hover
 
                             if (_verboseLogging)
                             {
@@ -509,6 +537,28 @@ namespace map_editor
         {
             if (_mainWindow == null) return;
 
+            // Get the actual map marker range from the Map data
+            uint mapMarkerRange = 0;
+            if (_currentMap != null)
+            {
+                try
+                {
+                    var type = _currentMap.GetType();
+                    var indexer = type.GetProperty("Item", new[] { typeof(string) });
+                    if (indexer != null)
+                    {
+                        mapMarkerRange = (uint)Convert.ChangeType(indexer.GetValue(_currentMap, new object[] { "MapMarkerRange" }), typeof(uint));
+                    }
+                }
+                catch (Exception ex)
+                {
+                    if (_verboseLogging)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"Failed to get MapMarkerRange: {ex.Message}");
+                    }
+                }
+            }
+
             // Instead of creating a popup, update the marker information panel
             _mainWindow.Dispatcher.Invoke(() =>
             {
@@ -549,12 +599,13 @@ namespace map_editor
                 markerDetailsGrid.Children.Clear();
 
                 // Add detail rows
-                AddDetailRowToGrid(markerDetailsGrid, 0, "Map Marker Range:", $"{marker.IconId / 100}");
-                AddDetailRowToGrid(markerDetailsGrid, 1, "Raw Position:", $"X={marker.X:F0}, Y={marker.Y:F0}");
-                AddDetailRowToGrid(markerDetailsGrid, 2, "Icon ID:", $"{marker.IconId}");
-                AddDetailRowToGrid(markerDetailsGrid, 3, "Marker ID:", $"{marker.Id}");
-                AddDetailRowToGrid(markerDetailsGrid, 4, "Place Name ID:", $"{marker.PlaceNameId}");
-                AddDetailRowToGrid(markerDetailsGrid, 5, "Type:", $"{marker.Type}");
+                AddDetailRowToGrid(markerDetailsGrid, 0, "Map Marker Range:", $"{mapMarkerRange}");
+                AddDetailRowToGrid(markerDetailsGrid, 1, "MapMarker Row:", $"{mapMarkerRange}.{marker.Id}");
+                AddDetailRowToGrid(markerDetailsGrid, 2, "Raw Position:", $"X={marker.X:F0}, Y={marker.Y:F0}");
+                AddDetailRowToGrid(markerDetailsGrid, 3, "Icon ID:", $"{marker.IconId}");
+                AddDetailRowToGrid(markerDetailsGrid, 4, "Marker ID:", $"{marker.Id}");
+                AddDetailRowToGrid(markerDetailsGrid, 5, "Place Name ID:", $"{marker.PlaceNameId}");
+                AddDetailRowToGrid(markerDetailsGrid, 6, "Type:", $"{marker.Type}");
 
                 // Log if verbose logging is enabled
                 if (_verboseLogging)

@@ -73,64 +73,84 @@ namespace map_editor
     public static class MapMarkerHelper
     {
         /// <summary>
-        /// Maps icon IDs to marker types based on MapSymbol.csv
+        /// Maps icon IDs to their PlaceName IDs from MapSymbol.csv
         /// </summary>
-        private static readonly Dictionary<uint, MarkerType> IconToTypeMap = new Dictionary<uint, MarkerType>
+        private static Dictionary<uint, uint> IconToPlaceNameIdMap = new Dictionary<uint, uint>();
+        
+        /// <summary>
+        /// Stores the PlaceName strings by ID for display purposes
+        /// </summary>
+        private static Dictionary<uint, string> PlaceNameIdToNameMap = new Dictionary<uint, string>();
+        
+        private static bool _isInitialized = false;
+
+        /// <summary>
+        /// Initializes the icon mappings from MapSymbol data
+        /// </summary>
+        public static void InitializeFromMapSymbolData(IEnumerable<MapSymbolRow> mapSymbols, Dictionary<uint, string> placeNames)
         {
-            // Aetheryte icons
-            { 60441, MarkerType.Aetheryte },
-            { 60447, MarkerType.Aetheryte },
-            { 60446, MarkerType.Aetheryte },
+            IconToPlaceNameIdMap.Clear();
+            PlaceNameIdToNameMap = placeNames ?? new Dictionary<uint, string>();
             
-            // Quest icons
-            { 60314, MarkerType.Quest },
+            foreach (var symbol in mapSymbols)
+            {
+                if (symbol.IconId == 0) continue;
+                
+                // Store the icon -> PlaceNameId mapping
+                IconToPlaceNameIdMap[symbol.IconId] = symbol.PlaceNameId;
+            }
             
-            // Shop icons
-            { 60412, MarkerType.Shop },
-            { 60425, MarkerType.Shop },
-            { 60434, MarkerType.Shop },
-            { 60551, MarkerType.Shop },
-            { 60570, MarkerType.Shop },
+            _isInitialized = true;
+        }
+
+        /// <summary>
+        /// Gets the PlaceName for a given icon ID
+        /// </summary>
+        public static string GetPlaceNameForIcon(uint iconId)
+        {
+            if (!_isInitialized)
+                return string.Empty;
+                
+            if (IconToPlaceNameIdMap.TryGetValue(iconId, out uint placeNameId) &&
+                PlaceNameIdToNameMap.TryGetValue(placeNameId, out string placeName))
+            {
+                return placeName;
+            }
             
-            // Landmark icons
-            { 60430, MarkerType.Landmark },
-            { 60451, MarkerType.Landmark },
-            { 60448, MarkerType.Landmark },
-            { 60311, MarkerType.Landmark },
-            
-            // Entrance icons
-            { 60456, MarkerType.Entrance },
-            
-            // Symbol icons
-            { 60436, MarkerType.Symbol },
-            { 60453, MarkerType.Symbol },
-            { 60467, MarkerType.Symbol }
-        };
+            return string.Empty;
+        }
+
+        /// <summary>
+        /// Updates a MapMarker with its proper PlaceName from the icon mapping
+        /// </summary>
+        public static void UpdateMarkerPlaceName(MapMarker marker)
+        {
+            if (!_isInitialized || marker.IconId == 0)
+                return;
+                
+            // If the marker already has a PlaceNameId from MapMarker.csv, use that
+            if (marker.PlaceNameId > 0 && PlaceNameIdToNameMap.TryGetValue(marker.PlaceNameId, out string existingName))
+            {
+                marker.PlaceName = existingName;
+            }
+            // Otherwise, try to get it from the icon mapping
+            else if (IconToPlaceNameIdMap.TryGetValue(marker.IconId, out uint placeNameId) &&
+                     PlaceNameIdToNameMap.TryGetValue(placeNameId, out string placeName))
+            {
+                marker.PlaceNameId = placeNameId;
+                marker.PlaceName = placeName;
+            }
+        }
 
         /// <summary>
         /// Infers the marker type based on its icon ID
+        /// For backwards compatibility - prefer using the actual PlaceName data
         /// </summary>
         public static MarkerType InferMarkerTypeFromIconId(uint iconId)
         {
-            // First check our explicit mapping
-            if (IconToTypeMap.TryGetValue(iconId, out MarkerType type))
-            {
-                return type;
-            }
-
-            // If not found, try inferring from icon ID range
-            if (iconId >= 60440 && iconId <= 60449)
-                return MarkerType.Aetheryte;
-            else if (iconId >= 60310 && iconId <= 60319)
-                return MarkerType.Quest;
-            else if (iconId >= 60410 && iconId <= 60439)
-                return MarkerType.Shop;
-            else if (iconId >= 60450 && iconId <= 60459)
-                return MarkerType.Landmark;
-            else if (iconId >= 60430 && iconId <= 60439)
-                return MarkerType.Landmark;
-            else
-                return MarkerType.Generic;
+            // This method now just returns Generic - let the UI decide how to categorize
+            // based on the actual PlaceName or let users categorize manually
+            return MarkerType.Generic;
         }
 
         /// <summary>
@@ -199,5 +219,16 @@ namespace map_editor
             string iconFolder = $"{iconId / 1000 * 1000:D6}";
             return $"ui/icon/{iconFolder}/{iconId:D6}.tex";
         }
+    }
+
+    /// <summary>
+    /// Represents a row from MapSymbol.csv
+    /// </summary>
+    public class MapSymbolRow
+    {
+        public uint RowId { get; set; }
+        public uint IconId { get; set; }
+        public uint PlaceNameId { get; set; }
+        public bool DisplayNavi { get; set; }
     }
 }

@@ -196,7 +196,7 @@ namespace map_editor
                                                 uint iconId = 0;
                                                 string placeName = "Marker";
                                                 uint placeNameId = 0;
-                                                
+
                                                 try
                                                 {
                                                     var xValue = indexerMethod.Invoke(subRow, new object[] { "X" });
@@ -204,7 +204,7 @@ namespace map_editor
                                                         x = Convert.ToSingle(xValue);
                                                 }
                                                 catch { /* Ignore conversion errors */ }
-                                                
+
                                                 try
                                                 {
                                                     var yValue = indexerMethod.Invoke(subRow, new object[] { "Y" });
@@ -212,15 +212,86 @@ namespace map_editor
                                                         y = Convert.ToSingle(yValue);
                                                 }
                                                 catch { /* Ignore conversion errors */ }
-                                                
+
+                                                // FIXED: Read icon ID from column index 2 (UInt16)
                                                 try
                                                 {
-                                                    var iconValue = indexerMethod.Invoke(subRow, new object[] { "Icon" });
-                                                    if (iconValue != null && !(iconValue is SaintCoinach.Imaging.ImageFile))
-                                                        iconId = Convert.ToUInt32(iconValue);
+                                                    // Get the indexer method that accepts an integer parameter
+                                                    var intIndexerMethod = subRowType.GetMethod("get_Item", new[] { typeof(int) });
+                                                    
+                                                    if (intIndexerMethod != null)
+                                                    {
+                                                        // Get the icon value by column index 2
+                                                        var iconValue = intIndexerMethod.Invoke(subRow, new object[] { 2 });
+                                                        if (iconValue != null)
+                                                        {
+                                                            // Check if it's an ImageFile object
+                                                            if (iconValue is SaintCoinach.Imaging.ImageFile imageFile)
+                                                            {
+                                                                // Extract icon ID from the image file path
+                                                                var imagePath = imageFile.Path;
+                                                                if (!string.IsNullOrEmpty(imagePath))
+                                                                {
+                                                                    // Extract icon ID from path like "ui/icon/060000/060442.tex"
+                                                                    var match = System.Text.RegularExpressions.Regex.Match(imagePath, @"/(\d{6})\.tex$");
+                                                                    if (match.Success && uint.TryParse(match.Groups[1].Value, out uint extractedIconId))
+                                                                    {
+                                                                        iconId = extractedIconId;
+                                                                        Debug.WriteLine($"Extracted icon ID {iconId} from image path: {imagePath}");
+                                                                    }
+                                                                    else
+                                                                    {
+                                                                        Debug.WriteLine($"Could not extract icon ID from path: {imagePath}");
+                                                                    }
+                                                                }
+                                                            }
+                                                            else if (iconValue is ushort iconUShort)
+                                                            {
+                                                                iconId = iconUShort;
+                                                            }
+                                                            else if (iconValue is short iconShort && iconShort >= 0)
+                                                            {
+                                                                iconId = (uint)iconShort;
+                                                            }
+                                                            else
+                                                            {
+                                                                // Try general conversion as fallback
+                                                                iconId = Convert.ToUInt32(iconValue);
+                                                            }
+                                                        }
+                                                    }
+                                                    else
+                                                    {
+                                                        // Fallback: try using the string indexer with "Icon"
+                                                        var iconValue = indexerMethod.Invoke(subRow, new object[] { "Icon" });
+                                                        if (iconValue != null)
+                                                        {
+                                                            if (iconValue is SaintCoinach.Imaging.ImageFile imageFile)
+                                                            {
+                                                                // Extract icon ID from the image file path
+                                                                var imagePath = imageFile.Path;
+                                                                if (!string.IsNullOrEmpty(imagePath))
+                                                                {
+                                                                    var match = System.Text.RegularExpressions.Regex.Match(imagePath, @"/(\d{6})\.tex$");
+                                                                    if (match.Success && uint.TryParse(match.Groups[1].Value, out uint extractedIconId))
+                                                                    {
+                                                                        iconId = extractedIconId;
+                                                                    }
+                                                                }
+                                                            }
+                                                            else
+                                                            {
+                                                                iconId = Convert.ToUInt32(iconValue);
+                                                            }
+                                                        }
+                                                    }
                                                 }
-                                                catch { /* Ignore conversion errors */ }
-                                                
+                                                catch (Exception ex)
+                                                {
+                                                    Debug.WriteLine($"Error reading icon from column 2: {ex.Message}");
+                                                    iconId = 0;
+                                                }
+
                                                 try
                                                 {
                                                     var placeNameValue = indexerMethod.Invoke(subRow, new object[] { "PlaceNameSubtext" });
@@ -235,7 +306,7 @@ namespace map_editor
                                                     }
                                                 }
                                                 catch { /* Ignore conversion errors */ }
-                                                
+
                                                 // Also try to get place name ID if available
                                                 try
                                                 {
@@ -244,7 +315,7 @@ namespace map_editor
                                                         placeNameId = Convert.ToUInt32(placeNameIdValue);
                                                 }
                                                 catch { /* Ignore conversion errors */ }
-                                                
+
                                                 // Get key of subrow
                                                 uint subRowKey = 0;
                                                 var keyProp = subRowType.GetProperty("Key");
@@ -258,10 +329,15 @@ namespace map_editor
                                                 // Only add markers with valid coordinates
                                                 if (x > 0 && y > 0)
                                                 {
-                                                    // Assign appropriate icon based on name and/or position
+                                                    // Log what we found
+                                                    Debug.WriteLine($"SubRow {subRowKey}: IconId from data = {iconId}, PlaceName = '{placeName}'");
+                                                    
+                                                    // Only call GetIconForPlaceName if we didn't get an icon ID from the data
                                                     if (iconId == 0)
                                                     {
+                                                        Debug.WriteLine($"SubRow {subRowKey}: No icon in data, calling GetIconForPlaceName('{placeName}')");
                                                         iconId = GetIconForPlaceName(placeName);
+                                                        Debug.WriteLine($"SubRow {subRowKey}: GetIconForPlaceName returned {iconId}");
                                                     }
                                                     
                                                     if (count < 10) // Only log first 10 markers to avoid spam
@@ -1000,13 +1076,19 @@ public MapCoordinate ConvertMapToGameCoordinates(
         {
             // Early exit for null/empty
             if (string.IsNullOrEmpty(placeName))
+            {
+                Debug.WriteLine($"GetIconForPlaceName: Empty place name, returning default icon");
                 return 60001; // Default generic icon
+            }
+
+            Debug.WriteLine($"GetIconForPlaceName: Looking up icon for '{placeName}'");
 
             // Make sure symbols are loaded (but with timeout to prevent hanging)
             if (!_symbolsLoaded)
             {
                 try
                 {
+                    Debug.WriteLine("GetIconForPlaceName: Symbols not loaded, attempting to load...");
                     LoadMapSymbols();
                 }
                 catch (Exception ex)
@@ -1016,20 +1098,26 @@ public MapCoordinate ConvertMapToGameCoordinates(
                 }
             }
 
+            // Log the state of our mapping dictionaries
+            Debug.WriteLine($"GetIconForPlaceName: PlaceNameStringToIconMap has {_placeNameStringToIconMap.Count} entries");
+
             // 1. Special cases based on exact mappings from the game data
             if (IsAetheryte(placeName))
             {
+                Debug.WriteLine($"GetIconForPlaceName: '{placeName}' identified as Aetheryte");
                 return 60441; // Aetheryte icon from data
             }
 
             if (IsLandmark(placeName))
             {
+                Debug.WriteLine($"GetIconForPlaceName: '{placeName}' identified as Landmark");
                 return 60442; // Landmark icon from data
             }
 
             // 2. Direct exact match of the full place name
             if (_placeNameStringToIconMap.TryGetValue(placeName, out var iconId))
             {
+                Debug.WriteLine($"GetIconForPlaceName: Found exact match for '{placeName}' -> {iconId}");
                 return iconId;
             }
 
@@ -1045,20 +1133,29 @@ public MapCoordinate ConvertMapToGameCoordinates(
                 
                 if (placeName.Contains(knownName, StringComparison.OrdinalIgnoreCase))
                 {
+                    Debug.WriteLine($"GetIconForPlaceName: Found partial match '{knownName}' in '{placeName}' -> {_placeNameStringToIconMap[knownName]}");
                     return _placeNameStringToIconMap[knownName];
                 }
             }
 
             // 4. Type-based lookup based on name patterns
             if (IsCityOrSettlement(placeName))
+            {
+                Debug.WriteLine($"GetIconForPlaceName: '{placeName}' identified as City/Settlement");
                 return 60430; // City/Settlement icon
+            }
 
             if (IsShopOrMarket(placeName))
+            {
+                Debug.WriteLine($"GetIconForPlaceName: '{placeName}' identified as Shop/Market");
                 return 60314; // Shop/Market icon
+            }
 
             // 5. Final fallback
+            Debug.WriteLine($"GetIconForPlaceName: No match found for '{placeName}', returning default icon");
             return 60001; // Default generic icon
         }
+
 
         private bool IsAetheryte(string placeName)
         {

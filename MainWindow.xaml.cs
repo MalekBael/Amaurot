@@ -45,7 +45,7 @@ namespace map_editor
 
         public ObservableCollection<TerritoryInfo> Territories { get; set; } = new ObservableCollection<TerritoryInfo>();
 
-        private const int MaxLogLines = 100; // Maximum number of log lines to keep
+        private const int MaxLogLines = 500; // Maximum number of log lines to keep
 
         public MainWindow()
         {
@@ -275,8 +275,10 @@ namespace map_editor
                 }
 
                 _lastMousePosition = currentPosition;
+                
+                // Only sync the overlay transform, don't refresh markers during drag
                 SyncOverlayWithMap();
-                RefreshMarkers();
+                // REMOVED: RefreshMarkers();
             }
             else if (!_isDragging)
             {
