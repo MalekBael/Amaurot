@@ -67,6 +67,47 @@ namespace map_editor
         public List<MapMarker> Markers { get; set; } = new List<MapMarker>();
     }
 
+    // NEW: Quest data models - Updated with correct SaintCoinach properties
+    public class QuestInfo
+    {
+        public uint Id { get; set; }
+        public string Name { get; set; } = string.Empty;
+        public string JournalGenre { get; set; } = string.Empty;
+        public uint ClassJobCategoryId { get; set; }
+        public uint ClassJobLevelRequired { get; set; }
+        public string ClassJobCategoryName { get; set; } = string.Empty;
+        public bool IsMainScenarioQuest { get; set; }
+        public bool IsFeatureQuest { get; set; }
+        public uint PreviousQuestId { get; set; }
+        public uint ExpReward { get; set; }
+        public uint GilReward { get; set; }
+
+        public override string ToString()
+        {
+            string prefix = IsMainScenarioQuest ? "[MSQ] " : IsFeatureQuest ? "[FEATURE] " : "";
+            return $"{Id} - {prefix}{Name}";
+        }
+    }
+
+    // NEW: BNpc data models
+    public class BNpcInfo
+    {
+        public uint BNpcNameId { get; set; }
+        public string BNpcName { get; set; } = string.Empty;
+        public uint BNpcBaseId { get; set; }
+        public string Title { get; set; } = string.Empty;
+        public uint TribeId { get; set; }
+        public string TribeName { get; set; } = string.Empty;
+
+        public override string ToString()
+        {
+            if (!string.IsNullOrEmpty(Title))
+                return $"{BNpcName} - {Title} (Base: {BNpcBaseId})";
+            else
+                return $"{BNpcName} (Base: {BNpcBaseId})";
+        }
+    }
+
     /// <summary>
     /// Helper class for marker-related functionality
     /// </summary>
@@ -76,12 +117,12 @@ namespace map_editor
         /// Maps icon IDs to their PlaceName IDs from MapSymbol.csv
         /// </summary>
         private static Dictionary<uint, uint> IconToPlaceNameIdMap = new Dictionary<uint, uint>();
-        
+
         /// <summary>
         /// Stores the PlaceName strings by ID for display purposes
         /// </summary>
         private static Dictionary<uint, string> PlaceNameIdToNameMap = new Dictionary<uint, string>();
-        
+
         private static bool _isInitialized = false;
 
         /// <summary>
@@ -91,15 +132,15 @@ namespace map_editor
         {
             IconToPlaceNameIdMap.Clear();
             PlaceNameIdToNameMap = placeNames ?? new Dictionary<uint, string>();
-            
+
             foreach (var symbol in mapSymbols)
             {
                 if (symbol.IconId == 0) continue;
-                
+
                 // Store the icon -> PlaceNameId mapping
                 IconToPlaceNameIdMap[symbol.IconId] = symbol.PlaceNameId;
             }
-            
+
             _isInitialized = true;
         }
 
@@ -110,13 +151,13 @@ namespace map_editor
         {
             if (!_isInitialized)
                 return string.Empty;
-                
+
             if (IconToPlaceNameIdMap.TryGetValue(iconId, out uint placeNameId) &&
                 PlaceNameIdToNameMap.TryGetValue(placeNameId, out string placeName))
             {
                 return placeName;
             }
-            
+
             return string.Empty;
         }
 
@@ -127,7 +168,7 @@ namespace map_editor
         {
             if (!_isInitialized || marker.IconId == 0)
                 return;
-                
+
             // If the marker already has a PlaceNameId from MapMarker.csv, use that
             if (marker.PlaceNameId > 0 && PlaceNameIdToNameMap.TryGetValue(marker.PlaceNameId, out string existingName))
             {
