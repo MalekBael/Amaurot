@@ -42,11 +42,18 @@
 
             <!-- Territory List -->
             <DockPanel Grid.Column="0">
-                <TextBlock DockPanel.Dock="Top" Text="Territories" FontWeight="Bold" Margin="5"/>
+                <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="5">
+                    <TextBlock Text="Territories" FontWeight="Bold" VerticalAlignment="Center"/>
+                    <TextBlock Name="TerritoryCountText" Text="(0)" Margin="5,0,0,0" Foreground="Gray" VerticalAlignment="Center"/>
+                </StackPanel>
+                <TextBox DockPanel.Dock="Top" Name="TerritorySearchBox" Margin="5,0,5,5" 
+                         Text="" TextChanged="TerritorySearchBox_TextChanged"
+                         Background="White" BorderThickness="1" BorderBrush="Gray"
+                         ToolTip="Search territories by name or ID"/>
                 <ListBox Name="TerritoryList" 
                          ItemsSource="{Binding Territories}"
                          SelectionChanged="TerritoryList_SelectionChanged"
-                         Margin="5">
+                         Margin="5,0,5,5">
                     <ListBox.ItemTemplate>
                         <DataTemplate>
                             <TextBlock Text="{Binding}" />

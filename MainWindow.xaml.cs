@@ -5,6 +5,8 @@ using SaintCoinach.Xiv.Items;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Drawing;
+using System.Drawing.Imaging;
 using System.IO;
 using System.Linq;
 using System.Reflection;
@@ -14,14 +16,12 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
-using WinForms = System.Windows.Forms;
-using WpfMessageBox = System.Windows.MessageBox;
-using WpfSaveFileDialog = Microsoft.Win32.SaveFileDialog;
-
-using WpfPanel = System.Windows.Controls.Panel;
-using WpfColor = System.Windows.Media.Color;
-using System.Drawing.Imaging;
 using Bitmap = System.Drawing.Bitmap;
+using WinForms = System.Windows.Forms;
+using WpfColor = System.Windows.Media.Color;
+using WpfMessageBox = System.Windows.MessageBox;
+using WpfPanel = System.Windows.Controls.Panel;
+using WpfSaveFileDialog = Microsoft.Win32.SaveFileDialog;
 
 namespace map_editor
 {
@@ -52,6 +52,7 @@ namespace map_editor
         // Filtered collections for search functionality
         private ObservableCollection<QuestInfo> _filteredQuests = new ObservableCollection<QuestInfo>();
         private ObservableCollection<BNpcInfo> _filteredBNpcs = new ObservableCollection<BNpcInfo>();
+        private ObservableCollection<TerritoryInfo> _filteredTerritories = new ObservableCollection<TerritoryInfo>(); // Add this line
 
         private const int MaxLogLines = 500; // Maximum number of log lines to keep
 
@@ -63,6 +64,7 @@ namespace map_editor
             // Set up filtered collections
             QuestList.ItemsSource = _filteredQuests;
             BNpcList.ItemsSource = _filteredBNpcs;
+            TerritoryList.ItemsSource = _filteredTerritories; // Change this line
 
             // Fix constructor to use the XAML elements correctly
             _mapRenderer = new MapRenderer(_realm);
@@ -347,6 +349,30 @@ namespace map_editor
             UpdateBNpcCount();
         }
 
+        // NEW: Territory search functionality
+        private void TerritorySearchBox_TextChanged(object sender, TextChangedEventArgs e)
+        {
+            string searchText = TerritorySearchBox.Text?.ToLower() ?? "";
+
+            _filteredTerritories.Clear();
+
+            foreach (var territory in Territories)
+            {
+                bool matches = string.IsNullOrEmpty(searchText) ||
+                              territory.PlaceName.ToLower().Contains(searchText) ||
+                              territory.Id.ToString().Contains(searchText) ||
+                              territory.Region.ToLower().Contains(searchText) ||
+                              territory.TerritoryNameId.ToLower().Contains(searchText);
+
+                if (matches)
+                {
+                    _filteredTerritories.Add(territory);
+                }
+            }
+
+            UpdateTerritoryCount();
+        }
+
         // NEW: Quest selection handler
         private void QuestList_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
@@ -369,6 +395,7 @@ namespace map_editor
             }
         }
 
+      
         // NEW: Load BNpcs from SaintCoinach
         private void LoadBNpcs()
         {
@@ -520,6 +547,15 @@ namespace map_editor
             }
         }
 
+        // NEW: Update territory count display
+        private void UpdateTerritoryCount()
+        {
+            if (TerritoryCountText != null)
+            {
+                TerritoryCountText.Text = $"({_filteredTerritories.Count})";
+            }
+        }
+
         private void MapCanvas_MouseWheel(object sender, MouseWheelEventArgs e)
         {
             if (MapImageControl.Source == null) return;
@@ -653,6 +689,7 @@ namespace map_editor
         {
             LogDebug("Starting to load territories...");
             Territories.Clear();
+            _filteredTerritories.Clear(); // Add this line
 
             try
             {
@@ -741,7 +778,7 @@ namespace map_editor
                                 LogDebug($"Territory {territory.Key} ('{placeName}') has no Map. Defaulting to 0.");
                             }
 
-                            Territories.Add(new TerritoryInfo
+                            var territoryInfo = new TerritoryInfo
                             {
                                 Id = (uint)territory.Key,
                                 Name = placeName,
@@ -752,7 +789,10 @@ namespace map_editor
                                 RegionName = regionName,
                                 Region = regionName,
                                 MapId = mapId,
-                            });
+                            };
+
+                            Territories.Add(territoryInfo);
+                            _filteredTerritories.Add(territoryInfo); // Add this line
                         }
                         catch (Exception ex)
                         {
@@ -771,13 +811,16 @@ namespace map_editor
                 {
                     var sortedTerritories = Territories.OrderBy(t => t.Id).ToList();
                     Territories.Clear();
+                    _filteredTerritories.Clear(); // Add this line
+
                     foreach (var t in sortedTerritories)
                     {
                         Territories.Add(t);
+                        _filteredTerritories.Add(t); // Add this line
                     }
 
-                    TerritoryList.ItemsSource = Territories;
                     LogDebug($"Territory list updated with {Territories.Count} entries");
+                    UpdateTerritoryCount(); // Add this line
                 }
                 else
                 {
@@ -815,7 +858,7 @@ namespace map_editor
                     uint.TryParse(row.ElementAtOrDefault(6), out uint placeNameId);
                     uint.TryParse(row.ElementAtOrDefault(7), out uint mapId);
 
-                    Territories.Add(new TerritoryInfo
+                    var territoryInfo = new TerritoryInfo
                     {
                         Id = territoryId,
                         Name = placeNameLookup.GetValueOrDefault(placeNameId, "Unknown"),
@@ -826,7 +869,10 @@ namespace map_editor
                         RegionName = placeNameLookup.GetValueOrDefault(regionNameId, "Unknown"),
                         Region = placeNameLookup.GetValueOrDefault(regionNameId, "Unknown"),
                         MapId = mapId,
-                    });
+                    };
+
+                    Territories.Add(territoryInfo);
+                    _filteredTerritories.Add(territoryInfo); // Add this line
                 }
             }
             catch (Exception ex)
