@@ -415,7 +415,6 @@ namespace map_editor
                                 RegionName = regionName,
                                 Region = regionName,
                                 MapId = mapId,
-                                Source = "SaintCoinach"
                             });
                         }
                         catch (Exception ex)
@@ -490,7 +489,6 @@ namespace map_editor
                         RegionName = placeNameLookup.GetValueOrDefault(regionNameId, "Unknown"),
                         Region = placeNameLookup.GetValueOrDefault(regionNameId, "Unknown"),
                         MapId = mapId,
-                        Source = "CSV"
                     });
                 }
             }
@@ -1005,11 +1003,25 @@ namespace map_editor
         public string PlaceName { get; set; } = string.Empty;
         public uint MapId { get; set; }
         public string Region { get; set; } = string.Empty;
-        public string Source { get; set; } = string.Empty;
         public uint PlaceNameIdTerr { get; set; }
         public uint RegionId { get; set; }
         public string RegionName { get; set; } = string.Empty;
 
-        public override string ToString() => $"{Id} {TerritoryNameId} {PlaceName}";
+        public override string ToString()
+        {
+            // Always show MapId first, then the best available name
+            if (!string.IsNullOrEmpty(PlaceName) && !PlaceName.StartsWith("[Territory ID:"))
+            {
+                return $"Map {MapId} - {PlaceName}";
+            }
+            else if (!string.IsNullOrEmpty(TerritoryNameId))
+            {
+                return $"Map {MapId} - Territory {Id} ({TerritoryNameId})";
+            }
+            else
+            {
+                return $"Map {MapId} - Territory {Id}";
+            }
+        }
     }
 }
