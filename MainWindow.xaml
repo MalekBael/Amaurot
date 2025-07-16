@@ -41,6 +41,7 @@
             </Grid.ColumnDefinitions>
 
             <!-- Territory List -->
+            <!-- Territory List -->
             <DockPanel Grid.Column="0">
                 <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="5">
                     <TextBlock Text="Territories" FontWeight="Bold" VerticalAlignment="Center"/>
@@ -50,8 +51,13 @@
                          Text="" TextChanged="TerritorySearchBox_TextChanged"
                          Background="White" BorderThickness="1" BorderBrush="Gray"
                          ToolTip="Search territories by name or ID"/>
+                <!-- Add checkbox for hiding duplicates -->
+                <CheckBox DockPanel.Dock="Top" x:Name="HideDuplicateTerritoriesCheckBox" 
+                          Content="Hide duplicate IDs" Margin="5,0,5,5" 
+                          IsChecked="False" Checked="HideDuplicateTerritoriesCheckBox_Changed" 
+                          Unchecked="HideDuplicateTerritoriesCheckBox_Changed"
+                          ToolTip="Hide territories with duplicate territory IDs, keeping only the first occurrence"/>
                 <ListBox Name="TerritoryList" 
-                         ItemsSource="{Binding Territories}"
                          SelectionChanged="TerritoryList_SelectionChanged"
                          Margin="5,0,5,5">
                     <ListBox.ItemTemplate>
@@ -163,51 +169,119 @@
 
             <GridSplitter Grid.Column="3" HorizontalAlignment="Stretch"/>
 
-            <!-- Quest List Panel -->
-            <DockPanel Grid.Column="4">
-                <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="5">
-                    <TextBlock Text="Quests" FontWeight="Bold" VerticalAlignment="Center"/>
-                    <TextBlock x:Name="QuestCountText" Text="(0)" Margin="5,0,0,0" Foreground="Gray" VerticalAlignment="Center"/>
-                </StackPanel>
-                <TextBox DockPanel.Dock="Top" x:Name="QuestSearchBox" Margin="5,0,5,5" 
-                         Text="" TextChanged="QuestSearchBox_TextChanged"
-                         Background="White" BorderThickness="1" BorderBrush="Gray"
-                         ToolTip="Search quests by name or ID"/>
-                <ListBox Name="QuestList" 
-                         ItemsSource="{Binding Quests}"
-                         SelectionChanged="QuestList_SelectionChanged"
-                         Margin="5,0,5,5">
-                    <ListBox.ItemTemplate>
-                        <DataTemplate>
-                            <TextBlock Text="{Binding}" ToolTip="{Binding Name}"/>
-                        </DataTemplate>
-                    </ListBox.ItemTemplate>
-                </ListBox>
-            </DockPanel>
+            <!-- Right Panels Grid - Split horizontally -->
+            <Grid Grid.Column="4">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="5"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+
+                <!-- Quest List Panel (Top) -->
+                <DockPanel Grid.Row="0">
+                    <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="5">
+                        <TextBlock Text="Quests" FontWeight="Bold" VerticalAlignment="Center"/>
+                        <TextBlock x:Name="QuestCountText" Text="(0)" Margin="5,0,0,0" Foreground="Gray" VerticalAlignment="Center"/>
+                    </StackPanel>
+                    <TextBox DockPanel.Dock="Top" x:Name="QuestSearchBox" Margin="5,0,5,5" 
+                             Text="" TextChanged="QuestSearchBox_TextChanged"
+                             Background="White" BorderThickness="1" BorderBrush="Gray"
+                             ToolTip="Search quests by name or ID"/>
+                    <ListBox Name="QuestList" 
+                             ItemsSource="{Binding Quests}"
+                             SelectionChanged="QuestList_SelectionChanged"
+                             Margin="5,0,5,5">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <TextBlock Text="{Binding}" ToolTip="{Binding Name}"/>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </DockPanel>
+
+                <!-- Horizontal Splitter -->
+                <GridSplitter Grid.Row="1" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"/>
+
+                <!-- Events Panel (Bottom) -->
+                <DockPanel Grid.Row="2">
+                    <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="5">
+                        <TextBlock Text="Events" FontWeight="Bold" VerticalAlignment="Center"/>
+                        <TextBlock x:Name="EventCountText" Text="(0)" Margin="5,0,0,0" Foreground="Gray" VerticalAlignment="Center"/>
+                    </StackPanel>
+                    <TextBox DockPanel.Dock="Top" x:Name="EventSearchBox" Margin="5,0,5,5" 
+                             Text="" TextChanged="EventSearchBox_TextChanged"
+                             Background="White" BorderThickness="1" BorderBrush="Gray"
+                             ToolTip="Search events by name or ID"/>
+                    <ListBox Name="EventList" 
+                             ItemsSource="{Binding Events}"
+                             SelectionChanged="EventList_SelectionChanged"
+                             Margin="5,0,5,5">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <TextBlock Text="{Binding}" ToolTip="{Binding Name}"/>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </DockPanel>
+            </Grid>
 
             <GridSplitter Grid.Column="5" HorizontalAlignment="Stretch"/>
 
-            <!-- BNpc List Panel -->
-            <DockPanel Grid.Column="6">
-                <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="5">
-                    <TextBlock Text="NPCs" FontWeight="Bold" VerticalAlignment="Center"/>
-                    <TextBlock x:Name="BNpcCountText" Text="(0)" Margin="5,0,0,0" Foreground="Gray" VerticalAlignment="Center"/>
-                </StackPanel>
-                <TextBox DockPanel.Dock="Top" x:Name="BNpcSearchBox" Margin="5,0,5,5" 
-                         Text="" TextChanged="BNpcSearchBox_TextChanged"
-                         Background="White" BorderThickness="1" BorderBrush="Gray"
-                         ToolTip="Search NPCs by name or Base ID"/>
-                <ListBox Name="BNpcList" 
-                         ItemsSource="{Binding BNpcs}"
-                         SelectionChanged="BNpcList_SelectionChanged"
-                         Margin="5,0,5,5">
-                    <ListBox.ItemTemplate>
-                        <DataTemplate>
-                            <TextBlock Text="{Binding}" ToolTip="{Binding BNpcName}"/>
-                        </DataTemplate>
-                    </ListBox.ItemTemplate>
-                </ListBox>
-            </DockPanel>
+            <!-- Far Right Panels Grid - Split horizontally -->
+            <Grid Grid.Column="6">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="5"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+
+                <!-- BNpc List Panel (Top) -->
+                <DockPanel Grid.Row="0">
+                    <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="5">
+                        <TextBlock Text="BNpcs" FontWeight="Bold" VerticalAlignment="Center"/>
+                        <TextBlock x:Name="BNpcCountText" Text="(0)" Margin="5,0,0,0" Foreground="Gray" VerticalAlignment="Center"/>
+                    </StackPanel>
+                    <TextBox DockPanel.Dock="Top" x:Name="BNpcSearchBox" Margin="5,0,5,5" 
+                             Text="" TextChanged="BNpcSearchBox_TextChanged"
+                             Background="White" BorderThickness="1" BorderBrush="Gray"
+                             ToolTip="Search NPCs by name or Base ID"/>
+                    <ListBox Name="BNpcList" 
+                             ItemsSource="{Binding BNpcs}"
+                             SelectionChanged="BNpcList_SelectionChanged"
+                             Margin="5,0,5,5">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <TextBlock Text="{Binding}" ToolTip="{Binding BNpcName}"/>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </DockPanel>
+
+                <!-- Horizontal Splitter -->
+                <GridSplitter Grid.Row="1" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"/>
+
+                <!-- Fates Panel (Bottom) -->
+                <DockPanel Grid.Row="2">
+                    <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="5">
+                        <TextBlock Text="Fates" FontWeight="Bold" VerticalAlignment="Center"/>
+                        <TextBlock x:Name="FateCountText" Text="(0)" Margin="5,0,0,0" Foreground="Gray" VerticalAlignment="Center"/>
+                    </StackPanel>
+                    <TextBox DockPanel.Dock="Top" x:Name="FateSearchBox" Margin="5,0,5,5" 
+                             Text="" TextChanged="FateSearchBox_TextChanged"
+                             Background="White" BorderThickness="1" BorderBrush="Gray"
+                             ToolTip="Search fates by name or ID"/>
+                    <ListBox Name="FateList" 
+                             ItemsSource="{Binding Fates}"
+                             SelectionChanged="FateList_SelectionChanged"
+                             Margin="5,0,5,5">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <TextBlock Text="{Binding}" ToolTip="{Binding Name}"/>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </DockPanel>
+            </Grid>
         </Grid>
 
         <!-- Debug Information - Updated with checkbox in header -->

@@ -1,0 +1,50 @@
+{
+  "sheet": "Level",
+  "defaultColumn": "single",
+  "definitions": [
+    {
+      "index": 1,
+      "name": "Y"
+    },
+    {
+      "index": 2,
+      "name": "Z"
+    },
+    {
+      "index": 3,
+      "name": "Yaw"
+    },
+    {
+      "index": 4,
+      "name": "Radius"
+    },
+    {
+      "index": 5,
+      "name": "Type"
+    },
+    {
+      "index": 6,
+      "name": "Object"
+    },
+    {
+      "index": 7,
+      "name": "EventId"
+    },
+    {
+      "index": 8,
+      "name": "Map",
+      "converter": {
+        "type": "link",
+        "target": "Map"
+      }
+    },
+    {
+      "index": 9,
+      "name": "Territory",
+      "converter": {
+        "type": "link",
+        "target": "TerritoryType"
+      }
+    }
+  ]
+}

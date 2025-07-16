@@ -1,0 +1,71 @@
+{     "sheet": "Fate",
+      "defaultColumn": "Name",
+      "definitions": [
+        {
+          "index": 2,
+          "name": "ClassJobLevel"
+        },
+        {
+          "index": 3,
+          "name": "Icon"
+        },
+        {
+          "index": 4,
+          "name": "ReqEventItem",
+          "converter": {
+            "type": "link",
+            "target": "EventItem"
+          }
+        },
+        {
+          "index": 5,
+          "name": "Unknown11"
+        },
+        {
+          "index": 8,
+          "name": "Icon{Objective}",
+          "converter": {
+            "type": "icon"
+          }
+        },
+        {
+          "index": 11,
+          "name": "Icon{Map}",
+          "converter": {
+            "type": "icon"
+          }
+        },
+        {
+          "index": 13,
+          "name": "Music",
+          "converter": {
+            "type": "link",
+            "target": "BGM"
+          }
+        },
+        {
+        "index": 19,
+        "name": "HasWorldMapIcon"
+        },
+        {
+          "index": 24,
+          "name": "Name"
+        },
+        {
+          "index": 25,
+          "name": "Description"
+        },
+        {
+          "index": 26,
+          "name": "Objective"
+        },
+        {
+          "index": 27,
+          "type": "repeat",
+          "count": 3,
+          "definition": {
+            "name": "StatusText"
+          }
+        }
+      ]
+    }

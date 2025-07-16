@@ -1,0 +1,38 @@
+{
+  "sheet": "BNpcName",
+  "defaultColumn": "Singular",
+  "definitions": [
+    {
+      "index": 0,
+      "name": "Singular"
+    },
+    {
+      "index": 1,
+      "name": "Adjective"
+    },
+    {
+      "index": 2,
+      "name": "Plural"
+    },
+    {
+      "index": 3,
+      "name": "PossessivePronoun"
+    },
+    {
+      "index": 4,
+      "name": "StartsWithVowel"
+    },
+    {
+      "index": 5,
+      "name": "Unknown0"
+    },
+    {
+      "index": 6,
+      "name": "Pronoun"
+    },
+    {
+      "index": 7,
+      "name": "Article"
+    }
+  ]
+}

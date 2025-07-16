@@ -64,7 +64,22 @@
 	  <Folder Include="Sheets\" />
 	</ItemGroup>
 	<ItemGroup>
+	  <None Update="Libs\Definitions\BNpcBase.json">
+	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+	  </None>
+	  <None Update="Libs\Definitions\BNpcName.json">
+	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+	  </None>
+	  <None Update="Libs\Definitions\CompleteJournal.json">
+	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+	  </None>
+	  <None Update="Libs\Definitions\Fate.json">
+	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+	  </None>
 	  <None Update="Libs\Definitions\game.ver">
+	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+	  </None>
+	  <None Update="Libs\Definitions\Level.json">
 	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
 	  </None>
 	  <None Update="Libs\Definitions\Map.json">

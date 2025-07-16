@@ -20,7 +20,6 @@ namespace map_editor
         private readonly Dictionary<uint, Dictionary<uint, string>> _placeNameCache = new();
         private bool _csvDataLoaded = false;
 
-        // Use structured data for symbol categories instead of hardcoded strings
         private class MapSymbolCategory
         {
             public string Name { get; set; } = string.Empty;
@@ -28,14 +27,13 @@ namespace map_editor
             public HashSet<string> Keywords { get; set; } = new HashSet<string>();
         }
 
-        // Fields to store symbol data
         private Dictionary<string, uint> _mapSymbols = new();
         private Dictionary<uint, uint> _placeNameToSymbol = new();
         private Dictionary<string, uint> _keywordToSymbol = new();
         private List<MapSymbolCategory> _symbolCategories = new();
-        private Dictionary<uint, uint> _placeNameToIconMap = new(); // PlaceNameId -> IconId
-        private Dictionary<string, uint> _placeNameStringToIconMap = new(); // PlaceName string -> IconId
-        private Dictionary<uint, List<uint>> _iconToPlaceNameMap = new(); // IconId -> List<PlaceNameId>
+        private Dictionary<uint, uint> _placeNameToIconMap = new(); 
+        private Dictionary<string, uint> _placeNameStringToIconMap = new(); 
+        private Dictionary<uint, List<uint>> _iconToPlaceNameMap = new();
         private bool _symbolsLoaded = false;
 
         public MapService(ARealmReversed? realm)
@@ -43,7 +41,6 @@ namespace map_editor
             _realm = realm;
         }
 
-        // Load map markers for a specific map using SaintCoinach directly
         public List<MapMarker> LoadMapMarkers(uint mapId)
         {
             if (_mapMarkerCache.TryGetValue(mapId, out var cachedMarkers))
@@ -99,14 +96,13 @@ namespace map_editor
             return markers;
         }
 
-        // Updated: Pass the Map object so we can access MapMarkerRange
         private void LoadMapMarkersFromSheet(List<MapMarker> markers, Map map)
         {
             try
             {
                 Debug.WriteLine("Loading map markers from sheet...");
                 int count = 0;
-                const int MAX_MARKERS = 100; // Limit the number of markers to prevent freezing
+                const int MAX_MARKERS = 100; 
 
                 var mapMarkerSheet = _realm?.GameData?.GetSheet("MapMarker");
                 if (mapMarkerSheet == null)
@@ -115,7 +111,6 @@ namespace map_editor
                     return;
                 }
 
-                // Get the MapMarkerRange value for this map
                 uint markerRange = 0;
                 try
                 {
@@ -134,7 +129,6 @@ namespace map_editor
                     return;
                 }
 
-                // Find the row for this markerRange
                 var variantRow = mapMarkerSheet.FirstOrDefault(r => Convert.ToUInt32(r.Key) == markerRange);
                 if (variantRow == null)
                 {
@@ -146,7 +140,6 @@ namespace map_editor
 
                 try
                 {
-                    // Get the SourceRow property (XivRow contains a SourceRow)
                     var sourceRowProp = variantRow.GetType().GetProperty("SourceRow");
                     if (sourceRowProp != null)
                     {
@@ -155,7 +148,6 @@ namespace map_editor
                         {
                             Debug.WriteLine($"Found SourceRow of type: {sourceRow.GetType().FullName}");
                             
-                            // Get the SubRows property
                             var subRowsProp = sourceRow.GetType().GetProperty("SubRows");
                             if (subRowsProp != null)
                             {
@@ -164,13 +156,11 @@ namespace map_editor
                                 {
                                     Debug.WriteLine("Successfully retrieved SubRows collection");
                                     
-                                    // CRITICAL FIX: Add performance monitoring and limits
                                     var stopwatch = System.Diagnostics.Stopwatch.StartNew();
-                                    const int MAX_PROCESSING_TIME_MS = 2000; // Maximum 2 seconds processing
+                                    const int MAX_PROCESSING_TIME_MS = 2000;
                                     
                                     foreach (var subRow in subRowsCollection)
                                     {
-                                        // Check if we've hit our limits to prevent freezing
                                         if (count >= MAX_MARKERS)
                                         {
                                             Debug.WriteLine($"Reached maximum marker limit of {MAX_MARKERS}, stopping processing");
@@ -190,7 +180,6 @@ namespace map_editor
                                             
                                             if (indexerMethod != null)
                                             {
-                                                // Try to get values safely (with type checking)
                                                 float x = 0;
                                                 float y = 0;
                                                 uint iconId = 0;
@@ -203,7 +192,7 @@ namespace map_editor
                                                     if (xValue != null && !(xValue is SaintCoinach.Imaging.ImageFile))
                                                         x = Convert.ToSingle(xValue);
                                                 }
-                                                catch { /* Ignore conversion errors */ }
+                                                catch {}
 
                                                 try
                                                 {
@@ -211,28 +200,22 @@ namespace map_editor
                                                     if (yValue != null && !(yValue is SaintCoinach.Imaging.ImageFile))
                                                         y = Convert.ToSingle(yValue);
                                                 }
-                                                catch { /* Ignore conversion errors */ }
+                                                catch {}
 
-                                                // FIXED: Read icon ID from column index 2 (UInt16)
                                                 try
                                                 {
-                                                    // Get the indexer method that accepts an integer parameter
                                                     var intIndexerMethod = subRowType.GetMethod("get_Item", new[] { typeof(int) });
                                                     
                                                     if (intIndexerMethod != null)
                                                     {
-                                                        // Get the icon value by column index 2
                                                         var iconValue = intIndexerMethod.Invoke(subRow, new object[] { 2 });
                                                         if (iconValue != null)
                                                         {
-                                                            // Check if it's an ImageFile object
                                                             if (iconValue is SaintCoinach.Imaging.ImageFile imageFile)
                                                             {
-                                                                // Extract icon ID from the image file path
                                                                 var imagePath = imageFile.Path;
                                                                 if (!string.IsNullOrEmpty(imagePath))
                                                                 {
-                                                                    // Extract icon ID from path like "ui/icon/060000/060442.tex"
                                                                     var match = System.Text.RegularExpressions.Regex.Match(imagePath, @"/(\d{6})\.tex$");
                                                                     if (match.Success && uint.TryParse(match.Groups[1].Value, out uint extractedIconId))
                                                                     {
@@ -255,20 +238,17 @@ namespace map_editor
                                                             }
                                                             else
                                                             {
-                                                                // Try general conversion as fallback
                                                                 iconId = Convert.ToUInt32(iconValue);
                                                             }
                                                         }
                                                     }
                                                     else
                                                     {
-                                                        // Fallback: try using the string indexer with "Icon"
                                                         var iconValue = indexerMethod.Invoke(subRow, new object[] { "Icon" });
                                                         if (iconValue != null)
                                                         {
                                                             if (iconValue is SaintCoinach.Imaging.ImageFile imageFile)
                                                             {
-                                                                // Extract icon ID from the image file path
                                                                 var imagePath = imageFile.Path;
                                                                 if (!string.IsNullOrEmpty(imagePath))
                                                                 {
@@ -297,7 +277,6 @@ namespace map_editor
                                                     var placeNameValue = indexerMethod.Invoke(subRow, new object[] { "PlaceNameSubtext" });
                                                     if (placeNameValue != null && !(placeNameValue is SaintCoinach.Imaging.ImageFile))
                                                     {
-                                                        // Check if it's a PlaceName object
                                                         if (placeNameValue is SaintCoinach.Xiv.PlaceName placeNameObj)
                                                         {
                                                             placeName = placeNameObj.Name?.ToString() ?? "Marker";
@@ -305,12 +284,10 @@ namespace map_editor
                                                         }
                                                         else
                                                         {
-                                                            // Try to get the PlaceName ID and look it up
                                                             uint placeNameSubtextId = Convert.ToUInt32(placeNameValue);
                                                             if (placeNameSubtextId > 0)
                                                             {
                                                                 placeNameId = placeNameSubtextId;
-                                                                // Look up the actual name from PlaceName sheet
                                                                 var placeNameSheet = _realm.GameData.GetSheet<PlaceName>();
                                                                 var placeNameRow = placeNameSheet.FirstOrDefault(p => p.Key == placeNameSubtextId);
                                                                 if (placeNameRow?.Name != null)
@@ -330,24 +307,21 @@ namespace map_editor
                                                     }
                                                     else
                                                     {
-                                                        // Try alternate column name for place name
                                                         placeNameValue = indexerMethod.Invoke(subRow, new object[] { "PlaceName" });
                                                         if (placeNameValue != null && !(placeNameValue is SaintCoinach.Imaging.ImageFile))
                                                             placeName = placeNameValue.ToString() ?? "Marker";
                                                     }
                                                 }
-                                                catch { /* Ignore conversion errors */ }
+                                                catch {}
 
-                                                // Also try to get place name ID if available
                                                 try
                                                 {
                                                     var placeNameIdValue = indexerMethod.Invoke(subRow, new object[] { "PlaceNameId" });
                                                     if (placeNameIdValue != null && !(placeNameIdValue is SaintCoinach.Imaging.ImageFile))
                                                         placeNameId = Convert.ToUInt32(placeNameIdValue);
                                                 }
-                                                catch { /* Ignore conversion errors */ }
+                                                catch {}
 
-                                                // Get key of subrow
                                                 uint subRowKey = 0;
                                                 var keyProp = subRowType.GetProperty("Key");
                                                 if (keyProp != null)
@@ -357,28 +331,23 @@ namespace map_editor
                                                         subRowKey = Convert.ToUInt32(keyValue);
                                                 }
                                                 
-                                                // Only add markers with valid coordinates
                                                 if (x > 0 && y > 0)
                                                 {
-                                                    // Log what we found
                                                     Debug.WriteLine($"SubRow {subRowKey}: IconId from data = {iconId}, PlaceName = '{placeName}', PlaceNameId = {placeNameId}");
                                                     
-                                                    // If we have no icon ID but have a PlaceNameId, this is a text-only marker
                                                     if (iconId == 0 && placeNameId > 0)
                                                     {
                                                         Debug.WriteLine($"SubRow {subRowKey}: Text-only marker detected for '{placeName}'");
-                                                        // Use a special icon ID to indicate text-only markers
-                                                        iconId = 0; // Keep it as 0 to indicate text-only
+                                                        iconId = 0;
                                                     }
                                                     else if (iconId == 0)
                                                     {
-                                                        // Only call GetIconForPlaceName if we didn't get an icon ID and don't have a PlaceNameId
                                                         Debug.WriteLine($"SubRow {subRowKey}: No icon in data, calling GetIconForPlaceName('{placeName}')");
                                                         iconId = GetIconForPlaceName(placeName);
                                                         Debug.WriteLine($"SubRow {subRowKey}: GetIconForPlaceName returned {iconId}");
                                                     }
                                                     
-                                                    if (count < 10) // Only log first 10 markers to avoid spam
+                                                    if (count < 10)
                                                     {
                                                         Debug.WriteLine($"SubRow data: Key={subRowKey}, X={x}, Y={y}, Icon={iconId}, Name={placeName}");
                                                     }
@@ -410,7 +379,6 @@ namespace map_editor
                                         catch (Exception ex)
                                         {
                                             Debug.WriteLine($"Error processing subrow: {ex.Message}");
-                                            // Continue processing other subrows
                                         }
                                     }
                                     
@@ -436,7 +404,6 @@ namespace map_editor
             }
         }
 
-        // Helper to safely get column values
         private T TryGetColumnValue<T>(SaintCoinach.Ex.Relational.IRelationalRow row, string columnName)
         {
             try
@@ -472,7 +439,6 @@ namespace map_editor
         {
             var markers = new List<MapMarker>();
 
-            // The center of the map in FFXIV coordinates is (50, 50)
             float centerX = 50f;
             float centerY = 50f;
 
@@ -490,13 +456,11 @@ namespace map_editor
                 IconPath = GetIconPath(60441)
             });
 
-            // Add cardinal direction markers
             markers.Add(CreateDirectionalMarker(mapId, 2, centerX + 20, centerY, "East Quest", MarkerType.Quest, 60201));
             markers.Add(CreateDirectionalMarker(mapId, 3, centerX - 20, centerY, "West Shop", MarkerType.Shop, 60301));
             markers.Add(CreateDirectionalMarker(mapId, 4, centerX, centerY + 20, "North Landmark", MarkerType.Landmark, 60501));
             markers.Add(CreateDirectionalMarker(mapId, 5, centerX, centerY - 20, "South Entrance", MarkerType.Entrance, 60901));
 
-            // Add diagonal markers
             markers.Add(CreateDirectionalMarker(mapId, 6, centerX + 15, centerY + 15, "Northeast", MarkerType.Generic, 60701));
             markers.Add(CreateDirectionalMarker(mapId, 7, centerX - 15, centerY + 15, "Northwest", MarkerType.Generic, 60702));
             markers.Add(CreateDirectionalMarker(mapId, 8, centerX + 15, centerY - 15, "Southeast", MarkerType.Generic, 60703));
@@ -574,13 +538,8 @@ namespace map_editor
     WpfPoint imagePosition,
     WpfSize imageSize)
 {
-    // For territory 128, coordinates go from (0,0) at top-left to (42,42) at bottom-right
-    
-    // Convert from FFXIV game coordinates to relative position (0-1 range)
     double relativeX = gameX / 42.0;
     double relativeY = gameY / 42.0;
-    
-    // Convert relative position to image pixels
     double pixelX = relativeX * imageSize.Width;
     double pixelY = relativeY * imageSize.Height;
     
@@ -588,7 +547,7 @@ namespace map_editor
                    $"Relative ({relativeX:F2}, {relativeY:F2}) -> " +
                    $"Pixel ({pixelX:F1}, {pixelY:F1})");
     
-    // Apply current zoom and pan to get final screen coordinates
+
     double screenX = pixelX * imageScale + imagePosition.X;
     double screenY = pixelY * imageScale + imagePosition.Y;
     
@@ -599,21 +558,17 @@ public MapCoordinate ConvertMapToGameCoordinates(
     WpfPoint clickPoint, WpfPoint imagePosition, 
     double scale, WpfSize imageSize, Map? map)
 {
-    // Create a default result with zeros
     var result = new MapCoordinate();
     
     try
     {
         if (map == null) return result;
-        
-        // Get map properties safely
         float sizeFactor = 100.0f;
         float offsetX = 0;
         float offsetY = 0;
         
         try
         {
-            // Use reflection to safely get properties
             var type = map.GetType();
             var indexer = type.GetProperty("Item", new[] { typeof(string) });
             
@@ -630,17 +585,10 @@ public MapCoordinate ConvertMapToGameCoordinates(
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine($"Error accessing map properties: {ex.Message}");
-            // Use default values if properties can't be accessed
         }
-        
-        // The Map from SaintCoinach doesn't have a RenderTransform property
-        // Instead, we'll rely on the imagePosition and scale parameters
-        
-        // Calculate relative position on the image (0-1 range)
+
         double relativeX = (clickPoint.X - imagePosition.X) / (imageSize.Width * scale);
         double relativeY = (clickPoint.Y - imagePosition.Y) / (imageSize.Height * scale);
-        
-        // Clamp to valid range
         relativeX = Math.Max(0, Math.Min(1, relativeX));
         relativeY = Math.Max(0, Math.Min(1, relativeY));
         
@@ -950,7 +898,6 @@ public MapCoordinate ConvertMapToGameCoordinates(
             if (lines.Length < 2)
                 return markers;
 
-            // Assume map image size (adjust if needed)
             const double mapImageSize = 2048.0;
 
             for (int i = 2; i < lines.Length; i++)
@@ -1010,7 +957,6 @@ public MapCoordinate ConvertMapToGameCoordinates(
                 _placeNameStringToIconMap.Clear();
                 _iconToPlaceNameMap.Clear();
 
-                // Try loading from the MapSymbol sheet
                 var symbolSheet = _realm.GameData.GetSheet("MapSymbol");
                 if (symbolSheet == null)
                 {
@@ -1018,44 +964,36 @@ public MapCoordinate ConvertMapToGameCoordinates(
                     return;
                 }
 
-                // Load all symbols from the sheet
                 int count = 0;
                 foreach (var row in symbolSheet)
                 {
                     try
                     {
-                        // Get the source row
                         var sourceRow = row.GetType().GetProperty("SourceRow")?.GetValue(row) as SaintCoinach.Ex.Relational.IRelationalRow;
                         if (sourceRow == null) continue;
 
-                        // Get icon ID (column 0)
                         uint iconId = 0;
                         if (sourceRow[0] != null && !(sourceRow[0] is SaintCoinach.Imaging.ImageFile))
                         {
                             iconId = Convert.ToUInt32(sourceRow[0]);
                         }
 
-                        // Skip if no icon ID
                         if (iconId == 0) continue;
 
-                        // Get PlaceName (column 1)
                         uint placeNameId = 0;
                         string placeNameString = string.Empty;
 
                         if (sourceRow[1] is SaintCoinach.Xiv.PlaceName placeNameObj)
                         {
-                            // If we have the direct PlaceName object
                             placeNameId = (uint)placeNameObj.Key;
                             placeNameString = placeNameObj.Name?.ToString() ?? string.Empty;
                         }
                         else if (sourceRow[1] != null && !(sourceRow[1] is SaintCoinach.Imaging.ImageFile))
                         {
-                            // If we have just the ID
                             try
                             {
                                 placeNameId = Convert.ToUInt32(sourceRow[1]);
                                 
-                                // Get the actual name from PlaceName sheet
                                 var placeNameSheet = _realm.GameData.GetSheet<PlaceName>();
                                 var placeNameRow = placeNameSheet.FirstOrDefault(p => p.Key == placeNameId);
                                 if (placeNameRow?.Name != null)
@@ -1069,12 +1007,10 @@ public MapCoordinate ConvertMapToGameCoordinates(
                             }
                         }
 
-                        // Map PlaceName ID to icon ID if we have both
                         if (placeNameId > 0 && iconId > 0)
                         {
                             _placeNameToIconMap[placeNameId] = iconId;
                             
-                            // Also add to the reverse lookup
                             if (!_iconToPlaceNameMap.ContainsKey(iconId))
                             {
                                 _iconToPlaceNameMap[iconId] = new List<uint>();
@@ -1084,7 +1020,6 @@ public MapCoordinate ConvertMapToGameCoordinates(
                             count++;
                         }
 
-                        // Map PlaceName string to icon ID if we have both
                         if (!string.IsNullOrEmpty(placeNameString) && iconId > 0)
                         {
                             _placeNameStringToIconMap[placeNameString] = iconId;
@@ -1109,19 +1044,16 @@ public MapCoordinate ConvertMapToGameCoordinates(
             }
         }
 
-        // Also optimize the GetIconForPlaceName method to prevent potential infinite loops
         private uint GetIconForPlaceName(string placeName)
         {
-            // Early exit for null/empty
             if (string.IsNullOrEmpty(placeName))
             {
                 Debug.WriteLine($"GetIconForPlaceName: Empty place name, returning default icon");
-                return 60001; // Default generic icon
+                return 60001;
             }
 
             Debug.WriteLine($"GetIconForPlaceName: Looking up icon for '{placeName}'");
 
-            // Make sure symbols are loaded (but with timeout to prevent hanging)
             if (!_symbolsLoaded)
             {
                 try
@@ -1132,42 +1064,38 @@ public MapCoordinate ConvertMapToGameCoordinates(
                 catch (Exception ex)
                 {
                     Debug.WriteLine($"Error loading map symbols: {ex.Message}");
-                    return 60001; // Return default if symbol loading fails
+                    return 60001; 
                 }
             }
 
-            // Log the state of our mapping dictionaries
             Debug.WriteLine($"GetIconForPlaceName: PlaceNameStringToIconMap has {_placeNameStringToIconMap.Count} entries");
 
-            // 1. Special cases based on exact mappings from the game data
             if (IsAetheryte(placeName))
             {
                 Debug.WriteLine($"GetIconForPlaceName: '{placeName}' identified as Aetheryte");
-                return 60441; // Aetheryte icon from data
+                return 60441; 
             }
 
             if (IsLandmark(placeName))
             {
                 Debug.WriteLine($"GetIconForPlaceName: '{placeName}' identified as Landmark");
-                return 60442; // Landmark icon from data
+                return 60442; 
             }
 
-            // 2. Direct exact match of the full place name
+
             if (_placeNameStringToIconMap.TryGetValue(placeName, out var iconId))
             {
                 Debug.WriteLine($"GetIconForPlaceName: Found exact match for '{placeName}' -> {iconId}");
                 return iconId;
             }
 
-            // 3. Partial match by checking if any known place name is contained in this name
-            // Limit the search to prevent performance issues
             int searchCount = 0;
             const int MAX_SEARCH_ITERATIONS = 50;
             
             foreach (var knownName in _placeNameStringToIconMap.Keys)
             {
                 if (++searchCount > MAX_SEARCH_ITERATIONS)
-                    break; // Prevent excessive searching
+                    break;
                 
                 if (placeName.Contains(knownName, StringComparison.OrdinalIgnoreCase))
                 {
@@ -1176,22 +1104,21 @@ public MapCoordinate ConvertMapToGameCoordinates(
                 }
             }
 
-            // 4. Type-based lookup based on name patterns
             if (IsCityOrSettlement(placeName))
             {
                 Debug.WriteLine($"GetIconForPlaceName: '{placeName}' identified as City/Settlement");
-                return 60430; // City/Settlement icon
+                return 60430;
             }
 
             if (IsShopOrMarket(placeName))
             {
                 Debug.WriteLine($"GetIconForPlaceName: '{placeName}' identified as Shop/Market");
-                return 60314; // Shop/Market icon
+                return 60314;
             }
 
-            // 5. Final fallback
+
             Debug.WriteLine($"GetIconForPlaceName: No match found for '{placeName}', returning default icon");
-            return 60001; // Default generic icon
+            return 60001;
         }
 
 
@@ -1200,16 +1127,13 @@ public MapCoordinate ConvertMapToGameCoordinates(
             if (string.IsNullOrEmpty(placeName))
                 return false;
 
-            // Check specific aetheryte references
             string lowerName = placeName.ToLower();
     
-            // Direct aetheryte references
             if (lowerName.Contains("aetheryte") || 
                 lowerName.Contains("aethernet") || 
                 lowerName.Contains("airship landing"))
                 return true;
     
-            // Common teleport hub patterns based on MapMarker.csv data
             if ((lowerName.Contains("plaza") || lowerName.Contains("square")) && 
                 (lowerName.Contains("city") || lowerName.Contains("town")))
                 return true;
@@ -1222,15 +1146,13 @@ public MapCoordinate ConvertMapToGameCoordinates(
             if (string.IsNullOrEmpty(placeName))
                 return false;
 
-            // Common landmark identifiers based on MapMarker.csv data
             string[] landmarkKeywords = { 
                 "yard", "tower", "keep", "falls", "gorge", "cliff", "peak", 
-                "cave", "ruins", "temple", "bridge", "camp", "enclave"
+                "cave", "ruins", "temple", "bridge"
             };
 
             string lowerName = placeName.ToLower();
     
-            // Check if any of the landmark keywords are in the place name
             foreach (var keyword in landmarkKeywords)
             {
                 if (lowerName.Contains(keyword))
@@ -1247,7 +1169,6 @@ public MapCoordinate ConvertMapToGameCoordinates(
                 
             string lowerName = placeName.ToLower();
     
-            // Common city/settlement terms
             return lowerName.Contains("limsa lominsa") || 
                    lowerName.Contains("gridania") ||
                    lowerName.Contains("ul'dah") ||
@@ -1275,7 +1196,6 @@ public MapCoordinate ConvertMapToGameCoordinates(
                    lowerName.Contains("store");
         }
 
-        // Add this method to MapService.cs to help diagnose canvas alignment issues
         public void DiagnoseCanvasAlignment(WpfSize mapCanvasSize, WpfSize overlayCanvasSize,
                                            WpfPoint mapPosition, WpfPoint overlayPosition,
                                            double mapScale, double overlayScale)
@@ -1307,22 +1227,19 @@ public MapCoordinate ConvertMapToGameCoordinates(
                 Debug.WriteLine("Canvas alignment appears correct");
             }
 
-            // Add this line to check the actual transforms
+
             Debug.WriteLine($"MapImageControl transform: Scale={mapScale:F2}, Position=({mapPosition.X:F1},{mapPosition.Y:F1})");
             Debug.WriteLine($"OverlayCanvas transform: Scale={overlayScale:F2}, Position=({overlayPosition.X:F1},{overlayPosition.Y:F1})");
         }
 
-        // Add this method to MapService class to help with debugging cursor position issues
         public void LogCursorPosition(WpfPoint mousePosition, WpfPoint imagePosition, 
                             double scale, WpfSize imageSize, Map? map)
         {
-            // Convert screen coordinates to map coordinates
             var mapCoords = ConvertMapToGameCoordinates(mousePosition, imagePosition, scale, imageSize, map);
             
             Debug.WriteLine($"Cursor - Screen: ({mousePosition.X:F1}, {mousePosition.Y:F1}), " +
                            $"Map: ({mapCoords.MapX:F2}, {mapCoords.MapY:F2})");
             
-            // Check if cursor is within map bounds
             bool isInMapBounds = 
                 mousePosition.X >= imagePosition.X && 
                 mousePosition.X <= imagePosition.X + (imageSize.Width * scale) &&
@@ -1332,25 +1249,20 @@ public MapCoordinate ConvertMapToGameCoordinates(
             Debug.WriteLine($"Cursor is {(isInMapBounds ? "INSIDE" : "OUTSIDE")} map bounds");
         }
 
-        // Add this method to MapService class
         public MapMarker? GetMarkerAtPosition(WpfPoint mousePosition, WpfPoint imagePosition, 
                                      double scale, WpfSize imageSize, List<MapMarker> markers)
         {
-            // Define a reasonable hit test radius (in pixels at current zoom level)
-            double hitTestRadius = 15 / scale; // Adjust this value as needed for better hit detection
+            double hitTestRadius = 15 / scale;
             
             foreach (var marker in markers.Where(m => m.IsVisible))
             {
-                // Get marker position in screen coordinates
                 double screenX = (marker.X / 42.0) * imageSize.Width * scale + imagePosition.X;
                 double screenY = (marker.Y / 42.0) * imageSize.Height * scale + imagePosition.Y;
                 
-                // Calculate distance between mouse and marker
                 double distance = Math.Sqrt(
                     Math.Pow(mousePosition.X - screenX, 2) + 
                     Math.Pow(mousePosition.Y - screenY, 2));
                 
-                // If mouse is within hit test radius, return this marker
                 if (distance <= hitTestRadius)
                 {
                     return marker;

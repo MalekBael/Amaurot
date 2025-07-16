@@ -22,15 +22,12 @@ using WpfColor = System.Windows.Media.Color;
 using WpfMessageBox = System.Windows.MessageBox;
 using WpfPanel = System.Windows.Controls.Panel;
 using WpfSaveFileDialog = Microsoft.Win32.SaveFileDialog;
+using WpfApplication = System.Windows.Application;
 
 namespace map_editor
 {
-    /// <summary>
-    /// Interaction logic for MainWindow.xaml
-    /// </summary>
     public partial class MainWindow : Window
     {
-        // Update class fields
         private ARealmReversed? _realm;
         private MapService? _mapService;
         private MapRenderer? _mapRenderer;
@@ -40,61 +37,59 @@ namespace map_editor
         private double _currentScale = 1.0;
         private System.Windows.Point _lastMousePosition;
         private bool _isDragging = false;
+        private bool _hideDuplicateTerritories = false;
 
-        private bool _debugLoggingEnabled = false; // Add this field at the class level
+        private bool _debugLoggingEnabled = false;
 
         public ObservableCollection<TerritoryInfo> Territories { get; set; } = new ObservableCollection<TerritoryInfo>();
-
-        // NEW: Collections for the new panels
         public ObservableCollection<QuestInfo> Quests { get; set; } = new ObservableCollection<QuestInfo>();
-        public ObservableCollection<BNpcInfo> BNpcs { get; set; } = new ObservableCollection<BNpcInfo>();
 
-        // Filtered collections for search functionality
+        public ObservableCollection<BNpcInfo> BNpcs { get; set; } = new ObservableCollection<BNpcInfo>();
+        public ObservableCollection<EventInfo> Events { get; set; } = new ObservableCollection<EventInfo>();
+
+        public ObservableCollection<FateInfo> Fates { get; set; } = new ObservableCollection<FateInfo>();
         private ObservableCollection<QuestInfo> _filteredQuests = new ObservableCollection<QuestInfo>();
         private ObservableCollection<BNpcInfo> _filteredBNpcs = new ObservableCollection<BNpcInfo>();
-        private ObservableCollection<TerritoryInfo> _filteredTerritories = new ObservableCollection<TerritoryInfo>(); // Add this line
-
-        private const int MaxLogLines = 500; // Maximum number of log lines to keep
+        private ObservableCollection<TerritoryInfo> _filteredTerritories = new ObservableCollection<TerritoryInfo>(); 
+        private ObservableCollection<EventInfo> _filteredEvents = new ObservableCollection<EventInfo>();
+        private ObservableCollection<FateInfo> _filteredFates = new ObservableCollection<FateInfo>();
+        private const int MaxLogLines = 500;
+        private System.Windows.Threading.DispatcherTimer? _searchDebounceTimer;
 
         public MainWindow()
         {
             InitializeComponent();
             DataContext = this;
 
-            // Set up filtered collections
             QuestList.ItemsSource = _filteredQuests;
             BNpcList.ItemsSource = _filteredBNpcs;
-            TerritoryList.ItemsSource = _filteredTerritories; // Change this line
+            TerritoryList.ItemsSource = _filteredTerritories;
+            EventList.ItemsSource = _filteredEvents; 
+            FateList.ItemsSource = _filteredFates;   
 
-            // Fix constructor to use the XAML elements correctly
             _mapRenderer = new MapRenderer(_realm);
 
-            // Set up debug logging
             RedirectDebugOutput();
             LogDebug("Application started");
 
-            // Subscribe to the Loaded event
             this.Loaded += MainWindow_Loaded;
         }
 
         private void MainWindow_Loaded(object sender, RoutedEventArgs e)
         {
-            // Simply pass the overlay canvas from the XAML to the renderer
             if (_mapRenderer != null)
             {
                 _mapRenderer.SetOverlayCanvas(OverlayCanvas);
-                _mapRenderer.SetMainWindow(this); // Add this line
+                _mapRenderer.SetMainWindow(this);
                 LogDebug("OverlayCanvas from XAML is now set in MapRenderer.");
             }
 
-            // Ensure the overlay canvas doesn't block mouse events to child elements
             if (OverlayCanvas != null)
             {
                 OverlayCanvas.IsHitTestVisible = true;
-                OverlayCanvas.Background = null; // Transparent background
+                OverlayCanvas.Background = null;
             }
 
-            // If a map was somehow loaded before this point, ensure it's scaled correctly
             if (MapImageControl.Source is BitmapSource bitmapSource)
             {
                 CalculateAndApplyInitialScale(bitmapSource);
@@ -111,7 +106,7 @@ namespace map_editor
             }
         }
 
-        private void LoadGameData_Click(object sender, RoutedEventArgs e)
+        private async void LoadGameData_Click(object sender, RoutedEventArgs e)
         {
             var dialog = new WinForms.FolderBrowserDialog
             {
@@ -124,7 +119,7 @@ namespace map_editor
                 var gamePath = dialog.SelectedPath;
                 if (Directory.Exists(gamePath))
                 {
-                    LoadFFXIVData(gamePath);
+                    await LoadFFXIVDataAsync(gamePath);
                 }
                 else
                 {
@@ -134,13 +129,92 @@ namespace map_editor
             }
         }
 
+        private async Task LoadFFXIVDataAsync(string gameDirectory)
+        {
+            try
+            {
+                StatusText.Text = "Loading FFXIV data...";
+
+                if (!ValidateGameDirectory(gameDirectory))
+                {
+                    WpfMessageBox.Show(
+                        "The selected folder doesn't appear to be a valid FFXIV installation.\n\n" +
+                        "Please select the main FFXIV installation folder that contains the 'game' and 'boot' folders.",
+                        "Invalid Directory", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    return;
+                }
+
+                await Task.Run(() =>
+                {
+                    _realm = new ARealmReversed(gameDirectory, SaintCoinach.Ex.Language.English);
+                });
+
+                LogDebug($"Initialized realm: {(_realm != null ? "Success" : "Failed")}");
+
+                _mapService = new MapService(_realm);
+                LogDebug("Initialized map service");
+
+                if (_realm != null)
+                {
+                    _mapRenderer?.UpdateRealm(_realm);
+                }
+
+                var loadingTasks = new List<Task>
+                {
+                    Task.Run(() =>
+                    {
+                        LogDebug("Loading territories...");
+                        LoadTerritories();
+                    }),
+                    Task.Run(() =>
+                    {
+                        LogDebug("Loading quests...");
+                        LoadQuests();
+                    }),
+                    Task.Run(() =>
+                    {
+                        LogDebug("Loading BNpcs...");
+                        LoadBNpcs();
+                    }),
+                    Task.Run(() =>
+                    {
+                        LogDebug("Loading events...");
+                        LoadEvents();
+                    }),
+                    Task.Run(() =>
+                    {
+                        LogDebug("Loading fates...");
+                        LoadFates();
+                    })
+                };
+
+                var loadingTask = Task.WhenAll(loadingTasks);
+                while (!loadingTask.IsCompleted)
+                {
+                    await Task.Delay(500);
+                    StatusText.Text = $"Loading FFXIV data... Territories: {Territories.Count}, Quests: {Quests.Count}, NPCs: {BNpcs.Count}";
+                }
+
+                await loadingTask;
+
+                StatusText.Text = $"Loaded {Territories.Count} territories, {Quests.Count} quests, {BNpcs.Count} NPCs, {Events.Count} events, {Fates.Count} fates from: {gameDirectory}";
+            }
+            catch (Exception ex)
+            {
+                StatusText.Text = $"Error loading data: {ex.Message}";
+                LogDebug($"Error loading FFXIV data: {ex.Message}\n{ex.StackTrace}");
+                WpfMessageBox.Show($"Failed to load FFXIV data: {ex.Message}", "Error",
+                    MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
         private void MapCanvas_MouseRightButtonDown(object sender, MouseButtonEventArgs e)
         {
             if (MapImageControl.Source == null || _mapService == null || _mapRenderer == null)
                 return;
 
             System.Windows.Point clickPoint = e.GetPosition(MapCanvas);
-            var imagePosition = new System.Windows.Point(0, 0); // Always (0,0) since we use transforms
+            var imagePosition = new System.Windows.Point(0, 0);
 
             var bitmapSource = MapImageControl.Source as System.Windows.Media.Imaging.BitmapSource;
             if (bitmapSource == null) return;
@@ -156,6 +230,62 @@ namespace map_editor
             _mapRenderer.ShowCoordinateInfo(coordinates, clickPoint);
             e.Handled = true;
         }
+        private void HideDuplicateTerritoriesCheckBox_Changed(object sender, RoutedEventArgs e)
+        {
+            bool newValue = HideDuplicateTerritoriesCheckBox?.IsChecked == true;
+
+            if (_hideDuplicateTerritories != newValue)
+            {
+                _hideDuplicateTerritories = newValue;
+                if (_debugLoggingEnabled)
+                {
+                    LogDebug($"Hide duplicates checkbox changed to: {_hideDuplicateTerritories}");
+                }
+                ApplyTerritoryFilters();
+            }
+        }
+
+        private void UpdateQuestCount()
+        {
+            if (QuestCountText != null)
+            {
+                QuestCountText.Text = $"({_filteredQuests.Count})";
+            }
+        }
+
+        private void UpdateBNpcCount()
+        {
+            if (BNpcCountText != null)
+            {
+                BNpcCountText.Text = $"({_filteredBNpcs.Count})";
+            }
+        }
+
+        private void UpdateTerritoryCount()
+        {
+            if (TerritoryCountText != null)
+            {
+                TerritoryCountText.Text = $"({_filteredTerritories.Count})";
+            }
+        }
+
+        private void UpdateEventCount()
+        {
+            if (EventCountText != null)
+            {
+                EventCountText.Text = $"({_filteredEvents.Count})";
+            }
+        }
+
+        private void UpdateFateCount()
+        {
+            if (FateCountText != null)
+            {
+                FateCountText.Text = $"({_filteredFates.Count})";
+            }
+        }
+
+        public ObservableCollection<TerritoryInfo> FilteredTerritories => _filteredTerritories;
 
         private void LoadFFXIVData(string gameDirectory)
         {
@@ -192,7 +322,13 @@ namespace map_editor
                 LogDebug("Loading BNpcs...");
                 LoadBNpcs();
 
-                StatusText.Text = $"Loaded {Territories.Count} territories, {Quests.Count} quests, {BNpcs.Count} NPCs from: {gameDirectory}";
+                LogDebug("Loading events...");
+                LoadEvents(); 
+
+                LogDebug("Loading fates...");
+                LoadFates();
+
+                StatusText.Text = $"Loaded {Territories.Count} territories, {Quests.Count} quests, {BNpcs.Count} NPCs, {Events.Count} events, {Fates.Count} fates from: {gameDirectory}";
             }
             catch (Exception ex)
             {
@@ -203,11 +339,9 @@ namespace map_editor
             }
         }
 
-        // NEW: Load quests from SaintCoinach - CORRECTED VERSION
         private void LoadQuests()
         {
-            Quests.Clear();
-            _filteredQuests.Clear();
+            var tempQuests = new List<QuestInfo>();
 
             try
             {
@@ -216,21 +350,20 @@ namespace map_editor
                     LogDebug("Loading quests from SaintCoinach...");
                     var questSheet = _realm.GameData.GetSheet<Quest>();
 
+                    int processedCount = 0;
+                    int totalCount = questSheet.Count();
+
                     foreach (var quest in questSheet)
                     {
                         try
                         {
-                            // Skip quests with no name
                             if (string.IsNullOrWhiteSpace(quest.Name)) continue;
 
-                            // Use safe property access - these are the properties that actually exist on Quest
                             var questInfo = new QuestInfo
                             {
                                 Id = (uint)quest.Key,
                                 Name = quest.Name?.ToString() ?? "",
                                 JournalGenre = quest.JournalGenre?.Name?.ToString() ?? "",
-
-                                // Set defaults for properties that don't exist in SaintCoinach Quest
                                 ClassJobCategoryId = 0,
                                 ClassJobLevelRequired = 0,
                                 ClassJobCategoryName = "",
@@ -241,60 +374,56 @@ namespace map_editor
                                 GilReward = 0
                             };
 
-                            // Try to get additional properties if they exist using reflection or AsString method
                             try
                             {
-                                // For SaintCoinach, we need to use AsString or AsInt32 methods for additional properties
                                 var classJobLevel = quest.AsInt32("ClassJobLevelRequired");
                                 questInfo.ClassJobLevelRequired = (uint)Math.Max(0, classJobLevel);
                             }
-                            catch
-                            {
-                                // Property doesn't exist or failed to read
-                            }
+                            catch { }
 
                             try
                             {
                                 var expReward = quest.AsInt32("ExpReward");
                                 questInfo.ExpReward = (uint)Math.Max(0, expReward);
                             }
-                            catch
-                            {
-                                // Property doesn't exist or failed to read
-                            }
+                            catch { }
 
                             try
                             {
                                 var gilReward = quest.AsInt32("GilReward");
                                 questInfo.GilReward = (uint)Math.Max(0, gilReward);
                             }
-                            catch
-                            {
-                                // Property doesn't exist or failed to read
-                            }
+                            catch { }
 
-                            Quests.Add(questInfo);
-                            _filteredQuests.Add(questInfo);
+                            tempQuests.Add(questInfo);
+
+                            processedCount++;
+                            if (processedCount % 500 == 0)
+                            {
+                                LogDebug($"Processed {processedCount}/{totalCount} quests...");
+                            }
                         }
                         catch (Exception ex)
                         {
-                            LogDebug($"Failed to process quest with key {quest.Key}. Error: {ex.Message}");
                         }
                     }
 
-                    // Sort quests by ID
-                    var sortedQuests = Quests.OrderBy(q => q.Id).ToList();
-                    Quests.Clear();
-                    _filteredQuests.Clear();
+                    tempQuests.Sort((a, b) => a.Id.CompareTo(b.Id));
 
-                    foreach (var quest in sortedQuests)
+                    WpfApplication.Current.Dispatcher.Invoke(() =>
                     {
-                        Quests.Add(quest);
-                        _filteredQuests.Add(quest);
-                    }
+                        Quests.Clear();
+                        _filteredQuests.Clear();
 
-                    LogDebug($"Loaded {Quests.Count} quests");
-                    UpdateQuestCount();
+                        foreach (var quest in tempQuests)
+                        {
+                            Quests.Add(quest);
+                            _filteredQuests.Add(quest);
+                        }
+
+                        LogDebug($"Loaded {Quests.Count} quests");
+                        UpdateQuestCount();
+                    });
                 }
             }
             catch (Exception ex)
@@ -303,7 +432,6 @@ namespace map_editor
             }
         }
 
-        // NEW: Quest search functionality
         private void QuestSearchBox_TextChanged(object sender, TextChangedEventArgs e)
         {
             string searchText = QuestSearchBox.Text?.ToLower() ?? "";
@@ -326,7 +454,6 @@ namespace map_editor
             UpdateQuestCount();
         }
 
-        // NEW: BNpc search functionality
         private void BNpcSearchBox_TextChanged(object sender, TextChangedEventArgs e)
         {
             string searchText = BNpcSearchBox.Text?.ToLower() ?? "";
@@ -349,210 +476,425 @@ namespace map_editor
             UpdateBNpcCount();
         }
 
-        // NEW: Territory search functionality
         private void TerritorySearchBox_TextChanged(object sender, TextChangedEventArgs e)
         {
-            string searchText = TerritorySearchBox.Text?.ToLower() ?? "";
+            _searchDebounceTimer?.Stop();
+            _searchDebounceTimer = new System.Windows.Threading.DispatcherTimer
+            {
+                Interval = TimeSpan.FromMilliseconds(300)
+            };
 
-            _filteredTerritories.Clear();
+            _searchDebounceTimer.Tick += (s, args) =>
+            {
+                _searchDebounceTimer.Stop();
+                ApplyTerritoryFilters();
+            };
 
-            foreach (var territory in Territories)
+            _searchDebounceTimer.Start();
+        }
+
+        private void ApplyTerritoryFilters()
+        {
+            if (_debugLoggingEnabled)
+            {
+                LogDebug($"=== ApplyTerritoryFilters START ===");
+                LogDebug($"Hide duplicates: {_hideDuplicateTerritories}");
+                LogDebug($"Search text: '{TerritorySearchBox?.Text}'");
+            }
+
+            string searchText = TerritorySearchBox?.Text?.ToLower() ?? "";
+
+            Task.Run(() =>
+            {
+                var filteredTerritories = Territories.AsEnumerable();
+
+                if (!string.IsNullOrEmpty(searchText))
+                {
+                    filteredTerritories = filteredTerritories.Where(territory =>
+                        territory.PlaceName.ToLower().Contains(searchText) ||
+                        territory.Id.ToString().Contains(searchText) ||
+                        territory.Region.ToLower().Contains(searchText) ||
+                        territory.TerritoryNameId.ToLower().Contains(searchText));
+                }
+
+                if (_hideDuplicateTerritories)
+                {
+                    var seenPlaceNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                    var territoriesToKeep = new List<TerritoryInfo>();
+
+                    foreach (var territory in filteredTerritories)
+                    {
+                        string placeName = territory.PlaceName ?? territory.Name ?? "";
+
+                        if (placeName.StartsWith("[Territory ID:") || string.IsNullOrEmpty(placeName))
+                        {
+                            territoriesToKeep.Add(territory);
+                            continue;
+                        }
+
+                        if (!seenPlaceNames.Contains(placeName))
+                        {
+                            seenPlaceNames.Add(placeName);
+                            territoriesToKeep.Add(territory);
+                        }
+                    }
+
+                    filteredTerritories = territoriesToKeep;
+                }
+
+                var finalResults = filteredTerritories.ToList();
+
+                WpfApplication.Current.Dispatcher.Invoke(() =>
+                {
+                    _filteredTerritories.Clear();
+                    foreach (var territory in finalResults)
+                    {
+                        _filteredTerritories.Add(territory);
+                    }
+                    UpdateTerritoryCount();
+                });
+
+                if (_debugLoggingEnabled)
+                {
+                    LogDebug($"Filtered territories count: {finalResults.Count}");
+                    LogDebug($"=== ApplyTerritoryFilters END ===");
+                }
+            });
+        }
+
+        private void EventSearchBox_TextChanged(object sender, TextChangedEventArgs e)
+        {
+            string searchText = EventSearchBox.Text?.ToLower() ?? "";
+
+            _filteredEvents.Clear();
+
+            foreach (var evt in Events)
             {
                 bool matches = string.IsNullOrEmpty(searchText) ||
-                              territory.PlaceName.ToLower().Contains(searchText) ||
-                              territory.Id.ToString().Contains(searchText) ||
-                              territory.Region.ToLower().Contains(searchText) ||
-                              territory.TerritoryNameId.ToLower().Contains(searchText);
+                              evt.Name.ToLower().Contains(searchText) ||
+                              evt.EventId.ToString().Contains(searchText);
 
                 if (matches)
                 {
-                    _filteredTerritories.Add(territory);
+                    _filteredEvents.Add(evt);
                 }
             }
 
-            UpdateTerritoryCount();
+            UpdateEventCount();
         }
 
-        // NEW: Quest selection handler
+        private void FateSearchBox_TextChanged(object sender, TextChangedEventArgs e)
+        {
+            string searchText = FateSearchBox.Text?.ToLower() ?? "";
+
+            _filteredFates.Clear();
+
+            foreach (var fate in Fates)
+            {
+                bool matches = string.IsNullOrEmpty(searchText) ||
+                              fate.Name.ToLower().Contains(searchText) ||
+                              fate.FateId.ToString().Contains(searchText);
+
+                if (matches)
+                {
+                    _filteredFates.Add(fate);
+                }
+            }
+
+            UpdateFateCount();
+        }
+
         private void QuestList_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
             if (QuestList.SelectedItem is QuestInfo selectedQuest)
             {
                 LogDebug($"Selected quest: {selectedQuest.Name} (ID: {selectedQuest.Id})");
-                // You can add more functionality here later, such as showing quest details
+                // We can add more functionality here later, such as showing quest details
                 // or highlighting quest-related markers on the map
             }
         }
 
-        // NEW: BNpc selection handler
         private void BNpcList_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
             if (BNpcList.SelectedItem is BNpcInfo selectedBNpc)
             {
                 LogDebug($"Selected BNpc: {selectedBNpc.BNpcName} (Base ID: {selectedBNpc.BNpcBaseId})");
-                // You can add more functionality here later, such as showing NPC details
+                // We can add more functionality here later, such as showing NPC details
                 // or highlighting NPC-related markers on the map
             }
         }
 
-      
-        // NEW: Load BNpcs from SaintCoinach
+        private void EventList_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (EventList.SelectedItem is EventInfo selectedEvent)
+            {
+                LogDebug($"Selected Event: {selectedEvent.Name} (ID: {selectedEvent.EventId})");
+                // We can add more functionality here later, such as showing event details
+                // or highlighting event-related markers on the map
+            }
+        }
+
+        private void FateList_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (FateList.SelectedItem is FateInfo selectedFate)
+            {
+                LogDebug($"Selected Fate: {selectedFate.Name} (ID: {selectedFate.FateId})");
+                // We can add more functionality here later, such as showing fate details
+                // or highlighting fate-related markers on the map
+            }
+        }
+
         private void LoadBNpcs()
         {
-            BNpcs.Clear();
-            _filteredBNpcs.Clear();
+            var tempBNpcs = new List<BNpcInfo>();
 
             try
             {
                 if (_realm != null)
                 {
                     LogDebug("Loading BNpcs from SaintCoinach...");
-                    var bnpcNameSheet = _realm.GameData.GetSheet("BNpcName");
-                    var bnpcBaseSheet = _realm.GameData.GetSheet("BNpcBase");
-                    var tribeSheet = _realm.GameData.GetSheet("Tribe");
 
-                    // Create a lookup for BNpcBase info
-                    var bnpcBaseLookup = new Dictionary<uint, dynamic>();
-                    if (bnpcBaseSheet != null)
+                    SaintCoinach.Xiv.IXivSheet<SaintCoinach.Xiv.BNpcName>? bnpcNameSheet = null;
+
+                    try
                     {
-                        foreach (var bnpcBase in bnpcBaseSheet)
+                        bnpcNameSheet = _realm.GameData.GetSheet<SaintCoinach.Xiv.BNpcName>();
+                        if (bnpcNameSheet != null)
                         {
-                            try
-                            {
-                                uint baseId = (uint)bnpcBase.Key;
-                                bnpcBaseLookup[baseId] = bnpcBase;
-                            }
-                            catch { }
+                            LogDebug($"Found BNpcName sheet with {bnpcNameSheet.Count} entries");
                         }
                     }
-
-                    // Create a lookup for Tribe names
-                    var tribeLookup = new Dictionary<uint, string>();
-                    if (tribeSheet != null)
+                    catch (Exception ex)
                     {
-                        foreach (var tribe in tribeSheet)
-                        {
-                            try
-                            {
-                                uint tribeId = (uint)tribe.Key;
-                                string tribeName = tribe.AsString("Masculine") ?? tribe.AsString("Name") ?? "";
-                                if (!string.IsNullOrEmpty(tribeName))
-                                {
-                                    tribeLookup[tribeId] = tribeName;
-                                }
-                            }
-                            catch { }
-                        }
+                        LogDebug($"Failed to load BNpcName sheet: {ex.Message}");
+                        return;
                     }
 
-                    if (bnpcNameSheet != null)
+                    if (bnpcNameSheet == null)
                     {
-                        foreach (var bnpcName in bnpcNameSheet)
+                        LogDebug("ERROR: BNpcName sheet is null!");
+                        return;
+                    }
+
+                    int processedCount = 0;
+                    int skippedCount = 0;
+                    int totalCount = bnpcNameSheet.Count;
+                    LogDebug($"Processing {totalCount} BNpcName entries...");
+
+                    foreach (var bnpcName in bnpcNameSheet)
+                    {
+                        try
                         {
-                            try
+                            string name = bnpcName.Singular ?? "";
+
+                            if (string.IsNullOrWhiteSpace(name))
                             {
-                                string name = bnpcName.AsString("Singular") ?? "";
-                                if (string.IsNullOrWhiteSpace(name)) continue;
-
-                                uint nameId = (uint)bnpcName.Key;
-
-                                // Try to find corresponding BNpcBase
-                                uint bnpcBaseId = 0;
-                                string title = "";
-                                uint tribeId = 0;
-
-                                // Search for BNpcBase entries that reference this BNpcName
-                                var matchingBase = bnpcBaseLookup.Values.FirstOrDefault(b =>
-                                {
-                                    try
-                                    {
-                                        var nameRef = b.AsInt32("BNpcName");
-                                        return nameRef == nameId;
-                                    }
-                                    catch
-                                    {
-                                        return false;
-                                    }
-                                });
-
-                                if (matchingBase != null)
-                                {
-                                    bnpcBaseId = (uint)matchingBase.Key;
-                                    try
-                                    {
-                                        // Try to get tribe information
-                                        tribeId = (uint)matchingBase.AsInt32("Tribe");
-                                    }
-                                    catch { }
-                                }
-
-                                string tribeName = tribeLookup.GetValueOrDefault(tribeId, "");
-
-                                var bnpcInfo = new BNpcInfo
-                                {
-                                    BNpcNameId = nameId,
-                                    BNpcName = name,
-                                    BNpcBaseId = bnpcBaseId,
-                                    Title = title,
-                                    TribeId = tribeId,
-                                    TribeName = tribeName
-                                };
-
-                                BNpcs.Add(bnpcInfo);
-                                _filteredBNpcs.Add(bnpcInfo);
+                                skippedCount++;
+                                continue;
                             }
-                            catch (Exception ex)
+
+                            uint nameId = (uint)bnpcName.Key;
+
+                            var bnpcInfo = new BNpcInfo
                             {
-                                LogDebug($"Failed to process BNpcName with key {bnpcName.Key}. Error: {ex.Message}");
+                                BNpcNameId = nameId,
+                                BNpcName = name,
+                                BNpcBaseId = 0,
+                                Title = "",
+                                TribeId = 0,
+                                TribeName = ""
+                            };
+
+                            tempBNpcs.Add(bnpcInfo);
+                            processedCount++;
+                            if (processedCount % 1000 == 0)
+                            {
+                                LogDebug($"Processed {processedCount}/{totalCount} BNpc names (skipped {skippedCount} empty)...");
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            if (_debugLoggingEnabled)
+                            {
+                                LogDebug($"Error processing BNpcName {bnpcName.Key}: {ex.Message}");
                             }
                         }
                     }
 
-                    // Sort BNpcs by name
-                    var sortedBNpcs = BNpcs.OrderBy(b => b.BNpcName).ToList();
-                    BNpcs.Clear();
-                    _filteredBNpcs.Clear();
+                    LogDebug($"Finished processing BNpcs: {processedCount} processed, {skippedCount} skipped");
 
-                    foreach (var bnpc in sortedBNpcs)
+                    tempBNpcs.Sort((a, b) => string.Compare(a.BNpcName, b.BNpcName, StringComparison.OrdinalIgnoreCase));
+                    LogDebug($"Sorted {tempBNpcs.Count} BNpcs");
+
+                    WpfApplication.Current.Dispatcher.Invoke(() =>
                     {
-                        BNpcs.Add(bnpc);
-                        _filteredBNpcs.Add(bnpc);
-                    }
+                        BNpcs.Clear();
+                        _filteredBNpcs.Clear();
 
-                    LogDebug($"Loaded {BNpcs.Count} BNpcs");
-                    UpdateBNpcCount();
+                        foreach (var bnpc in tempBNpcs)
+                        {
+                            BNpcs.Add(bnpc);
+                            _filteredBNpcs.Add(bnpc);
+                        }
+
+                        LogDebug($"Loaded {BNpcs.Count} BNpcs to UI");
+                        UpdateBNpcCount();
+                    });
                 }
             }
             catch (Exception ex)
             {
-                LogDebug($"Error loading BNpcs: {ex.Message}");
+                LogDebug($"Error loading BNpcs: {ex.Message}\n{ex.StackTrace}");
             }
         }
 
-        // NEW: Update quest count display
-        private void UpdateQuestCount()
+        private void LoadEvents()
         {
-            if (QuestCountText != null)
+            var tempEvents = new List<EventInfo>();
+
+            try
             {
-                QuestCountText.Text = $"({_filteredQuests.Count})";
+                if (_realm != null)
+                {
+                    LogDebug("Loading events from SaintCoinach...");
+                    var eventSheet = _realm.GameData.GetSheet("Event");
+
+                    if (eventSheet != null)
+                    {
+                        foreach (var eventRow in eventSheet)
+                        {
+                            try
+                            {
+                                string eventName = eventRow.AsString("Name") ?? "";
+                                if (string.IsNullOrWhiteSpace(eventName)) continue;
+
+                                var eventInfo = new EventInfo
+                                {
+                                    Id = (uint)eventRow.Key,
+                                    EventId = (uint)eventRow.Key,
+                                    Name = eventName,
+                                    EventType = "Event", // Default type
+                                    Description = eventRow.AsString("Description") ?? "",
+                                    TerritoryId = 0, // Events may not have territory association
+                                    TerritoryName = ""
+                                };
+
+                                tempEvents.Add(eventInfo);
+                            }
+                            catch (Exception ex)
+                            {
+                                if (_debugLoggingEnabled)
+                                {
+                                    LogDebug($"Failed to process event with key {eventRow.Key}. Error: {ex.Message}");
+                                }
+                            }
+                        }
+                    }
+
+                    tempEvents.Sort((a, b) => a.EventId.CompareTo(b.EventId));
+
+                    WpfApplication.Current.Dispatcher.Invoke(() =>
+                    {
+                        Events.Clear();
+                        _filteredEvents.Clear();
+
+                        foreach (var evt in tempEvents)
+                        {
+                            Events.Add(evt);
+                            _filteredEvents.Add(evt);
+                        }
+
+                        LogDebug($"Loaded {Events.Count} events");
+                        UpdateEventCount();
+                    });
+                }
+            }
+            catch (Exception ex)
+            {
+                LogDebug($"Error loading events: {ex.Message}");
             }
         }
 
-        // NEW: Update BNpc count display
-        private void UpdateBNpcCount()
+        private void LoadFates()
         {
-            if (BNpcCountText != null)
-            {
-                BNpcCountText.Text = $"({_filteredBNpcs.Count})";
-            }
-        }
+            var tempFates = new List<FateInfo>();
 
-        // NEW: Update territory count display
-        private void UpdateTerritoryCount()
-        {
-            if (TerritoryCountText != null)
+            try
             {
-                TerritoryCountText.Text = $"({_filteredTerritories.Count})";
+                if (_realm != null)
+                {
+                    LogDebug("Loading fates from SaintCoinach...");
+                    var fateSheet = _realm.GameData.GetSheet("Fate");
+
+                    if (fateSheet != null)
+                    {
+                        foreach (var fateRow in fateSheet)
+                        {
+                            try
+                            {
+                                string fateName = fateRow.AsString("Name") ?? "";
+                                if (string.IsNullOrWhiteSpace(fateName)) continue;
+
+                                var classJobLevel = 0;
+                                try
+                                {
+                                    classJobLevel = fateRow.AsInt32("ClassJobLevel");
+                                }
+                                catch { }
+
+                                var iconId = 0;
+                                try
+                                {
+                                    iconId = fateRow.AsInt32("Icon");
+                                }
+                                catch { }
+
+                                var fateInfo = new FateInfo
+                                {
+                                    Id = (uint)fateRow.Key,
+                                    FateId = (uint)fateRow.Key,
+                                    Name = fateName,
+                                    Description = fateRow.AsString("Description") ?? "",
+                                    Level = (uint)Math.Max(0, classJobLevel),
+                                    ClassJobLevel = (uint)Math.Max(0, classJobLevel),
+                                    TerritoryId = 0, // Will need to determine from location data
+                                    TerritoryName = "",
+                                    IconId = (uint)Math.Max(0, iconId)
+                                };
+
+                                tempFates.Add(fateInfo);
+                            }
+                            catch (Exception ex)
+                            {
+                                if (_debugLoggingEnabled)
+                                {
+                                    LogDebug($"Failed to process fate with key {fateRow.Key}. Error: {ex.Message}");
+                                }
+                            }
+                        }
+                    }
+
+                    tempFates.Sort((a, b) => a.FateId.CompareTo(b.FateId));
+
+                    WpfApplication.Current.Dispatcher.Invoke(() =>
+                    {
+                        Fates.Clear();
+                        _filteredFates.Clear();
+
+                        foreach (var fate in tempFates)
+                        {
+                            Fates.Add(fate);
+                            _filteredFates.Add(fate);
+                        }
+
+                        LogDebug($"Loaded {Fates.Count} fates");
+                        UpdateFateCount();
+                    });
+                }
+            }
+            catch (Exception ex)
+            {
+                LogDebug($"Error loading fates: {ex.Message}");
             }
         }
 
@@ -560,14 +902,12 @@ namespace map_editor
         {
             if (MapImageControl.Source == null) return;
 
-            // Get mouse position relative to the canvas
             var mousePos = e.GetPosition(MapCanvas);
 
             double zoomFactor = e.Delta > 0 ? 1.1 : 1 / 1.1;
             double newScale = _currentScale * zoomFactor;
             newScale = Math.Clamp(newScale, 0.1, 2.0);
 
-            // Get the current transform
             var transformGroup = MapImageControl.RenderTransform as TransformGroup;
             if (transformGroup == null)
             {
@@ -582,14 +922,9 @@ namespace map_editor
 
             if (scaleTransform != null && translateTransform != null)
             {
-                // Calculate zoom to mouse position
                 double scaleDelta = newScale / _currentScale;
-
-                // Adjust translation to zoom towards mouse position
                 translateTransform.X = mousePos.X - (mousePos.X - translateTransform.X) * scaleDelta;
                 translateTransform.Y = mousePos.Y - (mousePos.Y - translateTransform.Y) * scaleDelta;
-
-                // Apply new scale
                 scaleTransform.ScaleX = newScale;
                 scaleTransform.ScaleY = newScale;
             }
@@ -599,7 +934,6 @@ namespace map_editor
             SyncOverlayWithMap();
             e.Handled = true;
 
-            // Refresh markers if needed
             if (_currentMap != null && _currentMapMarkers != null)
             {
                 RefreshMarkers();
@@ -650,21 +984,15 @@ namespace map_editor
 
                 _lastMousePosition = currentPosition;
 
-                // Only sync the overlay transform, don't refresh markers during drag
                 SyncOverlayWithMap();
             }
             else if (!_isDragging)
             {
-                // Hover detection logic
                 var mousePosition = e.GetPosition(MapCanvas);
-
-                // Pass mouse position to MapRenderer for hover detection
                 _mapRenderer?.HandleMouseMove(mousePosition, _currentMap);
 
-                // For debugging: log cursor position occasionally 
                 if (_debugLoggingEnabled && DateTime.Now.Millisecond < 50) // ~5% of the time
                 {
-                    // Get the image position from the transform
                     var transformGroup = MapImageControl.RenderTransform as TransformGroup;
                     var translateTransform = transformGroup?.Children.OfType<TranslateTransform>().FirstOrDefault();
                     var imagePosition = new System.Windows.Point(
@@ -688,8 +1016,8 @@ namespace map_editor
         private void LoadTerritories()
         {
             LogDebug("Starting to load territories...");
-            Territories.Clear();
-            _filteredTerritories.Clear(); // Add this line
+
+            var tempTerritories = new List<TerritoryInfo>();
 
             try
             {
@@ -697,11 +1025,15 @@ namespace map_editor
                 {
                     LogDebug("Loading territories from SaintCoinach...");
                     var territorySheet = _realm.GameData.GetSheet<SaintCoinach.Xiv.TerritoryType>();
+
+                    int processedCount = 0;
+                    int totalCount = territorySheet.Count();
+                    LogDebug($"Found {totalCount} territories in game data");
+
                     foreach (var territory in territorySheet)
                     {
                         try
                         {
-                            // Defensively get all required properties.
                             string placeName;
                             uint placeNameId = 0;
 
@@ -712,20 +1044,14 @@ namespace map_editor
                             }
                             else
                             {
-                                // Provide a fallback for territories without a proper name
                                 placeName = $"[Territory ID: {territory.Key}]";
-                                // placeNameId remains 0
                             }
 
                             string territoryNameId = territory.Name?.ToString() ?? string.Empty;
-
-                            // This is the critical fix: Defensively access RegionPlaceName,
-                            // and fall back to ZonePlaceName for instanced content.
                             string regionName = "Unknown";
                             uint regionId = 0;
                             bool regionFound = false;
 
-                            // 1. Try to get RegionPlaceName first.
                             try
                             {
                                 if (territory.RegionPlaceName != null && territory.RegionPlaceName.Key != 0)
@@ -739,9 +1065,9 @@ namespace map_editor
                                     }
                                 }
                             }
-                            catch (KeyNotFoundException) { /* This is expected, so we continue to the fallback. */ }
+                            catch (KeyNotFoundException) {}
 
-                            // 2. If no region was found, fall back to ZonePlaceName.
+
                             if (!regionFound)
                             {
                                 try
@@ -753,18 +1079,15 @@ namespace map_editor
                                         {
                                             regionName = name;
                                             regionId = (uint)territory.ZonePlaceName.Key;
-                                            LogDebug($"Territory {territory.Key} ('{placeName}') using ZonePlaceName '{regionName}' as fallback.");
                                         }
                                     }
                                 }
                                 catch (KeyNotFoundException)
                                 {
-                                    // This can also fail, in which case we stick with "Unknown".
-                                    LogDebug($"Territory {territory.Key} ('{placeName}') has no Region or Zone. Defaulting to 'Unknown'.");
                                 }
                             }
 
-                            // Defensively get the map key.
+
                             uint mapId = 0;
                             try
                             {
@@ -791,41 +1114,46 @@ namespace map_editor
                                 MapId = mapId,
                             };
 
-                            Territories.Add(territoryInfo);
-                            _filteredTerritories.Add(territoryInfo); // Add this line
+                            tempTerritories.Add(territoryInfo);
+
+                            processedCount++;
+                            if (processedCount % 100 == 0)
+                            {
+                                LogDebug($"Processed {processedCount}/{totalCount} territories...");
+                            }
                         }
                         catch (Exception ex)
                         {
                             LogDebug($"Failed to process territory with key {territory.Key}. Error: {ex.Message}");
                         }
                     }
+
+                    LogDebug($"Finished processing {tempTerritories.Count} territories");
                 }
 
-                if (Territories.Count == 0)
+                if (tempTerritories.Count == 0)
                 {
                     LogDebug("No territories loaded from SaintCoinach, trying CSV files...");
                     LoadTerritoriesFromCsv();
+                    return; 
                 }
 
-                if (Territories.Any())
-                {
-                    var sortedTerritories = Territories.OrderBy(t => t.Id).ToList();
-                    Territories.Clear();
-                    _filteredTerritories.Clear(); // Add this line
+                tempTerritories.Sort((a, b) => a.Id.CompareTo(b.Id));
 
-                    foreach (var t in sortedTerritories)
+                WpfApplication.Current.Dispatcher.Invoke(() =>
+                {
+                    Territories.Clear();
+                    _filteredTerritories.Clear();
+
+                    foreach (var territory in tempTerritories)
                     {
-                        Territories.Add(t);
-                        _filteredTerritories.Add(t); // Add this line
+                        Territories.Add(territory);
                     }
 
                     LogDebug($"Territory list updated with {Territories.Count} entries");
-                    UpdateTerritoryCount(); // Add this line
-                }
-                else
-                {
-                    LogDebug("WARNING: No territories loaded from any source!");
-                }
+
+                    ApplyTerritoryFilters();
+                });
             }
             catch (Exception ex)
             {
@@ -872,7 +1200,7 @@ namespace map_editor
                     };
 
                     Territories.Add(territoryInfo);
-                    _filteredTerritories.Add(territoryInfo); // Add this line
+                    _filteredTerritories.Add(territoryInfo);
                 }
             }
             catch (Exception ex)
@@ -906,10 +1234,8 @@ namespace map_editor
             {
                 try
                 {
-                    // Show loading indication
                     StatusText.Text = $"Loading map for {selectedTerritory.PlaceName}...";
 
-                    // Use the async version
                     bool success = await LoadTerritoryMapAsync(selectedTerritory);
 
                     if (!success)
@@ -956,7 +1282,6 @@ namespace map_editor
                     return false;
                 }
 
-                // Load the map image
                 LogDebug($"Loading map image for Map ID: {_currentMap.Key}");
                 var mapImage = _currentMap.MediumImage;
                 if (mapImage == null)
@@ -974,7 +1299,6 @@ namespace map_editor
                         var bitmapSource = System.Windows.Interop.Imaging.CreateBitmapSourceFromHBitmap(
                             handle, IntPtr.Zero, Int32Rect.Empty, BitmapSizeOptions.FromEmptyOptions());
 
-                        // Set image source and ensure it's part of the canvas
                         MapImageControl.Source = bitmapSource;
 
                         if (!MapCanvas.Children.Contains(MapImageControl))
@@ -983,29 +1307,24 @@ namespace map_editor
                             LogDebug("Added MapImageControl to MapCanvas");
                         }
 
-                        // Apply scaling and positioning
                         CalculateAndApplyInitialScale(bitmapSource);
 
-                        // Hide placeholder text
                         MapPlaceholderText.Visibility = Visibility.Collapsed;
 
                         StatusText.Text = $"Map loaded for {territory.PlaceName}. Loading markers...";
 
-                        // Load markers on a background thread
                         List<MapMarker> markers = await Task.Run(() =>
                             _mapService?.LoadMapMarkers(territory.MapId) ?? new List<MapMarker>()
                         );
 
-                        // Back on UI thread
                         _currentMapMarkers = markers;
 
-                        // Always use (0,0) as image position since positioning is handled by transform
                         var imagePosition = new System.Windows.Point(0, 0);
                         var imageSize = new System.Windows.Size(
                             bitmapSource.PixelWidth,
                             bitmapSource.PixelHeight);
 
-                        // Display markers
+ 
                         _mapRenderer?.DisplayMapMarkers(_currentMapMarkers, _currentMap, _currentScale, imagePosition, imageSize);
                         SyncOverlayWithMap();
                         _mapRenderer?.AddDebugGridAndBorders();
@@ -1048,29 +1367,26 @@ namespace map_editor
 
             double imageWidth = bitmapSource.PixelWidth;
             double imageHeight = bitmapSource.PixelHeight;
-
-            // Calculate scale to fit the image within the canvas
             double scaleX = canvasWidth / imageWidth;
             double scaleY = canvasHeight / imageHeight;
             double fitScale = Math.Min(scaleX, scaleY);
-            _currentScale = fitScale * 0.9; // Slightly smaller to leave margin
+            _currentScale = fitScale * 0.9;
 
-            // Center the image within the canvas using transforms ONLY
             double centeredX = (canvasWidth - (imageWidth * _currentScale)) / 2;
             double centeredY = (canvasHeight - (imageHeight * _currentScale)) / 2;
 
-            // Configure map image - Set position to 0,0 and use transform for centering
+
             MapImageControl.Width = imageWidth;
             MapImageControl.Height = imageHeight;
-            Canvas.SetLeft(MapImageControl, 0); // Always 0
-            Canvas.SetTop(MapImageControl, 0);  // Always 0
-            Canvas.SetZIndex(MapImageControl, 0); // Ensure map is behind markers
+            Canvas.SetLeft(MapImageControl, 0); 
+            Canvas.SetTop(MapImageControl, 0); 
+            Canvas.SetZIndex(MapImageControl, 0);
             MapImageControl.Visibility = Visibility.Visible;
 
-            // Create transform for scaling AND positioning
+
             var transformGroup = new TransformGroup();
             transformGroup.Children.Add(new ScaleTransform(_currentScale, _currentScale));
-            transformGroup.Children.Add(new TranslateTransform(centeredX, centeredY)); // Use transform for centering
+            transformGroup.Children.Add(new TranslateTransform(centeredX, centeredY)); 
             MapImageControl.RenderTransform = transformGroup;
             MapImageControl.RenderTransformOrigin = new System.Windows.Point(0, 0);
 
@@ -1081,7 +1397,6 @@ namespace map_editor
         {
             if (_mapRenderer == null || _currentMap == null) return;
 
-            // Always use (0,0) as image position since positioning is handled by transform
             var imagePosition = new System.Windows.Point(0, 0);
 
             if (MapImageControl.Source is BitmapSource bitmapSource)
@@ -1094,17 +1409,14 @@ namespace map_editor
                 _mapRenderer?.DisplayMapMarkers(_currentMapMarkers, _currentMap, _currentScale, imagePosition, imageSize);
                 SyncOverlayWithMap();
 
-                // Add a debug message to confirm markers were refreshed
                 LogDebug($"Refreshed {_currentMapMarkers.Count} markers on map");
             }
         }
 
-        // Add this method to diagnose map display issues
         private void DiagnoseMapDisplay()
         {
             LogDebug("=== MAP DISPLAY DIAGNOSTIC ===");
 
-            // Check map image
             if (MapImageControl.Source is BitmapSource bmp)
             {
                 LogDebug($"Map image: {bmp.PixelWidth}x{bmp.PixelHeight} pixels");
@@ -1145,7 +1457,6 @@ namespace map_editor
             LogDebug($"Map image actual size: {MapImageControl.ActualWidth}x{MapImageControl.ActualHeight}");
             LogDebug($"Map image position: Left={Canvas.GetLeft(MapImageControl)}, Top={Canvas.GetTop(MapImageControl)}");
 
-            // Check if the transform is applied correctly
             var transform = MapImageControl.RenderTransform as TransformGroup;
             if (transform != null)
             {
@@ -1160,7 +1471,6 @@ namespace map_editor
                 LogDebug("Map image has no transform!");
             }
 
-            // Fix the ambiguous Panel references in DiagnoseMapVisibility method
             LogDebug($"Z-Index: MapImageControl={System.Windows.Controls.Panel.GetZIndex(MapImageControl)}, " +
                      $"MapCanvas={System.Windows.Controls.Panel.GetZIndex(MapCanvas)}, " +
                      $"OverlayCanvas={System.Windows.Controls.Panel.GetZIndex(OverlayCanvas ?? new Canvas())}");
@@ -1242,7 +1552,6 @@ namespace map_editor
             LogDebug($"- MapImageControl visibility: {MapImageControl.Visibility}");
             LogDebug($"- MapImageControl z-index: {Canvas.GetZIndex(MapImageControl)}");
 
-            // Force MapImageControl to be visible if it isn't already
             if (MapImageControl.Visibility != Visibility.Visible)
             {
                 MapImageControl.Visibility = Visibility.Visible;
@@ -1278,6 +1587,7 @@ namespace map_editor
             if (_mapRenderer != null)
             {
                 bool isEnabled = DebugModeCheckBox.IsChecked == true;
+                _debugLoggingEnabled = isEnabled;
                 _mapRenderer.EnableVerboseLogging(isEnabled);
                 _mapRenderer.EnableDebugVisuals(isEnabled);
                 LogDebug($"Debug mode {(isEnabled ? "enabled" : "disabled")}");
@@ -1315,7 +1625,6 @@ namespace map_editor
             LogDebug($"OverlayCanvas z-index: {WpfPanel.GetZIndex(OverlayCanvas)}");
             LogDebug($"OverlayCanvas children count: {OverlayCanvas.Children.Count}");
 
-            // Check if overlay is attached to the visual tree
             bool isAttachedToVisualTree = false;
             DependencyObject parent = OverlayCanvas;
             while (parent != null)
@@ -1330,7 +1639,6 @@ namespace map_editor
 
             LogDebug($"OverlayCanvas attached to window: {isAttachedToVisualTree}");
 
-            // Check transform
             var transform = OverlayCanvas.RenderTransform as TransformGroup;
             if (transform != null)
             {
@@ -1366,7 +1674,6 @@ namespace map_editor
 
         public override void Write(string? message)
         {
-            // Intentionally left blank
         }
 
         public override void WriteLine(string? message)
@@ -1393,7 +1700,6 @@ namespace map_editor
 
         public override string ToString()
         {
-            // Format: Id + PlaceName (simple format)
             if (!string.IsNullOrEmpty(PlaceName) && !PlaceName.StartsWith("[Territory ID:"))
             {
                 return $"{Id} - {PlaceName}";

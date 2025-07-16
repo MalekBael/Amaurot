@@ -18,14 +18,10 @@ namespace map_editor
         public bool IsVisible { get; set; } = true;
         public MarkerType Type { get; set; } = MarkerType.Generic;
 
-        /// <summary>
-        /// Determines the marker type based on its icon ID if not already set
-        /// </summary>
         public void DetermineType()
         {
             if (Type != MarkerType.Generic && Type != MarkerType.Custom)
             {
-                // Type already set, don't override
                 return;
             }
 
@@ -67,7 +63,6 @@ namespace map_editor
         public List<MapMarker> Markers { get; set; } = new List<MapMarker>();
     }
 
-    // NEW: Quest data models - Updated with correct SaintCoinach properties
     public class QuestInfo
     {
         public uint Id { get; set; }
@@ -89,7 +84,6 @@ namespace map_editor
         }
     }
 
-    // NEW: BNpc data models
     public class BNpcInfo
     {
         public uint BNpcNameId { get; set; }
@@ -108,26 +102,48 @@ namespace map_editor
         }
     }
 
-    /// <summary>
-    /// Helper class for marker-related functionality
-    /// </summary>
+    public class EventInfo
+    {
+        public uint Id { get; set; }
+        public string Name { get; set; } = string.Empty;
+        public uint EventId { get; set; }
+        public string EventType { get; set; } = string.Empty;
+        public string Description { get; set; } = string.Empty;
+        public uint TerritoryId { get; set; }
+        public string TerritoryName { get; set; } = string.Empty;
+
+        public override string ToString()
+        {
+            return $"{EventId} - {Name}";
+        }
+    }
+
+    public class FateInfo
+    {
+        public uint Id { get; set; }
+        public string Name { get; set; } = string.Empty;
+        public uint FateId { get; set; }
+        public string Description { get; set; } = string.Empty;
+        public uint Level { get; set; }
+        public uint ClassJobLevel { get; set; }
+        public uint TerritoryId { get; set; }
+        public string TerritoryName { get; set; } = string.Empty;
+        public uint IconId { get; set; }
+
+        public override string ToString()
+        {
+            return $"{FateId} - {Name} (Lv.{Level})";
+        }
+    }
+
     public static class MapMarkerHelper
     {
-        /// <summary>
-        /// Maps icon IDs to their PlaceName IDs from MapSymbol.csv
-        /// </summary>
         private static Dictionary<uint, uint> IconToPlaceNameIdMap = new Dictionary<uint, uint>();
 
-        /// <summary>
-        /// Stores the PlaceName strings by ID for display purposes
-        /// </summary>
         private static Dictionary<uint, string> PlaceNameIdToNameMap = new Dictionary<uint, string>();
 
         private static bool _isInitialized = false;
 
-        /// <summary>
-        /// Initializes the icon mappings from MapSymbol data
-        /// </summary>
         public static void InitializeFromMapSymbolData(IEnumerable<MapSymbolRow> mapSymbols, Dictionary<uint, string> placeNames)
         {
             IconToPlaceNameIdMap.Clear();
@@ -137,16 +153,12 @@ namespace map_editor
             {
                 if (symbol.IconId == 0) continue;
 
-                // Store the icon -> PlaceNameId mapping
                 IconToPlaceNameIdMap[symbol.IconId] = symbol.PlaceNameId;
             }
 
             _isInitialized = true;
         }
 
-        /// <summary>
-        /// Gets the PlaceName for a given icon ID
-        /// </summary>
         public static string GetPlaceNameForIcon(uint iconId)
         {
             if (!_isInitialized)
@@ -161,20 +173,16 @@ namespace map_editor
             return string.Empty;
         }
 
-        /// <summary>
-        /// Updates a MapMarker with its proper PlaceName from the icon mapping
-        /// </summary>
         public static void UpdateMarkerPlaceName(MapMarker marker)
         {
             if (!_isInitialized || marker.IconId == 0)
                 return;
 
-            // If the marker already has a PlaceNameId from MapMarker.csv, use that
             if (marker.PlaceNameId > 0 && PlaceNameIdToNameMap.TryGetValue(marker.PlaceNameId, out string existingName))
             {
                 marker.PlaceName = existingName;
             }
-            // Otherwise, try to get it from the icon mapping
+
             else if (IconToPlaceNameIdMap.TryGetValue(marker.IconId, out uint placeNameId) &&
                      PlaceNameIdToNameMap.TryGetValue(placeNameId, out string placeName))
             {
@@ -183,20 +191,13 @@ namespace map_editor
             }
         }
 
-        /// <summary>
-        /// Infers the marker type based on its icon ID
-        /// For backwards compatibility - prefer using the actual PlaceName data
-        /// </summary>
+   
         public static MarkerType InferMarkerTypeFromIconId(uint iconId)
         {
-            // This method now just returns Generic - let the UI decide how to categorize
-            // based on the actual PlaceName or let users categorize manually
             return MarkerType.Generic;
         }
 
-        /// <summary>
-        /// Gets the fill color for a marker type
-        /// </summary>
+
         public static System.Windows.Media.Color GetMarkerFillColor(MarkerType type)
         {
             return type switch
@@ -208,13 +209,10 @@ namespace map_editor
                 MarkerType.Entrance => Colors.Brown,
                 MarkerType.Symbol => Colors.Teal,
                 MarkerType.Custom => Colors.Magenta,
-                _ => Colors.Red, // Generic
+                _ => Colors.Red, 
             };
         }
 
-        /// <summary>
-        /// Gets the stroke color for a marker type
-        /// </summary>
         public static System.Windows.Media.Color GetMarkerStrokeColor(MarkerType type)
         {
             return type switch
@@ -226,13 +224,10 @@ namespace map_editor
                 MarkerType.Entrance => Colors.SandyBrown,
                 MarkerType.Symbol => Colors.Cyan,
                 MarkerType.Custom => Colors.Pink,
-                _ => Colors.Yellow, // Generic
+                _ => Colors.Yellow, 
             };
         }
 
-        /// <summary>
-        /// Returns the shape type for a marker type (for fallback rendering)
-        /// </summary>
         public static string GetMarkerShapeType(MarkerType type)
         {
             return type switch
@@ -244,27 +239,20 @@ namespace map_editor
                 MarkerType.Entrance => "Ellipse",
                 MarkerType.Symbol => "Ellipse",
                 MarkerType.Custom => "Star",
-                _ => "Ellipse", // Generic
+                _ => "Ellipse", 
             };
         }
 
-        /// <summary>
-        /// Gets the formatted icon path for the game's file system
-        /// </summary>
         public static string GetIconPath(uint iconId)
         {
             if (iconId == 0)
                 return string.Empty;
 
-            // Format according to FFXIV's icon naming convention (060321 for ID 60321)
             string iconFolder = $"{iconId / 1000 * 1000:D6}";
             return $"ui/icon/{iconFolder}/{iconId:D6}.tex";
         }
     }
 
-    /// <summary>
-    /// Represents a row from MapSymbol.csv
-    /// </summary>
     public class MapSymbolRow
     {
         public uint RowId { get; set; }

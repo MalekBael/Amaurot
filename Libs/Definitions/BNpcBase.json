@@ -1,0 +1,90 @@
+{
+  "sheet": "BNpcBase",
+  "defaultColumn": "uint16",
+  "definitions": [
+    {
+      "index": 1,
+      "name": "Unknown9"
+    },
+    {
+      "index": 2,
+      "name": "Batallion",
+      "converter": {
+        "type": "link",
+        "target": "Batallion"
+      }
+    },
+    {
+      "index": 3,
+      "name": "LinkRace",
+      "converter": {
+        "type": "link",
+        "target": "LinkRace"
+      }
+    },
+    {
+      "index": 4,
+      "name": "Scale"
+    },
+    {
+      "index": 5,
+      "name": "ModelChara",
+      "converter": {
+        "type": "link",
+        "target": "ModelChara"
+      }
+    },
+    {
+      "index": 6,
+      "name": "BNpcCustomize",
+      "converter": {
+        "type": "link",
+        "target": "BNpcCustomize"
+      }
+    },
+    {
+      "index": 7,
+      "name": "NpcEquip",
+      "converter": {
+        "type": "link",
+        "target": "NpcEquip"
+      }
+    },
+    {
+      "index": 8,
+      "name": "Special"
+    },
+    {
+      "index": 9,
+      "name": "Rank"
+    },
+    {
+      "index": 10,
+      "name": "ArrayEventHandler",
+      "converter": {
+        "type": "link",
+        "target": "ArrayEventHandler"
+      }
+    },
+    {
+      "index": 11,
+      "name": "SEPack"
+    },
+    {
+      "index": 12,
+      "name": "Unknown0"
+    },
+    {
+      "index": 13,
+      "name": "BNpcParts",
+      "converter": {
+        "type": "link",
+        "target": "BNpcParts"
+      }
+    },
+    {
+      "index": 14,
+      "name": "Unknown1"
+    }
+  ]
+}
