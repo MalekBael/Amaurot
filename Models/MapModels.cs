@@ -47,7 +47,8 @@ namespace map_editor
         Landmark,
         Entrance,
         Symbol,
-        Custom
+        Custom,
+        Fate
     }
 
     public class MapInfo
@@ -129,6 +130,9 @@ namespace map_editor
         public uint TerritoryId { get; set; }
         public string TerritoryName { get; set; } = string.Empty;
         public uint IconId { get; set; }
+        public double X { get; set; }
+        public double Y { get; set; }
+        public double Z { get; set; }
 
         public override string ToString()
         {
@@ -194,9 +198,12 @@ namespace map_editor
    
         public static MarkerType InferMarkerTypeFromIconId(uint iconId)
         {
+            // Add Fate icon detection
+            if (iconId == 60722 || iconId == 60502 || iconId == 60503 || iconId == 60504 || iconId == 60505)
+                return MarkerType.Fate;
+
             return MarkerType.Generic;
         }
-
 
         public static System.Windows.Media.Color GetMarkerFillColor(MarkerType type)
         {
@@ -209,7 +216,8 @@ namespace map_editor
                 MarkerType.Entrance => Colors.Brown,
                 MarkerType.Symbol => Colors.Teal,
                 MarkerType.Custom => Colors.Magenta,
-                _ => Colors.Red, 
+                MarkerType.Fate => Colors.Orange, // Add Fate color
+                _ => Colors.Red,
             };
         }
 
@@ -224,7 +232,8 @@ namespace map_editor
                 MarkerType.Entrance => Colors.SandyBrown,
                 MarkerType.Symbol => Colors.Cyan,
                 MarkerType.Custom => Colors.Pink,
-                _ => Colors.Yellow, 
+                MarkerType.Fate => Colors.DarkOrange, // Add Fate stroke color
+                _ => Colors.Yellow,
             };
         }
 
@@ -239,7 +248,8 @@ namespace map_editor
                 MarkerType.Entrance => "Ellipse",
                 MarkerType.Symbol => "Ellipse",
                 MarkerType.Custom => "Star",
-                _ => "Ellipse", 
+                MarkerType.Fate => "Diamond", // Use diamond shape for Fates
+                _ => "Ellipse",
             };
         }
 

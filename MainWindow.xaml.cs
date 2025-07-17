@@ -23,11 +23,20 @@ using WpfMessageBox = System.Windows.MessageBox;
 using WpfPanel = System.Windows.Controls.Panel;
 using WpfSaveFileDialog = Microsoft.Win32.SaveFileDialog;
 using WpfApplication = System.Windows.Application;
+using WpfImage = System.Windows.Controls.Image; // Add this alias
 
 namespace map_editor
 {
     public partial class MainWindow : Window
     {
+        // Core services
+        private DataLoaderService? _dataLoaderService;
+        private SearchFilterService? _searchFilterService;
+        private MapInteractionService? _mapInteractionService;
+        private UIUpdateService? _uiUpdateService;
+        private DebugHelper? _debugHelper;
+        
+        // Existing fields...
         private ARealmReversed? _realm;
         private MapService? _mapService;
         private MapRenderer? _mapRenderer;
@@ -43,36 +52,43 @@ namespace map_editor
 
         public ObservableCollection<TerritoryInfo> Territories { get; set; } = new ObservableCollection<TerritoryInfo>();
         public ObservableCollection<QuestInfo> Quests { get; set; } = new ObservableCollection<QuestInfo>();
-
         public ObservableCollection<BNpcInfo> BNpcs { get; set; } = new ObservableCollection<BNpcInfo>();
         public ObservableCollection<EventInfo> Events { get; set; } = new ObservableCollection<EventInfo>();
-
         public ObservableCollection<FateInfo> Fates { get; set; } = new ObservableCollection<FateInfo>();
+
         private ObservableCollection<QuestInfo> _filteredQuests = new ObservableCollection<QuestInfo>();
         private ObservableCollection<BNpcInfo> _filteredBNpcs = new ObservableCollection<BNpcInfo>();
-        private ObservableCollection<TerritoryInfo> _filteredTerritories = new ObservableCollection<TerritoryInfo>(); 
+        private ObservableCollection<TerritoryInfo> _filteredTerritories = new ObservableCollection<TerritoryInfo>();
         private ObservableCollection<EventInfo> _filteredEvents = new ObservableCollection<EventInfo>();
         private ObservableCollection<FateInfo> _filteredFates = new ObservableCollection<FateInfo>();
-        private const int MaxLogLines = 500;
+
         private System.Windows.Threading.DispatcherTimer? _searchDebounceTimer;
+
+        // Public properties for DebugHelper access
+        public double CurrentScale => _currentScale;
+        public ObservableCollection<TerritoryInfo> FilteredTerritories => _filteredTerritories;
 
         public MainWindow()
         {
             InitializeComponent();
             DataContext = this;
+            InitializeServices();
+            // Remove SetupUI() call - it doesn't exist
+            this.Loaded += MainWindow_Loaded;
+        }
 
-            QuestList.ItemsSource = _filteredQuests;
-            BNpcList.ItemsSource = _filteredBNpcs;
-            TerritoryList.ItemsSource = _filteredTerritories;
-            EventList.ItemsSource = _filteredEvents; 
-            FateList.ItemsSource = _filteredFates;   
-
-            _mapRenderer = new MapRenderer(_realm);
-
+        private void InitializeServices()
+        {
+            _debugHelper = new DebugHelper(this);
+            _uiUpdateService = new UIUpdateService();
+            _mapInteractionService = new MapInteractionService(LogDebug);
+            _searchFilterService = new SearchFilterService(LogDebug);
+            // Initialize MapRenderer here
+            _mapRenderer = new MapRenderer(null); // Will update realm later
+            // _dataLoaderService will be initialized when _realm is available
+            
             RedirectDebugOutput();
             LogDebug("Application started");
-
-            this.Loaded += MainWindow_Loaded;
         }
 
         private void MainWindow_Loaded(object sender, RoutedEventArgs e)
@@ -93,6 +109,59 @@ namespace map_editor
             if (MapImageControl.Source is BitmapSource bitmapSource)
             {
                 CalculateAndApplyInitialScale(bitmapSource);
+            }
+        }
+
+        private void MarkerVisibility_Changed(object sender, RoutedEventArgs e)
+        {
+            if (_mapRenderer == null || _currentMapMarkers == null || _currentMapMarkers.Count == 0)
+                return;
+
+            // Create a filtered list based on checkbox states
+            var visibleMarkers = new List<MapMarker>();
+
+            foreach (var marker in _currentMapMarkers)
+            {
+                bool shouldShow = marker.Type switch
+                {
+                    MarkerType.Aetheryte => ShowAetheryteMarkersCheckBox?.IsChecked == true,
+                    MarkerType.Quest => ShowQuestMarkersCheckBox?.IsChecked == true,
+                    MarkerType.Shop => ShowShopMarkersCheckBox?.IsChecked == true,
+                    MarkerType.Landmark => ShowLandmarkMarkersCheckBox?.IsChecked == true,
+                    MarkerType.Fate => ShowFateMarkersCheckBox?.IsChecked == true,
+                    MarkerType.Entrance => ShowEntranceMarkersCheckBox?.IsChecked == true,
+                    _ => ShowGenericMarkersCheckBox?.IsChecked == true
+                };
+
+                if (shouldShow)
+                {
+                    visibleMarkers.Add(marker);
+                }
+            }
+
+            // Refresh the display with filtered markers
+            RefreshMarkersWithFiltered(visibleMarkers);
+
+            LogDebug($"Marker visibility changed - showing {visibleMarkers.Count} of {_currentMapMarkers.Count} total markers");
+        }
+
+        private void RefreshMarkersWithFiltered(List<MapMarker> visibleMarkers)
+        {
+            if (_mapRenderer == null || _currentMap == null) return;
+
+            var imagePosition = new System.Windows.Point(0, 0);
+
+            if (MapImageControl.Source is BitmapSource bitmapSource)
+            {
+                var imageSize = new System.Windows.Size(
+                    bitmapSource.PixelWidth,
+                    bitmapSource.PixelHeight
+                );
+
+                _mapRenderer?.DisplayMapMarkers(visibleMarkers, _currentMap, _currentScale, imagePosition, imageSize);
+                SyncOverlayWithMap();
+
+                LogDebug($"Refreshed with {visibleMarkers.Count} filtered markers on map");
             }
         }
 
@@ -151,7 +220,7 @@ namespace map_editor
 
                 LogDebug($"Initialized realm: {(_realm != null ? "Success" : "Failed")}");
 
-                _mapService = new MapService(_realm);
+                _mapService = new MapService(_realm, LogDebug); // Pass the LogDebug method
                 LogDebug("Initialized map service");
 
                 if (_realm != null)
@@ -159,43 +228,42 @@ namespace map_editor
                     _mapRenderer?.UpdateRealm(_realm);
                 }
 
+                // Initialize the data loader service
+                _dataLoaderService = new DataLoaderService(_realm, LogDebug);
+                LogDebug("Initialized data loader service");
+
+                // Add debug logging
+                LogDebug("Starting to load all data...");
+
+                // Load all data using the service
                 var loadingTasks = new List<Task>
                 {
-                    Task.Run(() =>
-                    {
-                        LogDebug("Loading territories...");
-                        LoadTerritories();
-                    }),
-                    Task.Run(() =>
-                    {
-                        LogDebug("Loading quests...");
-                        LoadQuests();
-                    }),
-                    Task.Run(() =>
-                    {
-                        LogDebug("Loading BNpcs...");
-                        LoadBNpcs();
-                    }),
-                    Task.Run(() =>
-                    {
-                        LogDebug("Loading events...");
-                        LoadEvents();
-                    }),
-                    Task.Run(() =>
-                    {
-                        LogDebug("Loading fates...");
-                        LoadFates();
-                    })
+                    LoadDataAsync(_dataLoaderService.LoadTerritoriesAsync, Territories, _filteredTerritories, _uiUpdateService!.UpdateTerritoryCount, TerritoryCountText),
+                    LoadDataAsync(_dataLoaderService.LoadQuestsAsync, Quests, _filteredQuests, _uiUpdateService!.UpdateQuestCount, QuestCountText),
+                    LoadDataAsync(_dataLoaderService.LoadBNpcsAsync, BNpcs, _filteredBNpcs, _uiUpdateService!.UpdateBNpcCount, BNpcCountText),
+                    LoadDataAsync(_dataLoaderService.LoadEventsAsync, Events, _filteredEvents, _uiUpdateService!.UpdateEventCount, EventCountText),
+                    LoadDataAsync(_dataLoaderService.LoadFatesAsync, Fates, _filteredFates, _uiUpdateService!.UpdateFateCount, FateCountText)
                 };
 
                 var loadingTask = Task.WhenAll(loadingTasks);
                 while (!loadingTask.IsCompleted)
                 {
                     await Task.Delay(500);
-                    StatusText.Text = $"Loading FFXIV data... Territories: {Territories.Count}, Quests: {Quests.Count}, NPCs: {BNpcs.Count}";
+                    // Add more detailed status
+                    StatusText.Text = $"Loading FFXIV data... Territories: {Territories.Count}, Quests: {Quests.Count}, NPCs: {BNpcs.Count}, Events: {Events.Count}, Fates: {Fates.Count}";
                 }
 
                 await loadingTask;
+
+                // Log final counts
+                LogDebug($"Loading complete - Territories: {Territories.Count}, Quests: {Quests.Count}, NPCs: {BNpcs.Count}, Events: {Events.Count}, Fates: {Fates.Count}");
+
+                // Apply initial territory filter to populate the filtered list
+                if (Territories.Count > 0)
+                {
+                    LogDebug("Applying initial territory filters...");
+                    ApplyTerritoryFilters();
+                }
 
                 StatusText.Text = $"Loaded {Territories.Count} territories, {Quests.Count} quests, {BNpcs.Count} NPCs, {Events.Count} events, {Fates.Count} fates from: {gameDirectory}";
             }
@@ -205,6 +273,38 @@ namespace map_editor
                 LogDebug($"Error loading FFXIV data: {ex.Message}\n{ex.StackTrace}");
                 WpfMessageBox.Show($"Failed to load FFXIV data: {ex.Message}", "Error",
                     MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        private async Task LoadDataAsync<T>(Func<Task<List<T>>> loadFunction, 
+            ObservableCollection<T> sourceCollection, 
+            ObservableCollection<T> filteredCollection,
+            Action<ObservableCollection<T>, TextBlock?> updateCountAction,
+            TextBlock? countTextBlock)
+        {
+            try
+            {
+                LogDebug($"LoadDataAsync starting for type: {typeof(T).Name}");
+                var data = await loadFunction();
+                LogDebug($"LoadDataAsync received {data?.Count ?? 0} items of type: {typeof(T).Name}");
+                
+                // Fix: Use WpfApplication alias instead of ambiguous Application
+                WpfApplication.Current.Dispatcher.Invoke(() =>
+                {
+                    sourceCollection.Clear();
+                    filteredCollection.Clear();
+                    foreach (var item in data)
+                    {
+                        sourceCollection.Add(item);
+                        filteredCollection.Add(item);
+                    }
+                    updateCountAction(filteredCollection, countTextBlock);
+                    LogDebug($"LoadDataAsync completed UI update for {sourceCollection.Count} items of type: {typeof(T).Name}");
+                });
+            }
+            catch (Exception ex)
+            {
+                LogDebug($"LoadDataAsync error for type {typeof(T).Name}: {ex.Message}\n{ex.StackTrace}");
             }
         }
 
@@ -230,6 +330,7 @@ namespace map_editor
             _mapRenderer.ShowCoordinateInfo(coordinates, clickPoint);
             e.Handled = true;
         }
+
         private void HideDuplicateTerritoriesCheckBox_Changed(object sender, RoutedEventArgs e)
         {
             bool newValue = HideDuplicateTerritoriesCheckBox?.IsChecked == true;
@@ -282,60 +383,6 @@ namespace map_editor
             if (FateCountText != null)
             {
                 FateCountText.Text = $"({_filteredFates.Count})";
-            }
-        }
-
-        public ObservableCollection<TerritoryInfo> FilteredTerritories => _filteredTerritories;
-
-        private void LoadFFXIVData(string gameDirectory)
-        {
-            try
-            {
-                StatusText.Text = "Loading FFXIV data...";
-
-                if (!ValidateGameDirectory(gameDirectory))
-                {
-                    WpfMessageBox.Show(
-                        "The selected folder doesn't appear to be a valid FFXIV installation.\n\n" +
-                        "Please select the main FFXIV installation folder that contains the 'game' and 'boot' folders.",
-                        "Invalid Directory", MessageBoxButton.OK, MessageBoxImage.Warning);
-                    return;
-                }
-
-                _realm = new ARealmReversed(gameDirectory, SaintCoinach.Ex.Language.English);
-                LogDebug($"Initialized realm: {(_realm != null ? "Success" : "Failed")}");
-
-                _mapService = new MapService(_realm);
-                LogDebug("Initialized map service");
-
-                if (_realm != null)
-                {
-                    _mapRenderer?.UpdateRealm(_realm);
-                }
-
-                LogDebug("Loading territories...");
-                LoadTerritories();
-
-                LogDebug("Loading quests...");
-                LoadQuests();
-
-                LogDebug("Loading BNpcs...");
-                LoadBNpcs();
-
-                LogDebug("Loading events...");
-                LoadEvents(); 
-
-                LogDebug("Loading fates...");
-                LoadFates();
-
-                StatusText.Text = $"Loaded {Territories.Count} territories, {Quests.Count} quests, {BNpcs.Count} NPCs, {Events.Count} events, {Fates.Count} fates from: {gameDirectory}";
-            }
-            catch (Exception ex)
-            {
-                StatusText.Text = $"Error loading data: {ex.Message}";
-                LogDebug($"Error loading FFXIV data: {ex.Message}\n{ex.StackTrace}");
-                WpfMessageBox.Show($"Failed to load FFXIV data: {ex.Message}", "Error",
-                    MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
@@ -434,24 +481,8 @@ namespace map_editor
 
         private void QuestSearchBox_TextChanged(object sender, TextChangedEventArgs e)
         {
-            string searchText = QuestSearchBox.Text?.ToLower() ?? "";
-
-            _filteredQuests.Clear();
-
-            foreach (var quest in Quests)
-            {
-                bool matches = string.IsNullOrEmpty(searchText) ||
-                              quest.Name.ToLower().Contains(searchText) ||
-                              quest.Id.ToString().Contains(searchText) ||
-                              quest.JournalGenre.ToLower().Contains(searchText);
-
-                if (matches)
-                {
-                    _filteredQuests.Add(quest);
-                }
-            }
-
-            UpdateQuestCount();
+            _searchFilterService?.FilterQuests(QuestSearchBox.Text ?? "", Quests, _filteredQuests);
+            _uiUpdateService?.UpdateQuestCount(_filteredQuests, QuestCountText);
         }
 
         private void BNpcSearchBox_TextChanged(object sender, TextChangedEventArgs e)
@@ -495,12 +526,10 @@ namespace map_editor
 
         private void ApplyTerritoryFilters()
         {
-            if (_debugLoggingEnabled)
-            {
-                LogDebug($"=== ApplyTerritoryFilters START ===");
-                LogDebug($"Hide duplicates: {_hideDuplicateTerritories}");
-                LogDebug($"Search text: '{TerritorySearchBox?.Text}'");
-            }
+            LogDebug($"=== ApplyTerritoryFilters START ===");
+            LogDebug($"Source Territories count: {Territories.Count}");
+            LogDebug($"Hide duplicates: {_hideDuplicateTerritories}");
+            LogDebug($"Search text: '{TerritorySearchBox?.Text}'");
 
             string searchText = TerritorySearchBox?.Text?.ToLower() ?? "";
 
@@ -543,22 +572,21 @@ namespace map_editor
                 }
 
                 var finalResults = filteredTerritories.ToList();
+                LogDebug($"Filtered results count: {finalResults.Count}");
 
                 WpfApplication.Current.Dispatcher.Invoke(() =>
                 {
+                    LogDebug($"Clearing _filteredTerritories (current count: {_filteredTerritories.Count})");
                     _filteredTerritories.Clear();
                     foreach (var territory in finalResults)
                     {
                         _filteredTerritories.Add(territory);
                     }
+                    LogDebug($"Added {_filteredTerritories.Count} territories to _filteredTerritories");
                     UpdateTerritoryCount();
                 });
 
-                if (_debugLoggingEnabled)
-                {
-                    LogDebug($"Filtered territories count: {finalResults.Count}");
-                    LogDebug($"=== ApplyTerritoryFilters END ===");
-                }
+                LogDebug($"=== ApplyTerritoryFilters END ===");
             });
         }
 
@@ -609,8 +637,6 @@ namespace map_editor
             if (QuestList.SelectedItem is QuestInfo selectedQuest)
             {
                 LogDebug($"Selected quest: {selectedQuest.Name} (ID: {selectedQuest.Id})");
-                // We can add more functionality here later, such as showing quest details
-                // or highlighting quest-related markers on the map
             }
         }
 
@@ -619,8 +645,6 @@ namespace map_editor
             if (BNpcList.SelectedItem is BNpcInfo selectedBNpc)
             {
                 LogDebug($"Selected BNpc: {selectedBNpc.BNpcName} (Base ID: {selectedBNpc.BNpcBaseId})");
-                // We can add more functionality here later, such as showing NPC details
-                // or highlighting NPC-related markers on the map
             }
         }
 
@@ -629,8 +653,6 @@ namespace map_editor
             if (EventList.SelectedItem is EventInfo selectedEvent)
             {
                 LogDebug($"Selected Event: {selectedEvent.Name} (ID: {selectedEvent.EventId})");
-                // We can add more functionality here later, such as showing event details
-                // or highlighting event-related markers on the map
             }
         }
 
@@ -639,8 +661,6 @@ namespace map_editor
             if (FateList.SelectedItem is FateInfo selectedFate)
             {
                 LogDebug($"Selected Fate: {selectedFate.Name} (ID: {selectedFate.FateId})");
-                // We can add more functionality here later, such as showing fate details
-                // or highlighting fate-related markers on the map
             }
         }
 
@@ -900,44 +920,10 @@ namespace map_editor
 
         private void MapCanvas_MouseWheel(object sender, MouseWheelEventArgs e)
         {
-            if (MapImageControl.Source == null) return;
-
-            var mousePos = e.GetPosition(MapCanvas);
-
-            double zoomFactor = e.Delta > 0 ? 1.1 : 1 / 1.1;
-            double newScale = _currentScale * zoomFactor;
-            newScale = Math.Clamp(newScale, 0.1, 2.0);
-
-            var transformGroup = MapImageControl.RenderTransform as TransformGroup;
-            if (transformGroup == null)
-            {
-                transformGroup = new TransformGroup();
-                transformGroup.Children.Add(new ScaleTransform());
-                transformGroup.Children.Add(new TranslateTransform());
-                MapImageControl.RenderTransform = transformGroup;
-            }
-
-            var scaleTransform = transformGroup.Children.OfType<ScaleTransform>().FirstOrDefault();
-            var translateTransform = transformGroup.Children.OfType<TranslateTransform>().FirstOrDefault();
-
-            if (scaleTransform != null && translateTransform != null)
-            {
-                double scaleDelta = newScale / _currentScale;
-                translateTransform.X = mousePos.X - (mousePos.X - translateTransform.X) * scaleDelta;
-                translateTransform.Y = mousePos.Y - (mousePos.Y - translateTransform.Y) * scaleDelta;
-                scaleTransform.ScaleX = newScale;
-                scaleTransform.ScaleY = newScale;
-            }
-
-            _currentScale = newScale;
+            // Fix: Cast MapImageControl to WpfImage to resolve ambiguity
+            _mapInteractionService?.HandleMouseWheel(e, MapCanvas, (WpfImage)MapImageControl, 
+                ref _currentScale, OverlayCanvas, SyncOverlayWithMap, RefreshMarkers);
             StatusText.Text = $"Zoom: {_currentScale:P0}";
-            SyncOverlayWithMap();
-            e.Handled = true;
-
-            if (_currentMap != null && _currentMapMarkers != null)
-            {
-                RefreshMarkers();
-            }
         }
 
         private void MapCanvas_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
@@ -1065,7 +1051,7 @@ namespace map_editor
                                     }
                                 }
                             }
-                            catch (KeyNotFoundException) {}
+                            catch (KeyNotFoundException) { }
 
 
                             if (!regionFound)
@@ -1135,7 +1121,7 @@ namespace map_editor
                 {
                     LogDebug("No territories loaded from SaintCoinach, trying CSV files...");
                     LoadTerritoriesFromCsv();
-                    return; 
+                    return;
                 }
 
                 tempTerritories.Sort((a, b) => a.Id.CompareTo(b.Id));
@@ -1324,9 +1310,12 @@ namespace map_editor
                             bitmapSource.PixelWidth,
                             bitmapSource.PixelHeight);
 
- 
                         _mapRenderer?.DisplayMapMarkers(_currentMapMarkers, _currentMap, _currentScale, imagePosition, imageSize);
                         SyncOverlayWithMap();
+
+                        // Add this line - debug FATE marker positions
+                        DebugFateMarkerPositions();
+
                         _mapRenderer?.AddDebugGridAndBorders();
                         DiagnoseOverlayCanvas();
 
@@ -1375,18 +1364,16 @@ namespace map_editor
             double centeredX = (canvasWidth - (imageWidth * _currentScale)) / 2;
             double centeredY = (canvasHeight - (imageHeight * _currentScale)) / 2;
 
-
             MapImageControl.Width = imageWidth;
             MapImageControl.Height = imageHeight;
-            Canvas.SetLeft(MapImageControl, 0); 
-            Canvas.SetTop(MapImageControl, 0); 
+            Canvas.SetLeft(MapImageControl, 0);
+            Canvas.SetTop(MapImageControl, 0);
             Canvas.SetZIndex(MapImageControl, 0);
             MapImageControl.Visibility = Visibility.Visible;
 
-
             var transformGroup = new TransformGroup();
             transformGroup.Children.Add(new ScaleTransform(_currentScale, _currentScale));
-            transformGroup.Children.Add(new TranslateTransform(centeredX, centeredY)); 
+            transformGroup.Children.Add(new TranslateTransform(centeredX, centeredY));
             MapImageControl.RenderTransform = transformGroup;
             MapImageControl.RenderTransformOrigin = new System.Windows.Point(0, 0);
 
@@ -1411,69 +1398,6 @@ namespace map_editor
 
                 LogDebug($"Refreshed {_currentMapMarkers.Count} markers on map");
             }
-        }
-
-        private void DiagnoseMapDisplay()
-        {
-            LogDebug("=== MAP DISPLAY DIAGNOSTIC ===");
-
-            if (MapImageControl.Source is BitmapSource bmp)
-            {
-                LogDebug($"Map image: {bmp.PixelWidth}x{bmp.PixelHeight} pixels");
-
-                var transformGroup = MapImageControl.RenderTransform as TransformGroup;
-                if (transformGroup != null)
-                {
-                    var scaleTransform = transformGroup.Children.OfType<ScaleTransform>().FirstOrDefault();
-                    var translateTransform = transformGroup.Children.OfType<TranslateTransform>().FirstOrDefault();
-
-                    LogDebug($"Map transforms: Scale={scaleTransform?.ScaleX:F2}, " +
-                             $"Position=({translateTransform?.X:F1},{translateTransform?.Y:F1})");
-                }
-            }
-            else
-            {
-                LogDebug("Map image source is null");
-            }
-
-            // Check markers
-            LogDebug($"Canvas size: {MapCanvas.ActualWidth}x{MapCanvas.ActualHeight}");
-            LogDebug($"Canvas children count: {MapCanvas.Children.Count}");
-            LogDebug($"Current scale: {_currentScale:F2}");
-
-            LogDebug("==============================");
-        }
-
-        private void DiagnoseMapVisibility()
-        {
-            if (MapImageControl.Source == null)
-            {
-                LogDebug("Map image source is null!");
-                return;
-            }
-
-            LogDebug($"Map image visibility: {MapImageControl.Visibility}");
-            LogDebug($"Map image opacity: {MapImageControl.Opacity}");
-            LogDebug($"Map image actual size: {MapImageControl.ActualWidth}x{MapImageControl.ActualHeight}");
-            LogDebug($"Map image position: Left={Canvas.GetLeft(MapImageControl)}, Top={Canvas.GetTop(MapImageControl)}");
-
-            var transform = MapImageControl.RenderTransform as TransformGroup;
-            if (transform != null)
-            {
-                var scaleTransform = transform.Children.OfType<ScaleTransform>().FirstOrDefault();
-                var translateTransform = transform.Children.OfType<TranslateTransform>().FirstOrDefault();
-
-                LogDebug($"Map image scale: {(scaleTransform != null ? $"{scaleTransform.ScaleX},{scaleTransform.ScaleY}" : "none")}");
-                LogDebug($"Map image translate: {(translateTransform != null ? $"{translateTransform.X},{translateTransform.Y}" : "none")}");
-            }
-            else
-            {
-                LogDebug("Map image has no transform!");
-            }
-
-            LogDebug($"Z-Index: MapImageControl={System.Windows.Controls.Panel.GetZIndex(MapImageControl)}, " +
-                     $"MapCanvas={System.Windows.Controls.Panel.GetZIndex(MapCanvas)}, " +
-                     $"OverlayCanvas={System.Windows.Controls.Panel.GetZIndex(OverlayCanvas ?? new Canvas())}");
         }
 
         private void ClearLogButton_Click(object sender, RoutedEventArgs e)
@@ -1504,183 +1428,41 @@ namespace map_editor
             }
         }
 
-        private void RedirectDebugOutput()
-        {
-            System.Diagnostics.Trace.Listeners.Add(new TextBoxTraceListener(this));
-        }
-
-        private void DebugCanvasHierarchy()
-        {
-            LogDebug("=== CANVAS HIERARCHY DEBUG ===");
-            LogDebug($"MapCanvas in visual tree: {MapCanvas != null}");
-            LogDebug($"MapImageControl in visual tree: {MapImageControl != null}");
-            LogDebug($"OverlayCanvas in visual tree: {OverlayCanvas != null}");
-
-            if (MapCanvas != null)
-            {
-                LogDebug($"MapCanvas children count: {MapCanvas.Children.Count}");
-                LogDebug($"MapCanvas contains MapImageControl: {MapCanvas.Children.Contains(MapImageControl)}");
-
-                for (int i = 0; i < MapCanvas.Children.Count; i++)
-                {
-                    var child = MapCanvas.Children[i];
-                    LogDebug($"  Child {i}: Type={child.GetType().Name}, Z-Index={System.Windows.Controls.Panel.GetZIndex(child)}");
-                }
-            }
-
-            if (MapCanvas?.Parent is Border border && border.Parent is Grid parentGrid)
-            {
-                LogDebug($"Parent Grid children count: {parentGrid.Children.Count}");
-                for (int i = 0; i < parentGrid.Children.Count; i++)
-                {
-                    var child = parentGrid.Children[i];
-                    LogDebug($"  Child {i}: Type={child.GetType().Name}");
-                }
-            }
-
-            LogDebug("==============================");
-        }
-
-        private void VerifyMapImageState()
-        {
-            LogDebug("VERIFYING MAP IMAGE STATE:");
-            LogDebug($"- MapImageControl source null? {MapImageControl.Source == null}");
-            LogDebug($"- MapImageControl dimensions: {MapImageControl.Width}x{MapImageControl.Height}");
-            LogDebug($"- MapImageControl actual size: {MapImageControl.ActualWidth}x{MapImageControl.ActualHeight}");
-            LogDebug($"- MapImageControl position: Left={Canvas.GetLeft(MapImageControl)}, Top={Canvas.GetTop(MapImageControl)}");
-            LogDebug($"- MapImageControl in Canvas: {MapCanvas.Children.Contains(MapImageControl)}");
-            LogDebug($"- MapImageControl visibility: {MapImageControl.Visibility}");
-            LogDebug($"- MapImageControl z-index: {Canvas.GetZIndex(MapImageControl)}");
-
-            if (MapImageControl.Visibility != Visibility.Visible)
-            {
-                MapImageControl.Visibility = Visibility.Visible;
-                LogDebug("- Visibility forced to Visible");
-            }
-        }
-
-        public void LogDebug(string message)
-        {
-            if (!Dispatcher.CheckAccess())
-            {
-                Dispatcher.Invoke(() => LogDebug(message));
-                return;
-            }
-
-            string timestampedMessage = $"[{DateTime.Now:HH:mm:ss.fff}] {message}";
-            DebugTextBox.AppendText(timestampedMessage + Environment.NewLine);
-
-            if (DebugTextBox.LineCount > MaxLogLines)
-            {
-                int charsToRemove = DebugTextBox.GetCharacterIndexFromLineIndex(DebugTextBox.LineCount - MaxLogLines);
-                DebugTextBox.Text = DebugTextBox.Text.Substring(charsToRemove);
-            }
-
-            if (AutoScrollCheckBox?.IsChecked == true)
-            {
-                DebugScrollViewer.ScrollToEnd();
-            }
-        }
-
         private void ToggleDebugMode_Click(object sender, RoutedEventArgs e)
         {
-            if (_mapRenderer != null)
+            if (sender is System.Windows.Controls.CheckBox checkBox)
             {
-                bool isEnabled = DebugModeCheckBox.IsChecked == true;
-                _debugLoggingEnabled = isEnabled;
-                _mapRenderer.EnableVerboseLogging(isEnabled);
-                _mapRenderer.EnableDebugVisuals(isEnabled);
-                LogDebug($"Debug mode {(isEnabled ? "enabled" : "disabled")}");
+                _mapService?.SetVerboseDebugMode(checkBox.IsChecked == true);
+                LogDebug($"Debug mode {(checkBox.IsChecked == true ? "enabled" : "disabled")}");
             }
+        }
+
+        // Delegated methods to DebugHelper
+        public void LogDebug(string message)
+        {
+            _debugHelper?.LogDebug(message);
         }
 
         private bool ValidateGameDirectory(string directory)
         {
-            LogDebug($"Validating directory: '{directory}'");
-            try
-            {
-                bool gameFolderExists = Directory.Exists(Path.Combine(directory, "game"));
-                bool bootFolderExists = Directory.Exists(Path.Combine(directory, "boot"));
-                return gameFolderExists && bootFolderExists;
-            }
-            catch (Exception ex)
-            {
-                LogDebug($"Error during directory validation: {ex.Message}");
-                return false;
-            }
+            return _debugHelper?.ValidateGameDirectory(directory) ?? false;
+        }
+
+        private void DebugFateMarkerPositions()
+        {
+            _debugHelper?.DebugFateMarkerPositions(_currentMapMarkers);
         }
 
         private void DiagnoseOverlayCanvas()
         {
-            if (OverlayCanvas == null)
-            {
-                LogDebug("ERROR: OverlayCanvas is NULL!");
-                return;
-            }
-
-            LogDebug("=== OVERLAY CANVAS DIAGNOSTIC ===");
-            LogDebug($"OverlayCanvas exists: Yes");
-            LogDebug($"OverlayCanvas size: {OverlayCanvas.ActualWidth}x{OverlayCanvas.ActualHeight}");
-            LogDebug($"OverlayCanvas visibility: {OverlayCanvas.Visibility}");
-            LogDebug($"OverlayCanvas z-index: {WpfPanel.GetZIndex(OverlayCanvas)}");
-            LogDebug($"OverlayCanvas children count: {OverlayCanvas.Children.Count}");
-
-            bool isAttachedToVisualTree = false;
-            DependencyObject parent = OverlayCanvas;
-            while (parent != null)
-            {
-                if (parent is Window)
-                {
-                    isAttachedToVisualTree = true;
-                    break;
-                }
-                parent = VisualTreeHelper.GetParent(parent);
-            }
-
-            LogDebug($"OverlayCanvas attached to window: {isAttachedToVisualTree}");
-
-            var transform = OverlayCanvas.RenderTransform as TransformGroup;
-            if (transform != null)
-            {
-                var scaleTransform = transform.Children.OfType<ScaleTransform>().FirstOrDefault();
-                var translateTransform = transform.Children.OfType<TranslateTransform>().FirstOrDefault();
-
-                LogDebug($"OverlayCanvas scale transform: {(scaleTransform != null ? $"{scaleTransform.ScaleX:F2}" : "none")}");
-                LogDebug($"OverlayCanvas translate transform: {(translateTransform != null ? $"({translateTransform.X:F1}, {translateTransform.Y:F1})" : "none")}");
-            }
-            else
-            {
-                LogDebug("OverlayCanvas has no transform!");
-            }
-
-            LogDebug("Children types:");
-            foreach (var child in OverlayCanvas.Children)
-            {
-                LogDebug($"  - {child.GetType().Name}, Z-Index={WpfPanel.GetZIndex((UIElement)child)}");
-            }
-
-            LogDebug("==============================");
-        }
-    }
-
-    public class TextBoxTraceListener : System.Diagnostics.TraceListener
-    {
-        private readonly MainWindow _window;
-
-        public TextBoxTraceListener(MainWindow window)
-        {
-            _window = window;
+            _debugHelper?.DiagnoseOverlayCanvas();
         }
 
-        public override void Write(string? message)
+        private void RedirectDebugOutput()
         {
-        }
-
-        public override void WriteLine(string? message)
-        {
-            if (message != null)
+            if (_debugHelper != null)
             {
-                _window.LogDebug(message);
+                System.Diagnostics.Trace.Listeners.Add(new TextBoxTraceListener(_debugHelper));
             }
         }
     }

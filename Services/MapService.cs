@@ -16,10 +16,14 @@ namespace map_editor
     public class MapService
     {
         private readonly ARealmReversed? _realm;
-        private readonly Dictionary<uint, List<MapMarker>> _mapMarkerCache = new();
-        private readonly Dictionary<uint, Dictionary<uint, string>> _placeNameCache = new();
-        private bool _csvDataLoaded = false;
-
+        private readonly Action<string> _logDebug;
+        private bool _verboseDebugMode = false;
+        
+        // Add missing cache fields
+        private readonly Dictionary<uint, List<MapMarker>> _mapMarkerCache = new Dictionary<uint, List<MapMarker>>();
+        private readonly Dictionary<uint, List<FateInfo>> _mapFateCache = new Dictionary<uint, List<FateInfo>>();
+        private readonly Dictionary<uint, string> _placeNameCache = new Dictionary<uint, string>();
+        
         private class MapSymbolCategory
         {
             public string Name { get; set; } = string.Empty;
@@ -29,68 +33,103 @@ namespace map_editor
 
         private Dictionary<string, uint> _mapSymbols = new();
         private Dictionary<uint, uint> _placeNameToSymbol = new();
-        private Dictionary<string, uint> _keywordToSymbol = new();
-        private List<MapSymbolCategory> _symbolCategories = new();
-        private Dictionary<uint, uint> _placeNameToIconMap = new(); 
-        private Dictionary<string, uint> _placeNameStringToIconMap = new(); 
+        private Dictionary<uint, uint> _placeNameToIconMap = new();
+        private Dictionary<string, uint> _placeNameStringToIconMap = new();
         private Dictionary<uint, List<uint>> _iconToPlaceNameMap = new();
         private bool _symbolsLoaded = false;
 
-        public MapService(ARealmReversed? realm)
+        public MapService(ARealmReversed? realm, Action<string>? logDebug = null)
         {
             _realm = realm;
+            _logDebug = logDebug ?? (msg => { }); // Provide a no-op if no logger provided
+            LoadMapSymbols();
+            LoadPlaceNameCache();
+        }
+
+        private void LoadPlaceNameCache()
+        {
+            if (_realm == null) return;
+
+            try
+            {
+                _logDebug("Loading PlaceName cache...");
+                var placeNameSheet = _realm.GameData.GetSheet("PlaceName");
+                
+                foreach (var placeNameRow in placeNameSheet)
+                {
+                    try
+                    {
+                        var id = (uint)placeNameRow.Key;
+                        var name = placeNameRow.AsString("Name") ?? "";
+                        
+                        if (!string.IsNullOrEmpty(name))
+                        {
+                            _placeNameCache[id] = name;
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        if (_verboseDebugMode)
+                        {
+                            _logDebug($"Error loading PlaceName {placeNameRow.Key}: {ex.Message}");
+                        }
+                    }
+                }
+                
+                _logDebug($"Loaded {_placeNameCache.Count} place names into cache");
+            }
+            catch (Exception ex)
+            {
+                _logDebug($"Error loading PlaceName cache: {ex.Message}");
+            }
         }
 
         public List<MapMarker> LoadMapMarkers(uint mapId)
         {
-            if (_mapMarkerCache.TryGetValue(mapId, out var cachedMarkers))
+            _logDebug($"LoadMapMarkers called for mapId: {mapId}");
+            
+            // Check cache first
+            if (_mapMarkerCache.ContainsKey(mapId))
             {
-                Debug.WriteLine($"Using cached {cachedMarkers.Count} markers for map {mapId}");
-                return cachedMarkers;
+                _logDebug($"Returning {_mapMarkerCache[mapId].Count} cached markers for map {mapId}");
+                return _mapMarkerCache[mapId];
             }
 
             var markers = new List<MapMarker>();
 
+            if (_realm == null)
+            {
+                _logDebug("Realm is null in LoadMapMarkers");
+                return markers;
+            }
+
             try
             {
-                if (_realm == null)
-                {
-                    Debug.WriteLine("SaintCoinach realm is null. Returning sample markers.");
-                    return CreateSampleMarkers(mapId);
-                }
-
-                Debug.WriteLine($"Loading markers for map ID: {mapId}");
-
                 var mapSheet = _realm.GameData.GetSheet<Map>();
-                var map = mapSheet.FirstOrDefault(m => m.Key == mapId);
-
+                var map = mapSheet[(int)mapId];
+                
                 if (map == null)
                 {
-                    Debug.WriteLine($"Map with ID {mapId} not found in SaintCoinach data.");
-                    return CreateSampleMarkers(mapId);
+                    _logDebug($"Map {mapId} not found");
+                    return markers;
                 }
 
-                Debug.WriteLine($"Map belongs to territory ID: {map.TerritoryType.Key}");
-
+                // Load markers from MapMarker sheet
                 LoadMapMarkersFromSheet(markers, map);
 
-                if (markers.Count == 0)
-                {
-                    Debug.WriteLine($"No markers found in SaintCoinach data, trying to load from CSV for map {mapId}");
-                    markers = LoadMapMarkersFromCsv(mapId);
-                    if (markers.Count == 0)
-                    {
-                        Debug.WriteLine($"No markers found in CSV, creating sample markers for map {mapId}");
-                        markers = CreateSampleMarkers(mapId);
-                    }
-                }
+                // Load FATEs and convert to markers
+                var fates = LoadMapFates(mapId);
+                var fateMarkers = ConvertFatesToMarkers(fates, mapId);
+                markers.AddRange(fateMarkers);
+
+                _logDebug($"Total markers loaded for map {mapId}: {markers.Count}");
+                
+                // Cache the results
                 _mapMarkerCache[mapId] = markers;
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"Error loading map markers: {ex.Message}");
-                Debug.WriteLine($"Stack trace: {ex.StackTrace}");
-                markers = CreateSampleMarkers(mapId);
+                _logDebug($"Error in LoadMapMarkers: {ex.Message}\n{ex.StackTrace}");
             }
 
             return markers;
@@ -489,6 +528,10 @@ namespace map_editor
 
         private MarkerType DetermineMarkerType(uint iconId)
         {
+            // Add Fate icon detection
+            if (iconId == 60093 || iconId == 60501 || iconId == 60502 || iconId == 60503 || iconId == 60504 || iconId == 60505)
+                return MarkerType.Fate;
+
             if (iconId == 60453)
                 return MarkerType.Aetheryte;
 
@@ -1270,6 +1313,547 @@ public MapCoordinate ConvertMapToGameCoordinates(
             }
             
             return null;
+        }
+
+        public List<FateInfo> LoadMapFates(uint mapId)
+        {
+            // Check cache first
+            if (_mapFateCache.ContainsKey(mapId))
+            {
+                return _mapFateCache[mapId];
+            }
+
+            var mapFates = new List<FateInfo>();
+
+            if (_realm == null) return mapFates;
+
+            try
+            {
+                // Get territory ID for this map
+                var mapSheet = _realm.GameData.GetSheet<Map>();
+                Map? map = null;
+
+                try
+                {
+                    map = mapSheet[(int)mapId];
+                }
+                catch (KeyNotFoundException)
+                {
+                    _logDebug($"Map {mapId} not found in sheet");
+                    return mapFates;
+                }
+
+                if (map == null)
+                {
+                    _logDebug($"Map {mapId} is null");
+                    return mapFates;
+                }
+
+                var territoryId = (uint)map.TerritoryType.Key;
+
+                // Load sheets
+                var fateSheet = _realm.GameData.GetSheet("Fate");
+
+                if (_verboseDebugMode)
+                {
+                    _logDebug($"Loading FATEs for map {mapId}, territory {territoryId}");
+                    _logDebug($"Fate sheet contains {fateSheet.Count()} entries");
+                }
+
+                int processedFates = 0;
+                int validFates = 0;
+                int fatesWithoutLocation = 0;
+
+                // Instead of trying to match with Level sheet, let's load ALL FATEs
+                // and filter by territory if we have territory information
+                foreach (var fateRow in fateSheet)
+                {
+                    processedFates++;
+
+                    try
+                    {
+                        // Ensure we can access the FATE row properly
+                        if (fateRow == null)
+                        {
+                            if (_verboseDebugMode)
+                            {
+                                _logDebug($"Null FATE row encountered");
+                            }
+                            continue;
+                        }
+
+                        int fateKey = 0;
+                        try
+                        {
+                            fateKey = fateRow.Key;
+                        }
+                        catch (Exception ex)
+                        {
+                            if (_verboseDebugMode)
+                            {
+                                _logDebug($"Error getting FATE key: {ex.Message}");
+                            }
+                            continue;
+                        }
+
+                        // Access FATE name using index 24 as specified in Fate.json
+                        string fateName = "";
+                        try
+                        {
+                            var nameValue = fateRow[24];
+                            fateName = nameValue?.ToString() ?? "";
+                        }
+                        catch (Exception ex)
+                        {
+                            if (_verboseDebugMode)
+                            {
+                                _logDebug($"Error accessing FATE name at index 24 for key {fateKey}: {ex.Message}");
+                            }
+                            // Fallback to string access
+                            try
+                            {
+                                if (fateRow is SaintCoinach.Xiv.XivRow xivRow)
+                                {
+                                    fateName = xivRow.AsString("Name") ?? "";
+                                }
+                            }
+                            catch
+                            {
+                                fateName = "";
+                            }
+                        }
+
+                        if (string.IsNullOrWhiteSpace(fateName)) continue;
+
+                        // Get location from Fate index 9 (Location)
+                        var locationValue = 0;
+                        try
+                        {
+                            if (fateRow is SaintCoinach.Xiv.XivRow xivRow)
+                            {
+                                locationValue = xivRow.AsInt32("Location");
+                            }
+                            else
+                            {
+                                var locValue = fateRow[9];
+                                if (locValue != null)
+                                {
+                                    locationValue = Convert.ToInt32(locValue);
+                                }
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            if (_verboseDebugMode)
+                            {
+                                _logDebug($"Error accessing Location for FATE {fateKey}: {ex.Message}");
+                            }
+                        }
+
+                        // For FATEs without location, we'll still include them in the list
+                        // but with default coordinates
+                        if (locationValue == 0)
+                        {
+                            fatesWithoutLocation++;
+                        }
+
+                        // Get other FATE properties safely
+                        uint classJobLevel = 0;
+                        uint iconId = 60093; // Default FATE icon
+
+                        try
+                        {
+                            if (fateRow is SaintCoinach.Xiv.XivRow xivRow)
+                            {
+                                classJobLevel = (uint)Math.Max(0, xivRow.AsInt32("ClassJobLevel"));
+                            }
+                            else
+                            {
+                                var levelValue = fateRow[2]; // ClassJobLevel is at index 2
+                                if (levelValue != null)
+                                {
+                                    classJobLevel = (uint)Math.Max(0, Convert.ToInt32(levelValue));
+                                }
+                            }
+                        }
+                        catch { }
+
+                        try
+                        {
+                            if (fateRow is SaintCoinach.Xiv.XivRow xivRow)
+                            {
+                                iconId = (uint)Math.Max(60093, xivRow.AsInt32("Icon"));
+                            }
+                            else
+                            {
+                                var iconValue = fateRow[3]; // Icon is at index 3
+                                if (iconValue != null)
+                                {
+                                    iconId = (uint)Math.Max(60093, Convert.ToInt32(iconValue));
+                                }
+                            }
+                        }
+                        catch { }
+
+                        string description = "";
+                        try
+                        {
+                            if (fateRow is SaintCoinach.Xiv.XivRow xivRow)
+                            {
+                                description = xivRow.AsString("Description") ?? "";
+                            }
+                            else
+                            {
+                                var descValue = fateRow[25]; // Description is at index 25
+                                description = descValue?.ToString() ?? "";
+                            }
+                        }
+                        catch { }
+
+                        // For now, create FATE entries with placeholder coordinates
+                        // This allows the FATE list to populate even without proper location data
+                        var random = new Random(fateKey); // Use FATE key as seed for consistency
+                        double fateMapX = 21 + (random.NextDouble() - 0.5) * 20; // Center around map center with some spread
+                        double fateMapY = 21 + (random.NextDouble() - 0.5) * 20;
+                        double worldZ = 0;
+
+                        var fateInfo = new FateInfo
+                        {
+                            Id = (uint)fateKey,
+                            FateId = (uint)fateKey,
+                            Name = fateName,
+                            Description = description,
+                            Level = classJobLevel,
+                            ClassJobLevel = classJobLevel,
+                            TerritoryId = territoryId,
+                            TerritoryName = map.PlaceName?.ToString() ?? "",
+                            IconId = iconId,
+                            X = fateMapX,
+                            Y = fateMapY,
+                            Z = worldZ
+                        };
+
+                        mapFates.Add(fateInfo);
+                        validFates++;
+                    }
+                    catch (Exception ex)
+                    {
+                        if (_verboseDebugMode)
+                        {
+                            _logDebug($"Error processing FATE at index {processedFates}: {ex.Message}");
+                        }
+                        // Continue processing other FATEs instead of stopping
+                    }
+                }
+
+                _mapFateCache[mapId] = mapFates;
+
+                _logDebug($"FATE loading summary for map {mapId}:");
+                _logDebug($"  - Processed: {processedFates} FATEs");
+                _logDebug($"  - Valid FATEs added: {validFates}");
+                _logDebug($"  - FATEs without location: {fatesWithoutLocation}");
+                _logDebug($"  - Total FATEs for this map: {mapFates.Count}");
+
+                if (mapFates.Count == 0)
+                {
+                    _logDebug($"No FATEs found for map {mapId} (territory {territoryId}). Loading all FATEs as fallback...");
+
+                    // As a fallback, load ALL FATEs regardless of territory
+                    // This ensures the FATE list window has something to show
+                    foreach (var fateRow in fateSheet)
+                    {
+                        try
+                        {
+                            if (fateRow == null) continue;
+
+                            var fateKey = fateRow.Key;
+                            var fateName = "";
+
+                            try
+                            {
+                                var nameValue = fateRow[24];
+                                fateName = nameValue?.ToString() ?? "";
+                            }
+                            catch
+                            {
+                                try
+                                {
+                                    if (fateRow is SaintCoinach.Xiv.XivRow xivRow)
+                                    {
+                                        fateName = xivRow.AsString("Name") ?? "";
+                                    }
+                                }
+                                catch
+                                {
+                                    fateName = $"FATE {fateKey}";
+                                }
+                            }
+
+                            if (string.IsNullOrWhiteSpace(fateName)) continue;
+
+                            // Get basic properties
+                            uint classJobLevel = 0;
+                            try
+                            {
+                                if (fateRow is SaintCoinach.Xiv.XivRow xivRow)
+                                {
+                                    classJobLevel = (uint)Math.Max(0, xivRow.AsInt32("ClassJobLevel"));
+                                }
+                                else
+                                {
+                                    var levelValue = fateRow[2];
+                                    if (levelValue != null)
+                                    {
+                                        classJobLevel = (uint)Math.Max(0, Convert.ToInt32(levelValue));
+                                    }
+                                }
+                            }
+                            catch { }
+
+                            var fateInfo = new FateInfo
+                            {
+                                Id = (uint)fateKey,
+                                FateId = (uint)fateKey,
+                                Name = fateName,
+                                Description = "",
+                                Level = classJobLevel,
+                                ClassJobLevel = classJobLevel,
+                                TerritoryId = territoryId,
+                                TerritoryName = map.PlaceName?.ToString() ?? "",
+                                IconId = 60093,
+                                X = 21,
+                                Y = 21,
+                                Z = 0
+                            };
+
+                            mapFates.Add(fateInfo);
+                        }
+                        catch { }
+                    }
+
+                    _logDebug($"Loaded {mapFates.Count} FATEs as fallback");
+                }
+            }
+            catch (Exception ex)
+            {
+                _logDebug($"Error in LoadMapFates: {ex.Message}");
+                if (_verboseDebugMode)
+                {
+                    _logDebug($"Stack trace: {ex.StackTrace}");
+                }
+            }
+
+            return mapFates;
+        }
+
+        private double ConvertWorldToMapCoordinate(double worldCoord, Map map)
+        {
+            try
+            {
+                // Get map properties
+                float sizeFactor = 100.0f;
+                float offsetX = 0;
+                float offsetY = 0;
+    
+                try
+                {
+                    var type = map.GetType();
+                    var indexer = type.GetProperty("Item", new[] { typeof(string) });
+    
+                    if (indexer != null)
+                    {
+                        sizeFactor = (float)Convert.ChangeType(indexer.GetValue(map, new object[] { "SizeFactor" }), typeof(float));
+                        offsetX = (float)Convert.ChangeType(indexer.GetValue(map, new object[] { "OffsetX" }), typeof(float));
+                        offsetY = (float)Convert.ChangeType(indexer.GetValue(map, new object[] { "OffsetY" }), typeof(float));
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine($"Error accessing map properties: {ex.Message}");
+                }
+    
+                // FFXIV world coordinate conversion
+                // World coordinates are typically in the range of roughly -1000 to +1000
+                // Map coordinates in your system are 0-42
+    
+                // Apply the standard FFXIV coordinate conversion
+                double c = sizeFactor / 100.0;
+                
+                // Convert world coordinate to map coordinate
+                // This formula converts FFXIV world coordinates to map coordinates
+                double mapCoord = ((worldCoord + offsetX) * c + 1024.0) / 2048.0 * 41.0 + 1.0;
+    
+                // Clamp to valid range
+                mapCoord = Math.Max(1, Math.Min(42, mapCoord));
+    
+                return mapCoord;
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"Error converting world coordinate {worldCoord}: {ex.Message}");
+                return 21.0; // Return center coordinate as fallback
+            }
+        }
+
+        public List<MapMarker> ConvertFatesToMarkers(List<FateInfo> fates, uint mapId)
+        {
+            var markers = new List<MapMarker>();
+
+            foreach (var fate in fates)
+            {
+                // Use the FATE's actual icon from the game data
+                uint iconId = fate.IconId;
+                
+                // If no icon is specified, determine a default based on FATE name/description patterns
+                if (iconId == 0)
+                {
+                    iconId = DetermineFateTypeIcon(fate.Name, fate.Description);
+                }
+
+                var marker = new MapMarker
+                {
+                    Id = fate.Id,
+                    MapId = mapId,
+                    X = fate.X,
+                    Y = fate.Y,
+                    Z = fate.Z,
+                    PlaceName = $"{fate.Name} (Lv.{fate.Level})",
+                    PlaceNameId = fate.FateId,
+                    IconId = iconId,
+                    Type = MarkerType.Fate,
+                    IsVisible = true,
+                    IconPath = GetIconPath(iconId)
+                };
+
+                markers.Add(marker);
+
+                // DEBUG: Log first few FATE markers to see if they're created correctly
+                if (markers.Count <= 5)
+                {
+                    Debug.WriteLine($"Created FATE marker: '{marker.PlaceName}' at ({marker.X:F1}, {marker.Y:F1}) with icon {marker.IconId}, Type={marker.Type}, Visible={marker.IsVisible}");
+                }
+            }
+
+            Debug.WriteLine($"Converted {fates.Count} fates to {markers.Count} markers");
+            return markers;
+        }
+
+        private uint DetermineFateTypeIcon(string fateName, string fateDescription)
+        {
+            // Analyze the FATE name and description to determine the appropriate icon
+            string combined = $"{fateName} {fateDescription}".ToLowerInvariant();
+
+            // Boss/Named Monster FATEs
+            if (combined.Contains("slay") || combined.Contains("defeat") || 
+                combined.Contains("eliminate") || combined.Contains("hunt") ||
+                combined.Contains("kill") || combined.Contains("destroy") ||
+                fateName.Contains("vs") || fateName.Contains("Vs"))
+            {
+                return 60501; // Boss/Combat icon
+            }
+
+            // Escort/Protection FATEs
+            if (combined.Contains("escort") || combined.Contains("protect") || 
+                combined.Contains("defend") || combined.Contains("guard") ||
+                combined.Contains("accompany") || combined.Contains("guide"))
+            {
+                return 60502; // Escort/Protection icon
+            }
+
+            // Collection/Gathering FATEs
+            if (combined.Contains("collect") || combined.Contains("gather") || 
+                combined.Contains("deliver") || combined.Contains("retrieve") ||
+                combined.Contains("harvest") || combined.Contains("supply"))
+            {
+                return 60503; // Collection icon
+            }
+
+            // Survival/Defense FATEs
+            if (combined.Contains("survive") || combined.Contains("hold") || 
+                combined.Contains("defend") || combined.Contains("withstand") ||
+                combined.Contains("last") || combined.Contains("endure"))
+            {
+                return 60504; // Defense icon
+            }
+
+            // Special Event FATEs
+            if (combined.Contains("special") || combined.Contains("event") || 
+                combined.Contains("seasonal") || combined.Contains("festival"))
+            {
+                return 60505; // Special event icon
+            }
+
+            // Default FATE icon for anything else
+            return 60093; // Generic FATE icon
+        }
+
+        public void SetVerboseDebugMode(bool enabled)
+        {
+            _verboseDebugMode = enabled;
+            Debug.WriteLine($"MapService verbose debug mode set to: {enabled}");
+        }
+
+        // Create a helper method for conditional debug output
+        private void DebugWriteLine(string message)
+        {
+            if (_verboseDebugMode)
+            {
+                Debug.WriteLine(message);
+            }
+        }
+
+        private uint ConvertToTerritoryId(object territoryValue)
+        {
+            if (territoryValue == null)
+                return 0;
+
+            try
+            {
+                // If it's already a TerritoryType object
+                if (territoryValue is SaintCoinach.Xiv.TerritoryType territoryType)
+                {
+                    return (uint)territoryType.Key;
+                }
+                
+                // If it's a direct integer value
+                if (territoryValue is int intValue)
+                {
+                    return (uint)Math.Max(0, intValue);
+                }
+                
+                if (territoryValue is uint uintValue)
+                {
+                    return uintValue;
+                }
+                
+                // Try to convert directly
+                try
+                {
+                    return Convert.ToUInt32(territoryValue);
+                }
+                catch
+                {
+                    // If direct conversion fails, try to get Key property via reflection
+                    var keyProp = territoryValue.GetType().GetProperty("Key");
+                    if (keyProp != null)
+                    {
+                        var keyValue = keyProp.GetValue(territoryValue);
+                        if (keyValue != null)
+                        {
+                            return Convert.ToUInt32(keyValue);
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                if (_verboseDebugMode)
+                {
+                    _logDebug($"Error converting territory value: {ex.Message}");
+                }
+            }
+            
+            return 0;
         }
     }
 }

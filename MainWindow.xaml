@@ -15,8 +15,9 @@
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>  <!-- Marker Visibility Controls -->
+            <RowDefinition Height="Auto"/>  <!-- Debug Information -->
+            <RowDefinition Height="Auto"/>  <!-- Status Bar -->
         </Grid.RowDefinitions>
 
         <!-- Menu Bar -->
@@ -57,9 +58,9 @@
                           IsChecked="False" Checked="HideDuplicateTerritoriesCheckBox_Changed" 
                           Unchecked="HideDuplicateTerritoriesCheckBox_Changed"
                           ToolTip="Hide territories with duplicate territory IDs, keeping only the first occurrence"/>
-                <ListBox Name="TerritoryList" 
-                         SelectionChanged="TerritoryList_SelectionChanged"
-                         Margin="5,0,5,5">
+                <ListBox x:Name="TerritoryList" 
+                         ItemsSource="{Binding FilteredTerritories}" 
+                         SelectionChanged="TerritoryList_SelectionChanged">
                     <ListBox.ItemTemplate>
                         <DataTemplate>
                             <TextBlock Text="{Binding}" />
@@ -284,8 +285,28 @@
             </Grid>
         </Grid>
 
-        <!-- Debug Information - Updated with checkbox in header -->
-        <Expander Grid.Row="2" Grid.ColumnSpan="3" Margin="5" Background="LightGray" BorderBrush="Gray" BorderThickness="1" IsExpanded="False">
+        <!-- Marker Visibility Controls -->
+        <GroupBox Grid.Row="2" Grid.ColumnSpan="3" Header="Marker Visibility" Margin="5,0,5,5" Background="LightBlue" BorderBrush="Blue" BorderThickness="1">
+            <StackPanel Orientation="Horizontal" Margin="5">
+                <CheckBox x:Name="ShowAetheryteMarkersCheckBox" Content="Aetherytes" IsChecked="True" 
+                          Margin="5,0" Checked="MarkerVisibility_Changed" Unchecked="MarkerVisibility_Changed"/>
+                <CheckBox x:Name="ShowQuestMarkersCheckBox" Content="Quests" IsChecked="True" 
+                          Margin="5,0" Checked="MarkerVisibility_Changed" Unchecked="MarkerVisibility_Changed"/>
+                <CheckBox x:Name="ShowShopMarkersCheckBox" Content="Shops" IsChecked="True" 
+                          Margin="5,0" Checked="MarkerVisibility_Changed" Unchecked="MarkerVisibility_Changed"/>
+                <CheckBox x:Name="ShowLandmarkMarkersCheckBox" Content="Landmarks" IsChecked="True" 
+                          Margin="5,0" Checked="MarkerVisibility_Changed" Unchecked="MarkerVisibility_Changed"/>
+                <CheckBox x:Name="ShowFateMarkersCheckBox" Content="FATEs" IsChecked="True" 
+                          Margin="5,0" Checked="MarkerVisibility_Changed" Unchecked="MarkerVisibility_Changed"/>
+                <CheckBox x:Name="ShowEntranceMarkersCheckBox" Content="Entrances" IsChecked="True" 
+                          Margin="5,0" Checked="MarkerVisibility_Changed" Unchecked="MarkerVisibility_Changed"/>
+                <CheckBox x:Name="ShowGenericMarkersCheckBox" Content="Other" IsChecked="True" 
+                          Margin="5,0" Checked="MarkerVisibility_Changed" Unchecked="MarkerVisibility_Changed"/>
+            </StackPanel>
+        </GroupBox>
+
+        <!-- Debug Information - Move this down -->
+        <Expander Grid.Row="3" Grid.ColumnSpan="3" Margin="5" Background="LightGray" BorderBrush="Gray" BorderThickness="1" IsExpanded="False">
             <Expander.Header>
                 <DockPanel Width="{Binding ActualWidth, RelativeSource={RelativeSource AncestorType=Expander}}">
                     <TextBlock Text="Debug Information" VerticalAlignment="Center" />
@@ -314,7 +335,7 @@
         </Expander>
 
         <!-- Status Bar -->
-        <StatusBar Grid.Row="3" Grid.ColumnSpan="3">
+        <StatusBar Grid.Row="4" Grid.ColumnSpan="3">
             <TextBlock Name="StatusText" Text="Ready - Load FFXIV data to begin"/>
         </StatusBar>
     </Grid>

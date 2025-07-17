@@ -29,6 +29,10 @@
           }
         },
         {
+          "index": 9,
+          "name": "Location"
+        },
+        {
           "index": 11,
           "name": "Icon{Map}",
           "converter": {

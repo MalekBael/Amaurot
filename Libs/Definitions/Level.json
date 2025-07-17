@@ -1,7 +1,10 @@
 {
   "sheet": "Level",
-  "defaultColumn": "single",
   "definitions": [
+    {
+      "index": 0,
+      "name": "X"
+    },
     {
       "index": 1,
       "name": "Y"
