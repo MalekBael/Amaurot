@@ -119,7 +119,7 @@ namespace map_editor
                 }
 
                 long currentTime = Environment.TickCount64;
-                if (currentTime - _lastUpdateTimestamp < 333) 
+                if (currentTime - _lastUpdateTimestamp < 333)
                 {
                     if (_markerUpdateTimer != null && !_markerUpdateTimer.IsEnabled)
                     {
@@ -268,10 +268,10 @@ namespace map_editor
                         $"Canvas({canvasX:F1},{canvasY:F1})");
                 }
 
-                const double MAX_MARKER_SIZE = 26.0; 
-                const double MIN_MARKER_SIZE = 14.0; 
-                const double BASE_MARKER_SIZE = 16.0; 
-                
+                const double MAX_MARKER_SIZE = 26.0;
+                const double MIN_MARKER_SIZE = 14.0;
+                const double BASE_MARKER_SIZE = 16.0;
+
                 double markerSize = Math.Max(MIN_MARKER_SIZE, Math.Min(MAX_MARKER_SIZE, BASE_MARKER_SIZE * displayScale));
 
                 marker.DetermineType();
@@ -596,13 +596,13 @@ namespace map_editor
             const double MAX_TEXT_SIZE = 12.0;
             const double MIN_TEXT_SIZE = 12.0;
             const double BASE_TEXT_SIZE = 12.0;
-            
+
             double fontSize = Math.Max(MIN_TEXT_SIZE, Math.Min(MAX_TEXT_SIZE, BASE_TEXT_SIZE * displayScale));
 
             var textBlock = new TextBlock
             {
                 Text = marker.PlaceName,
-                FontSize = fontSize, 
+                FontSize = fontSize,
                 FontWeight = FontWeights.Bold,
                 Foreground = WpfBrushes.White,
                 Tag = marker,
@@ -614,7 +614,7 @@ namespace map_editor
                 System.Globalization.CultureInfo.CurrentCulture,
                 System.Windows.FlowDirection.LeftToRight,
                 new Typeface(textBlock.FontFamily, textBlock.FontStyle, textBlock.FontWeight, textBlock.FontStretch),
-                fontSize, 
+                fontSize,
                 WpfBrushes.White,
                 VisualTreeHelper.GetDpi(Application.Current.MainWindow).PixelsPerDip);
 
@@ -639,7 +639,7 @@ namespace map_editor
             var textWidth = host.DesiredSize.Width;
             var textHeight = host.DesiredSize.Height;
 
-            // Position the text centered on the coordinates
+
             Canvas.SetLeft(host, canvasX - (textWidth / 2));
             Canvas.SetTop(host, canvasY - (textHeight / 2));
 
@@ -694,7 +694,7 @@ namespace map_editor
                         Opacity = 0.9,
                         RadiusX = size / 5,
                         RadiusY = size / 5,
-                        IsHitTestVisible = true 
+                        IsHitTestVisible = true
                     };
                     shapeElement = rect;
                     break;
@@ -761,7 +761,7 @@ namespace map_editor
                     star.StrokeThickness = 2;
                     star.Tag = marker;
                     star.Opacity = 0.9;
-                    star.IsHitTestVisible = true; 
+                    star.IsHitTestVisible = true;
 
                     shapeElement = star;
                     break;
@@ -777,7 +777,7 @@ namespace map_editor
                         StrokeThickness = 2,
                         Tag = marker,
                         Opacity = 0.9,
-                        IsHitTestVisible = true 
+                        IsHitTestVisible = true
                     };
                     shapeElement = ellipse;
                     break;
@@ -1006,7 +1006,7 @@ namespace map_editor
         {
             try
             {
-                double relativeX = marker.X / 42.0; 
+                double relativeX = marker.X / 42.0;
                 double relativeY = marker.Y / 42.0;
 
                 double pixelX = relativeX * imageSize.Width;
@@ -1089,7 +1089,7 @@ namespace map_editor
 
                         Canvas.SetZIndex(element, 4000);
                     }
-                    if (_showDebugVisuals) 
+                    if (_showDebugVisuals)
                     {
                         var dropShadow = new System.Windows.Media.Effects.DropShadowEffect
                         {
@@ -1166,7 +1166,7 @@ namespace map_editor
                     BorderBrush = new SolidColorBrush(Colors.Red),
                     BorderThickness = new Thickness(1),
                     Background = new SolidColorBrush(System.Windows.Media.Color.FromArgb(30, 255, 0, 0)),
-                    IsHitTestVisible = false 
+                    IsHitTestVisible = false
                 };
 
                 Canvas.SetLeft(debugBorder, Canvas.GetLeft(element) - 2);

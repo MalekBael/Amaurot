@@ -18,6 +18,7 @@ mono_crash.*
 
 notes/
 notes/*.csv
+notes/Lumina/
 Libs/SaintCoinach.History.zip
 
 

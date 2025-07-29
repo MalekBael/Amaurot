@@ -1,0 +1,55 @@
+<Window x:Class="map_editor.QuestDetailsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Quest Details" Height="500" Width="600"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="CanResize">
+    <Grid Margin="10">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Quest Title -->
+        <StackPanel Grid.Row="0" Margin="0,0,0,10">
+            <TextBlock x:Name="QuestTitleText" FontSize="18" FontWeight="Bold" 
+                       TextWrapping="Wrap" Foreground="DarkBlue"/>
+            <TextBlock x:Name="QuestSubtitleText" FontSize="12" FontStyle="Italic" 
+                       Foreground="Gray" Margin="0,2,0,0"/>
+        </StackPanel>
+
+        <!-- Quest Type Badges -->
+        <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,0,0,10">
+            <Border x:Name="MSQBadge" Background="DarkRed" CornerRadius="3" 
+                    Padding="5,2" Margin="0,0,5,0" Visibility="Collapsed">
+                <TextBlock Text="MAIN SCENARIO" Foreground="White" FontSize="10" FontWeight="Bold"/>
+            </Border>
+            <Border x:Name="FeatureBadge" Background="DarkGreen" CornerRadius="3" 
+                    Padding="5,2" Margin="0,0,5,0" Visibility="Collapsed">
+                <TextBlock Text="FEATURE" Foreground="White" FontSize="10" FontWeight="Bold"/>
+            </Border>
+            <Border x:Name="LevelBadge" Background="DarkBlue" CornerRadius="3" 
+                    Padding="5,2" Margin="0,0,5,0">
+                <TextBlock x:Name="LevelText" Foreground="White" FontSize="10" FontWeight="Bold"/>
+            </Border>
+        </StackPanel>
+
+        <!-- Quest Details Grid -->
+        <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto">
+            <Grid x:Name="QuestDetailsGrid">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="140"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+                <!-- Rows will be added dynamically -->
+            </Grid>
+        </ScrollViewer>
+
+        <!-- Close Button -->
+        <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,10,0,0">
+            <Button Content="Close" Width="80" Height="30" Click="CloseButton_Click"/>
+        </StackPanel>
+    </Grid>
+</Window>

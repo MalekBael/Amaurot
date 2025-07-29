@@ -18,12 +18,12 @@ namespace map_editor
         private readonly ARealmReversed? _realm;
         private readonly Action<string> _logDebug;
         private bool _verboseDebugMode = false;
-        
+
         // Add missing cache fields
         private readonly Dictionary<uint, List<MapMarker>> _mapMarkerCache = new Dictionary<uint, List<MapMarker>>();
         private readonly Dictionary<uint, List<FateInfo>> _mapFateCache = new Dictionary<uint, List<FateInfo>>();
         private readonly Dictionary<uint, string> _placeNameCache = new Dictionary<uint, string>();
-        
+
         private class MapSymbolCategory
         {
             public string Name { get; set; } = string.Empty;
@@ -54,14 +54,14 @@ namespace map_editor
             {
                 _logDebug("Loading PlaceName cache...");
                 var placeNameSheet = _realm.GameData.GetSheet("PlaceName");
-                
+
                 foreach (var placeNameRow in placeNameSheet)
                 {
                     try
                     {
                         var id = (uint)placeNameRow.Key;
                         var name = placeNameRow.AsString("Name") ?? "";
-                        
+
                         if (!string.IsNullOrEmpty(name))
                         {
                             _placeNameCache[id] = name;
@@ -75,7 +75,7 @@ namespace map_editor
                         }
                     }
                 }
-                
+
                 _logDebug($"Loaded {_placeNameCache.Count} place names into cache");
             }
             catch (Exception ex)
@@ -87,7 +87,7 @@ namespace map_editor
         public List<MapMarker> LoadMapMarkers(uint mapId)
         {
             _logDebug($"LoadMapMarkers called for mapId: {mapId}");
-            
+
             // Check cache first
             if (_mapMarkerCache.ContainsKey(mapId))
             {
@@ -107,7 +107,7 @@ namespace map_editor
             {
                 var mapSheet = _realm.GameData.GetSheet<Map>();
                 var map = mapSheet[(int)mapId];
-                
+
                 if (map == null)
                 {
                     _logDebug($"Map {mapId} not found");
@@ -117,13 +117,13 @@ namespace map_editor
                 // Load markers from MapMarker sheet
                 LoadMapMarkersFromSheet(markers, map);
 
-                // Load FATEs and convert to markers
-                var fates = LoadMapFates(mapId);
-                var fateMarkers = ConvertFatesToMarkers(fates, mapId);
-                markers.AddRange(fateMarkers);
-
-                _logDebug($"Total markers loaded for map {mapId}: {markers.Count}");
+                // DISABLED: Load FATEs and convert to markers - keeping UI but not placing markers
+                // var fates = LoadMapFates(mapId);
+                // var fateMarkers = ConvertFatesToMarkers(fates, mapId);
+                // markers.AddRange(fateMarkers);
                 
+                _logDebug($"Total markers loaded for map {mapId}: {markers.Count} (FATE markers disabled)");
+
                 // Cache the results
                 _mapMarkerCache[mapId] = markers;
             }
@@ -141,7 +141,7 @@ namespace map_editor
             {
                 Debug.WriteLine("Loading map markers from sheet...");
                 int count = 0;
-                const int MAX_MARKERS = 100; 
+                const int MAX_MARKERS = 100;
 
                 var mapMarkerSheet = _realm?.GameData?.GetSheet("MapMarker");
                 if (mapMarkerSheet == null)
@@ -161,7 +161,7 @@ namespace map_editor
                     Debug.WriteLine($"Error getting MapMarkerRange: {ex.Message}");
                     return;
                 }
-                
+
                 if (markerRange == 0)
                 {
                     Debug.WriteLine("MapMarkerRange is 0, cannot find markers");
@@ -186,7 +186,7 @@ namespace map_editor
                         if (sourceRow != null)
                         {
                             Debug.WriteLine($"Found SourceRow of type: {sourceRow.GetType().FullName}");
-                            
+
                             var subRowsProp = sourceRow.GetType().GetProperty("SubRows");
                             if (subRowsProp != null)
                             {
@@ -194,10 +194,10 @@ namespace map_editor
                                 if (subRowsCollection != null)
                                 {
                                     Debug.WriteLine("Successfully retrieved SubRows collection");
-                                    
+
                                     var stopwatch = System.Diagnostics.Stopwatch.StartNew();
                                     const int MAX_PROCESSING_TIME_MS = 2000;
-                                    
+
                                     foreach (var subRow in subRowsCollection)
                                     {
                                         if (count >= MAX_MARKERS)
@@ -205,18 +205,18 @@ namespace map_editor
                                             Debug.WriteLine($"Reached maximum marker limit of {MAX_MARKERS}, stopping processing");
                                             break;
                                         }
-                                        
+
                                         if (stopwatch.ElapsedMilliseconds > MAX_PROCESSING_TIME_MS)
                                         {
                                             Debug.WriteLine($"Processing time exceeded {MAX_PROCESSING_TIME_MS}ms, stopping to prevent freeze");
                                             break;
                                         }
-                                        
+
                                         try
                                         {
                                             var subRowType = subRow.GetType();
                                             var indexerMethod = subRowType.GetMethod("get_Item", new[] { typeof(string) });
-                                            
+
                                             if (indexerMethod != null)
                                             {
                                                 float x = 0;
@@ -231,7 +231,7 @@ namespace map_editor
                                                     if (xValue != null && !(xValue is SaintCoinach.Imaging.ImageFile))
                                                         x = Convert.ToSingle(xValue);
                                                 }
-                                                catch {}
+                                                catch { }
 
                                                 try
                                                 {
@@ -239,12 +239,12 @@ namespace map_editor
                                                     if (yValue != null && !(yValue is SaintCoinach.Imaging.ImageFile))
                                                         y = Convert.ToSingle(yValue);
                                                 }
-                                                catch {}
+                                                catch { }
 
                                                 try
                                                 {
                                                     var intIndexerMethod = subRowType.GetMethod("get_Item", new[] { typeof(int) });
-                                                    
+
                                                     if (intIndexerMethod != null)
                                                     {
                                                         var iconValue = intIndexerMethod.Invoke(subRow, new object[] { 2 });
@@ -327,8 +327,8 @@ namespace map_editor
                                                             if (placeNameSubtextId > 0)
                                                             {
                                                                 placeNameId = placeNameSubtextId;
-                                                                var placeNameSheet = _realm.GameData.GetSheet<PlaceName>();
-                                                                var placeNameRow = placeNameSheet.FirstOrDefault(p => p.Key == placeNameSubtextId);
+                                                                var placeNameSheet = _realm?.GameData.GetSheet<PlaceName>();
+                                                                var placeNameRow = placeNameSheet?.FirstOrDefault(p => p.Key == placeNameSubtextId);
                                                                 if (placeNameRow?.Name != null)
                                                                 {
                                                                     placeName = placeNameRow.Name.ToString();
@@ -351,7 +351,7 @@ namespace map_editor
                                                             placeName = placeNameValue.ToString() ?? "Marker";
                                                     }
                                                 }
-                                                catch {}
+                                                catch { }
 
                                                 try
                                                 {
@@ -359,7 +359,7 @@ namespace map_editor
                                                     if (placeNameIdValue != null && !(placeNameIdValue is SaintCoinach.Imaging.ImageFile))
                                                         placeNameId = Convert.ToUInt32(placeNameIdValue);
                                                 }
-                                                catch {}
+                                                catch { }
 
                                                 uint subRowKey = 0;
                                                 var keyProp = subRowType.GetProperty("Key");
@@ -369,11 +369,11 @@ namespace map_editor
                                                     if (keyValue != null)
                                                         subRowKey = Convert.ToUInt32(keyValue);
                                                 }
-                                                
+
                                                 if (x > 0 && y > 0)
                                                 {
                                                     Debug.WriteLine($"SubRow {subRowKey}: IconId from data = {iconId}, PlaceName = '{placeName}', PlaceNameId = {placeNameId}");
-                                                    
+
                                                     if (iconId == 0 && placeNameId > 0)
                                                     {
                                                         Debug.WriteLine($"SubRow {subRowKey}: Text-only marker detected for '{placeName}'");
@@ -385,12 +385,12 @@ namespace map_editor
                                                         iconId = GetIconForPlaceName(placeName);
                                                         Debug.WriteLine($"SubRow {subRowKey}: GetIconForPlaceName returned {iconId}");
                                                     }
-                                                    
+
                                                     if (count < 10)
                                                     {
                                                         Debug.WriteLine($"SubRow data: Key={subRowKey}, X={x}, Y={y}, Icon={iconId}, Name={placeName}");
                                                     }
-                                                    
+
                                                     var marker = new MapMarker
                                                     {
                                                         Id = subRowKey,
@@ -405,7 +405,7 @@ namespace map_editor
                                                         IsVisible = true,
                                                         IconPath = GetIconPath(iconId)
                                                     };
-                                                    
+
                                                     markers.Add(marker);
                                                     count++;
                                                 }
@@ -420,7 +420,7 @@ namespace map_editor
                                             Debug.WriteLine($"Error processing subrow: {ex.Message}");
                                         }
                                     }
-                                    
+
                                     stopwatch.Stop();
                                     Debug.WriteLine($"Processed {count} markers in {stopwatch.ElapsedMilliseconds}ms");
                                 }
@@ -580,84 +580,96 @@ namespace map_editor
     double imageScale,
     WpfPoint imagePosition,
     WpfSize imageSize)
-{
-    double relativeX = gameX / 42.0;
-    double relativeY = gameY / 42.0;
-    double pixelX = relativeX * imageSize.Width;
-    double pixelY = relativeY * imageSize.Height;
-    
-    Debug.WriteLine($"Converting: Game ({gameX:F1}, {gameY:F1}) -> " +
-                   $"Relative ({relativeX:F2}, {relativeY:F2}) -> " +
-                   $"Pixel ({pixelX:F1}, {pixelY:F1})");
-    
-
-    double screenX = pixelX * imageScale + imagePosition.X;
-    double screenY = pixelY * imageScale + imagePosition.Y;
-    
-    return new WpfPoint(screenX, screenY);
-}
-
-public MapCoordinate ConvertMapToGameCoordinates(
-    WpfPoint clickPoint, WpfPoint imagePosition, 
-    double scale, WpfSize imageSize, Map? map)
-{
-    var result = new MapCoordinate();
-    
-    try
-    {
-        if (map == null) return result;
-        float sizeFactor = 100.0f;
-        float offsetX = 0;
-        float offsetY = 0;
-        
-        try
         {
-            var type = map.GetType();
-            var indexer = type.GetProperty("Item", new[] { typeof(string) });
-            
-            if (indexer != null)
+            double relativeX = gameX / 42.0;
+            double relativeY = gameY / 42.0;
+            double pixelX = relativeX * imageSize.Width;
+            double pixelY = relativeY * imageSize.Height;
+
+            Debug.WriteLine($"Converting: Game ({gameX:F1}, {gameY:F1}) -> " +
+                           $"Relative ({relativeX:F2}, {relativeY:F2}) -> " +
+                           $"Pixel ({pixelX:F1}, {pixelY:F1})");
+
+
+            double screenX = pixelX * imageScale + imagePosition.X;
+            double screenY = pixelY * imageScale + imagePosition.Y;
+
+            return new WpfPoint(screenX, screenY);
+        }
+
+        public MapCoordinate ConvertMapToGameCoordinates(
+            WpfPoint clickPoint, WpfPoint imagePosition,
+            double scale, WpfSize imageSize, Map? map)
+        {
+            var result = new MapCoordinate();
+
+            try
             {
-                sizeFactor = (float)Convert.ChangeType(
-                    indexer.GetValue(map, new object[] { "SizeFactor" }), typeof(float));
-                offsetX = (float)Convert.ChangeType(
-                    indexer.GetValue(map, new object[] { "OffsetX" }), typeof(float));
-                offsetY = (float)Convert.ChangeType(
-                    indexer.GetValue(map, new object[] { "OffsetY" }), typeof(float));
+                if (map == null) return result;
+                float sizeFactor = 100.0f;
+                float offsetX = 0;
+                float offsetY = 0;
+
+                try
+                {
+                    var type = map.GetType();
+                    var indexer = type.GetProperty("Item", new[] { typeof(string) });
+
+                    if (indexer != null)
+                    {
+                        // Fixed: Add null checks for unboxing operations (Lines 620, 622, 624)
+                        var sizeFactorValue = indexer.GetValue(map, new object[] { "SizeFactor" });
+                        if (sizeFactorValue != null)
+                        {
+                            sizeFactor = (float)Convert.ChangeType(sizeFactorValue, typeof(float));
+                        }
+
+                        var offsetXValue = indexer.GetValue(map, new object[] { "OffsetX" });
+                        if (offsetXValue != null)
+                        {
+                            offsetX = (float)Convert.ChangeType(offsetXValue, typeof(float));
+                        }
+
+                        var offsetYValue = indexer.GetValue(map, new object[] { "OffsetY" });
+                        if (offsetYValue != null)
+                        {
+                            offsetY = (float)Convert.ChangeType(offsetYValue, typeof(float));
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"Error accessing map properties: {ex.Message}");
+                }
+
+                double relativeX = (clickPoint.X - imagePosition.X) / (imageSize.Width * scale);
+                double relativeY = (clickPoint.Y - imagePosition.Y) / (imageSize.Height * scale);
+                relativeX = Math.Max(0, Math.Min(1, relativeX));
+                relativeY = Math.Max(0, Math.Min(1, relativeY));
+
+                // Calculate raw map coordinates
+                double rawX = relativeX * 2048.0 - offsetX;
+                double rawY = relativeY * 2048.0 - offsetY;
+
+                // Calculate game coordinates
+                double c = sizeFactor / 100.0;
+                double gameX = (41.0 / c) * relativeX + 1.0;
+                double gameY = (41.0 / c) * relativeY + 1.0;
+
+                // Populate result
+                result.MapX = gameX;
+                result.MapY = gameY;
+                result.ClientX = clickPoint.X;
+                result.ClientY = clickPoint.Y;
+
+                return result;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error converting coordinates: {ex.Message}");
+                return result;
             }
         }
-        catch (Exception ex)
-        {
-            System.Diagnostics.Debug.WriteLine($"Error accessing map properties: {ex.Message}");
-        }
-
-        double relativeX = (clickPoint.X - imagePosition.X) / (imageSize.Width * scale);
-        double relativeY = (clickPoint.Y - imagePosition.Y) / (imageSize.Height * scale);
-        relativeX = Math.Max(0, Math.Min(1, relativeX));
-        relativeY = Math.Max(0, Math.Min(1, relativeY));
-        
-        // Calculate raw map coordinates
-        double rawX = relativeX * 2048.0 - offsetX;
-        double rawY = relativeY * 2048.0 - offsetY;
-        
-        // Calculate game coordinates
-        double c = sizeFactor / 100.0;
-        double gameX = (41.0 / c) * relativeX + 1.0;
-        double gameY = (41.0 / c) * relativeY + 1.0;
-        
-        // Populate result
-        result.MapX = gameX;
-        result.MapY = gameY;
-        result.ClientX = clickPoint.X;
-        result.ClientY = clickPoint.Y;
-        
-        return result;
-    }
-    catch (Exception ex)
-    {
-        System.Diagnostics.Debug.WriteLine($"Error converting coordinates: {ex.Message}");
-        return result;
-    }
-}
 
         public MapInfo? GetMapInfo(uint mapId)
         {
@@ -1016,6 +1028,7 @@ public MapCoordinate ConvertMapToGameCoordinates(
                         if (sourceRow == null) continue;
 
                         uint iconId = 0;
+                        // Fixed: Add null check for unboxing operation (Line 853)
                         if (sourceRow[0] != null && !(sourceRow[0] is SaintCoinach.Imaging.ImageFile))
                         {
                             iconId = Convert.ToUInt32(sourceRow[0]);
@@ -1031,17 +1044,23 @@ public MapCoordinate ConvertMapToGameCoordinates(
                             placeNameId = (uint)placeNameObj.Key;
                             placeNameString = placeNameObj.Name?.ToString() ?? string.Empty;
                         }
+                        // Fixed: Add null check for unboxing operation (Line 883)
                         else if (sourceRow[1] != null && !(sourceRow[1] is SaintCoinach.Imaging.ImageFile))
                         {
                             try
                             {
-                                placeNameId = Convert.ToUInt32(sourceRow[1]);
-                                
-                                var placeNameSheet = _realm.GameData.GetSheet<PlaceName>();
-                                var placeNameRow = placeNameSheet.FirstOrDefault(p => p.Key == placeNameId);
-                                if (placeNameRow?.Name != null)
+                                // Fixed CS8605: Check if the value is not null before unboxing
+                                var placeNameValue = sourceRow[1];
+                                if (placeNameValue != null)
                                 {
-                                    placeNameString = placeNameRow.Name.ToString();
+                                    placeNameId = Convert.ToUInt32(placeNameValue);
+
+                                    var placeNameSheet = _realm.GameData.GetSheet<PlaceName>();
+                                    var placeNameRow = placeNameSheet.FirstOrDefault(p => p.Key == placeNameId);
+                                    if (placeNameRow?.Name != null)
+                                    {
+                                        placeNameString = placeNameRow.Name.ToString();
+                                    }
                                 }
                             }
                             catch (Exception ex)
@@ -1053,13 +1072,13 @@ public MapCoordinate ConvertMapToGameCoordinates(
                         if (placeNameId > 0 && iconId > 0)
                         {
                             _placeNameToIconMap[placeNameId] = iconId;
-                            
+
                             if (!_iconToPlaceNameMap.ContainsKey(iconId))
                             {
                                 _iconToPlaceNameMap[iconId] = new List<uint>();
                             }
                             _iconToPlaceNameMap[iconId].Add(placeNameId);
-                            
+
                             count++;
                         }
 
@@ -1078,7 +1097,7 @@ public MapCoordinate ConvertMapToGameCoordinates(
                 Debug.WriteLine($"  - Place name ID mappings: {_placeNameToIconMap.Count}");
                 Debug.WriteLine($"  - Place name string mappings: {_placeNameStringToIconMap.Count}");
                 Debug.WriteLine($"  - Icon to place name mappings: {_iconToPlaceNameMap.Count}");
-                
+
                 _symbolsLoaded = true;
             }
             catch (Exception ex)
@@ -1107,7 +1126,7 @@ public MapCoordinate ConvertMapToGameCoordinates(
                 catch (Exception ex)
                 {
                     Debug.WriteLine($"Error loading map symbols: {ex.Message}");
-                    return 60001; 
+                    return 60001;
                 }
             }
 
@@ -1116,13 +1135,13 @@ public MapCoordinate ConvertMapToGameCoordinates(
             if (IsAetheryte(placeName))
             {
                 Debug.WriteLine($"GetIconForPlaceName: '{placeName}' identified as Aetheryte");
-                return 60441; 
+                return 60441;
             }
 
             if (IsLandmark(placeName))
             {
                 Debug.WriteLine($"GetIconForPlaceName: '{placeName}' identified as Landmark");
-                return 60442; 
+                return 60442;
             }
 
 
@@ -1134,12 +1153,12 @@ public MapCoordinate ConvertMapToGameCoordinates(
 
             int searchCount = 0;
             const int MAX_SEARCH_ITERATIONS = 50;
-            
+
             foreach (var knownName in _placeNameStringToIconMap.Keys)
             {
                 if (++searchCount > MAX_SEARCH_ITERATIONS)
                     break;
-                
+
                 if (placeName.Contains(knownName, StringComparison.OrdinalIgnoreCase))
                 {
                     Debug.WriteLine($"GetIconForPlaceName: Found partial match '{knownName}' in '{placeName}' -> {_placeNameStringToIconMap[knownName]}");
@@ -1171,16 +1190,16 @@ public MapCoordinate ConvertMapToGameCoordinates(
                 return false;
 
             string lowerName = placeName.ToLower();
-    
-            if (lowerName.Contains("aetheryte") || 
-                lowerName.Contains("aethernet") || 
+
+            if (lowerName.Contains("aetheryte") ||
+                lowerName.Contains("aethernet") ||
                 lowerName.Contains("airship landing"))
                 return true;
-    
-            if ((lowerName.Contains("plaza") || lowerName.Contains("square")) && 
+
+            if ((lowerName.Contains("plaza") || lowerName.Contains("square")) &&
                 (lowerName.Contains("city") || lowerName.Contains("town")))
                 return true;
-    
+
             return false;
         }
 
@@ -1189,19 +1208,19 @@ public MapCoordinate ConvertMapToGameCoordinates(
             if (string.IsNullOrEmpty(placeName))
                 return false;
 
-            string[] landmarkKeywords = { 
-                "yard", "tower", "keep", "falls", "gorge", "cliff", "peak", 
+            string[] landmarkKeywords = {
+                "yard", "tower", "keep", "falls", "gorge", "cliff", "peak",
                 "cave", "ruins", "temple", "bridge"
             };
 
             string lowerName = placeName.ToLower();
-    
+
             foreach (var keyword in landmarkKeywords)
             {
                 if (lowerName.Contains(keyword))
                     return true;
             }
-    
+
             return false;
         }
 
@@ -1209,10 +1228,10 @@ public MapCoordinate ConvertMapToGameCoordinates(
         {
             if (string.IsNullOrEmpty(placeName))
                 return false;
-                
+
             string lowerName = placeName.ToLower();
-    
-            return lowerName.Contains("limsa lominsa") || 
+
+            return lowerName.Contains("limsa lominsa") ||
                    lowerName.Contains("gridania") ||
                    lowerName.Contains("ul'dah") ||
                    lowerName.Contains("ishgard") ||
@@ -1227,9 +1246,9 @@ public MapCoordinate ConvertMapToGameCoordinates(
         {
             if (string.IsNullOrEmpty(placeName))
                 return false;
-                
+
             string lowerName = placeName.ToLower();
-    
+
             // Common shop/market terms
             return lowerName.Contains("shop") ||
                    lowerName.Contains("market") ||
@@ -1275,43 +1294,43 @@ public MapCoordinate ConvertMapToGameCoordinates(
             Debug.WriteLine($"OverlayCanvas transform: Scale={overlayScale:F2}, Position=({overlayPosition.X:F1},{overlayPosition.Y:F1})");
         }
 
-        public void LogCursorPosition(WpfPoint mousePosition, WpfPoint imagePosition, 
+        public void LogCursorPosition(WpfPoint mousePosition, WpfPoint imagePosition,
                             double scale, WpfSize imageSize, Map? map)
         {
             var mapCoords = ConvertMapToGameCoordinates(mousePosition, imagePosition, scale, imageSize, map);
-            
+
             Debug.WriteLine($"Cursor - Screen: ({mousePosition.X:F1}, {mousePosition.Y:F1}), " +
                            $"Map: ({mapCoords.MapX:F2}, {mapCoords.MapY:F2})");
-            
-            bool isInMapBounds = 
-                mousePosition.X >= imagePosition.X && 
+
+            bool isInMapBounds =
+                mousePosition.X >= imagePosition.X &&
                 mousePosition.X <= imagePosition.X + (imageSize.Width * scale) &&
-                mousePosition.Y >= imagePosition.Y && 
+                mousePosition.Y >= imagePosition.Y &&
                 mousePosition.Y <= imagePosition.Y + (imageSize.Height * scale);
-            
+
             Debug.WriteLine($"Cursor is {(isInMapBounds ? "INSIDE" : "OUTSIDE")} map bounds");
         }
 
-        public MapMarker? GetMarkerAtPosition(WpfPoint mousePosition, WpfPoint imagePosition, 
+        public MapMarker? GetMarkerAtPosition(WpfPoint mousePosition, WpfPoint imagePosition,
                                      double scale, WpfSize imageSize, List<MapMarker> markers)
         {
             double hitTestRadius = 15 / scale;
-            
+
             foreach (var marker in markers.Where(m => m.IsVisible))
             {
                 double screenX = (marker.X / 42.0) * imageSize.Width * scale + imagePosition.X;
                 double screenY = (marker.Y / 42.0) * imageSize.Height * scale + imagePosition.Y;
-                
+
                 double distance = Math.Sqrt(
-                    Math.Pow(mousePosition.X - screenX, 2) + 
+                    Math.Pow(mousePosition.X - screenX, 2) +
                     Math.Pow(mousePosition.Y - screenY, 2));
-                
+
                 if (distance <= hitTestRadius)
                 {
                     return marker;
                 }
             }
-            
+
             return null;
         }
 
@@ -1601,10 +1620,49 @@ public MapCoordinate ConvertMapToGameCoordinates(
                                 }
                                 else
                                 {
+                                    // Fixed: Add null check for unboxing operation (Line 1665)
                                     var levelValue = fateRow[2];
                                     if (levelValue != null)
                                     {
                                         classJobLevel = (uint)Math.Max(0, Convert.ToInt32(levelValue));
+                                    }
+                                }
+                            }
+                            catch { }
+
+                            uint iconId = 60093;
+                            try
+                            {
+                                if (fateRow is SaintCoinach.Xiv.XivRow xivRow)
+                                {
+                                    iconId = (uint)Math.Max(60093, xivRow.AsInt32("Icon"));
+                                }
+                                else
+                                {
+                                    // Fixed: Add null check for unboxing operation (Line 1666)
+                                    var iconValue = fateRow[3];
+                                    if (iconValue != null)
+                                    {
+                                        iconId = (uint)Math.Max(60093, Convert.ToInt32(iconValue));
+                                    }
+                                }
+                            }
+                            catch { }
+
+                            string description = "";
+                            try
+                            {
+                                if (fateRow is SaintCoinach.Xiv.XivRow xivRow)
+                                {
+                                    description = xivRow.AsString("Description") ?? "";
+                                }
+                                else
+                                {
+                                    // Fixed: Add null check for unboxing operation (Line 1667)
+                                    var descValue = fateRow[25];
+                                    if (descValue != null)
+                                    {
+                                        description = descValue.ToString() ?? "";
                                     }
                                 }
                             }
@@ -1615,12 +1673,12 @@ public MapCoordinate ConvertMapToGameCoordinates(
                                 Id = (uint)fateKey,
                                 FateId = (uint)fateKey,
                                 Name = fateName,
-                                Description = "",
+                                Description = description,
                                 Level = classJobLevel,
                                 ClassJobLevel = classJobLevel,
                                 TerritoryId = territoryId,
                                 TerritoryName = map.PlaceName?.ToString() ?? "",
-                                IconId = 60093,
+                                IconId = iconId,
                                 X = 21,
                                 Y = 21,
                                 Z = 0
@@ -1654,38 +1712,52 @@ public MapCoordinate ConvertMapToGameCoordinates(
                 float sizeFactor = 100.0f;
                 float offsetX = 0;
                 float offsetY = 0;
-    
+
                 try
                 {
                     var type = map.GetType();
                     var indexer = type.GetProperty("Item", new[] { typeof(string) });
-    
+
                     if (indexer != null)
                     {
-                        sizeFactor = (float)Convert.ChangeType(indexer.GetValue(map, new object[] { "SizeFactor" }), typeof(float));
-                        offsetX = (float)Convert.ChangeType(indexer.GetValue(map, new object[] { "OffsetX" }), typeof(float));
-                        offsetY = (float)Convert.ChangeType(indexer.GetValue(map, new object[] { "OffsetY" }), typeof(float));
+                        var sizeFactorValue = indexer.GetValue(map, new object[] { "SizeFactor" });
+                        if (sizeFactorValue != null)
+                        {
+                            sizeFactor = (float)Convert.ChangeType(sizeFactorValue, typeof(float));
+                        }
+
+                        var offsetXValue = indexer.GetValue(map, new object[] { "OffsetX" });
+                        if (offsetXValue != null)
+                        {
+                            offsetX = (float)Convert.ChangeType(offsetXValue, typeof(float));
+                        }
+
+                        var offsetYValue = indexer.GetValue(map, new object[] { "OffsetY" });
+                        if (offsetYValue != null)
+                        {
+                            offsetY = (float)Convert.ChangeType(offsetYValue, typeof(float));
+                        }
                     }
                 }
                 catch (Exception ex)
                 {
                     Debug.WriteLine($"Error accessing map properties: {ex.Message}");
                 }
-    
+
                 // FFXIV world coordinate conversion
                 // World coordinates are typically in the range of roughly -1000 to +1000
                 // Map coordinates in your system are 0-42
-    
+
                 // Apply the standard FFXIV coordinate conversion
                 double c = sizeFactor / 100.0;
-                
+
                 // Convert world coordinate to map coordinate
                 // This formula converts FFXIV world coordinates to map coordinates
                 double mapCoord = ((worldCoord + offsetX) * c + 1024.0) / 2048.0 * 41.0 + 1.0;
-    
+
                 // Clamp to valid range
                 mapCoord = Math.Max(1, Math.Min(42, mapCoord));
-    
+
                 return mapCoord;
             }
             catch (Exception ex)
@@ -1703,7 +1775,7 @@ public MapCoordinate ConvertMapToGameCoordinates(
             {
                 // Use the FATE's actual icon from the game data
                 uint iconId = fate.IconId;
-                
+
                 // If no icon is specified, determine a default based on FATE name/description patterns
                 if (iconId == 0)
                 {
@@ -1744,7 +1816,7 @@ public MapCoordinate ConvertMapToGameCoordinates(
             string combined = $"{fateName} {fateDescription}".ToLowerInvariant();
 
             // Boss/Named Monster FATEs
-            if (combined.Contains("slay") || combined.Contains("defeat") || 
+            if (combined.Contains("slay") || combined.Contains("defeat") ||
                 combined.Contains("eliminate") || combined.Contains("hunt") ||
                 combined.Contains("kill") || combined.Contains("destroy") ||
                 fateName.Contains("vs") || fateName.Contains("Vs"))
@@ -1753,7 +1825,7 @@ public MapCoordinate ConvertMapToGameCoordinates(
             }
 
             // Escort/Protection FATEs
-            if (combined.Contains("escort") || combined.Contains("protect") || 
+            if (combined.Contains("escort") || combined.Contains("protect") ||
                 combined.Contains("defend") || combined.Contains("guard") ||
                 combined.Contains("accompany") || combined.Contains("guide"))
             {
@@ -1761,7 +1833,7 @@ public MapCoordinate ConvertMapToGameCoordinates(
             }
 
             // Collection/Gathering FATEs
-            if (combined.Contains("collect") || combined.Contains("gather") || 
+            if (combined.Contains("collect") || combined.Contains("gather") ||
                 combined.Contains("deliver") || combined.Contains("retrieve") ||
                 combined.Contains("harvest") || combined.Contains("supply"))
             {
@@ -1769,7 +1841,7 @@ public MapCoordinate ConvertMapToGameCoordinates(
             }
 
             // Survival/Defense FATEs
-            if (combined.Contains("survive") || combined.Contains("hold") || 
+            if (combined.Contains("survive") || combined.Contains("hold") ||
                 combined.Contains("defend") || combined.Contains("withstand") ||
                 combined.Contains("last") || combined.Contains("endure"))
             {
@@ -1777,7 +1849,7 @@ public MapCoordinate ConvertMapToGameCoordinates(
             }
 
             // Special Event FATEs
-            if (combined.Contains("special") || combined.Contains("event") || 
+            if (combined.Contains("special") || combined.Contains("event") ||
                 combined.Contains("seasonal") || combined.Contains("festival"))
             {
                 return 60505; // Special event icon
@@ -1814,18 +1886,18 @@ public MapCoordinate ConvertMapToGameCoordinates(
                 {
                     return (uint)territoryType.Key;
                 }
-                
+
                 // If it's a direct integer value
                 if (territoryValue is int intValue)
                 {
                     return (uint)Math.Max(0, intValue);
                 }
-                
+
                 if (territoryValue is uint uintValue)
                 {
                     return uintValue;
                 }
-                
+
                 // Try to convert directly
                 try
                 {
@@ -1852,7 +1924,7 @@ public MapCoordinate ConvertMapToGameCoordinates(
                     _logDebug($"Error converting territory value: {ex.Message}");
                 }
             }
-            
+
             return 0;
         }
     }

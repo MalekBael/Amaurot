@@ -77,6 +77,14 @@ namespace map_editor
         public uint PreviousQuestId { get; set; }
         public uint ExpReward { get; set; }
         public uint GilReward { get; set; }
+        
+        // Additional fields that could be useful
+        public string PlaceName { get; set; } = string.Empty;
+        public uint PlaceNameId { get; set; } // Add this to store the PlaceName ID
+        public uint MapId { get; set; } // Add this for Map ID
+        public uint IconId { get; set; }
+        public string Description { get; set; } = string.Empty;
+        public bool IsRepeatable { get; set; }
 
         public override string ToString()
         {
@@ -148,7 +156,7 @@ namespace map_editor
 
         private static bool _isInitialized = false;
 
-        public static void InitializeFromMapSymbolData(IEnumerable<MapSymbolRow> mapSymbols, Dictionary<uint, string> placeNames)
+        public static void InitializeFromMapSymbolData(IEnumerable<MapSymbolRow> mapSymbols, Dictionary<uint, string>? placeNames)
         {
             IconToPlaceNameIdMap.Clear();
             PlaceNameIdToNameMap = placeNames ?? new Dictionary<uint, string>();
@@ -169,9 +177,9 @@ namespace map_editor
                 return string.Empty;
 
             if (IconToPlaceNameIdMap.TryGetValue(iconId, out uint placeNameId) &&
-                PlaceNameIdToNameMap.TryGetValue(placeNameId, out string placeName))
+                PlaceNameIdToNameMap.TryGetValue(placeNameId, out string? placeName))
             {
-                return placeName;
+                return placeName ?? string.Empty;
             }
 
             return string.Empty;
@@ -182,23 +190,22 @@ namespace map_editor
             if (!_isInitialized || marker.IconId == 0)
                 return;
 
-            if (marker.PlaceNameId > 0 && PlaceNameIdToNameMap.TryGetValue(marker.PlaceNameId, out string existingName))
+            if (marker.PlaceNameId > 0 && PlaceNameIdToNameMap.TryGetValue(marker.PlaceNameId, out string? existingName))
             {
-                marker.PlaceName = existingName;
+                marker.PlaceName = existingName ?? string.Empty;
             }
 
             else if (IconToPlaceNameIdMap.TryGetValue(marker.IconId, out uint placeNameId) &&
-                     PlaceNameIdToNameMap.TryGetValue(placeNameId, out string placeName))
+                     PlaceNameIdToNameMap.TryGetValue(placeNameId, out string? placeName))
             {
                 marker.PlaceNameId = placeNameId;
-                marker.PlaceName = placeName;
+                marker.PlaceName = placeName ?? string.Empty;
             }
         }
 
-   
+
         public static MarkerType InferMarkerTypeFromIconId(uint iconId)
         {
-            // Add Fate icon detection
             if (iconId == 60722 || iconId == 60502 || iconId == 60503 || iconId == 60504 || iconId == 60505)
                 return MarkerType.Fate;
 
@@ -216,7 +223,7 @@ namespace map_editor
                 MarkerType.Entrance => Colors.Brown,
                 MarkerType.Symbol => Colors.Teal,
                 MarkerType.Custom => Colors.Magenta,
-                MarkerType.Fate => Colors.Orange, // Add Fate color
+                MarkerType.Fate => Colors.Orange, 
                 _ => Colors.Red,
             };
         }
@@ -232,7 +239,7 @@ namespace map_editor
                 MarkerType.Entrance => Colors.SandyBrown,
                 MarkerType.Symbol => Colors.Cyan,
                 MarkerType.Custom => Colors.Pink,
-                MarkerType.Fate => Colors.DarkOrange, // Add Fate stroke color
+                MarkerType.Fate => Colors.DarkOrange,
                 _ => Colors.Yellow,
             };
         }
@@ -248,7 +255,7 @@ namespace map_editor
                 MarkerType.Entrance => "Ellipse",
                 MarkerType.Symbol => "Ellipse",
                 MarkerType.Custom => "Star",
-                MarkerType.Fate => "Diamond", // Use diamond shape for Fates
+                MarkerType.Fate => "Diamond", 
                 _ => "Ellipse",
             };
         }

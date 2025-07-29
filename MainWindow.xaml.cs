@@ -23,20 +23,18 @@ using WpfMessageBox = System.Windows.MessageBox;
 using WpfPanel = System.Windows.Controls.Panel;
 using WpfSaveFileDialog = Microsoft.Win32.SaveFileDialog;
 using WpfApplication = System.Windows.Application;
-using WpfImage = System.Windows.Controls.Image; // Add this alias
+using WpfImage = System.Windows.Controls.Image;
 
 namespace map_editor
 {
     public partial class MainWindow : Window
     {
-        // Core services
         private DataLoaderService? _dataLoaderService;
         private SearchFilterService? _searchFilterService;
         private MapInteractionService? _mapInteractionService;
         private UIUpdateService? _uiUpdateService;
         private DebugHelper? _debugHelper;
-        
-        // Existing fields...
+        private SettingsService? _settingsService;
         private ARealmReversed? _realm;
         private MapService? _mapService;
         private MapRenderer? _mapRenderer;
@@ -64,16 +62,20 @@ namespace map_editor
 
         private System.Windows.Threading.DispatcherTimer? _searchDebounceTimer;
 
-        // Public properties for DebugHelper access
         public double CurrentScale => _currentScale;
         public ObservableCollection<TerritoryInfo> FilteredTerritories => _filteredTerritories;
+        public ObservableCollection<BNpcInfo> FilteredBNpcs => _filteredBNpcs;
+        public ObservableCollection<FateInfo> FilteredFates => _filteredFates;
+        public ObservableCollection<QuestInfo> FilteredQuests => _filteredQuests;
 
         public MainWindow()
         {
             InitializeComponent();
             DataContext = this;
+            
+            _settingsService = new SettingsService();
+            
             InitializeServices();
-            // Remove SetupUI() call - it doesn't exist
             this.Loaded += MainWindow_Loaded;
         }
 
@@ -83,15 +85,14 @@ namespace map_editor
             _uiUpdateService = new UIUpdateService();
             _mapInteractionService = new MapInteractionService(LogDebug);
             _searchFilterService = new SearchFilterService(LogDebug);
-            // Initialize MapRenderer here
             _mapRenderer = new MapRenderer(null); // Will update realm later
-            // _dataLoaderService will be initialized when _realm is available
-            
+                                                  // _dataLoaderService will be initialized when _realm is available
+
             RedirectDebugOutput();
             LogDebug("Application started");
         }
 
-        private void MainWindow_Loaded(object sender, RoutedEventArgs e)
+        private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
         {
             if (_mapRenderer != null)
             {
@@ -109,6 +110,75 @@ namespace map_editor
             if (MapImageControl.Source is BitmapSource bitmapSource)
             {
                 CalculateAndApplyInitialScale(bitmapSource);
+            }
+
+            ApplySavedSettings();
+
+            if (_settingsService?.Settings.AutoLoadGameData == true && _settingsService.IsValidGamePath())
+            {
+                LogDebug("Auto-loading game data from saved path...");
+                await LoadFFXIVDataAsync(_settingsService.Settings.GameInstallationPath);
+            }
+        }
+
+        private void ApplySavedSettings()
+        {
+            if (_settingsService == null) return;
+
+            var settings = _settingsService.Settings;
+            
+            if (DebugModeCheckBox != null)
+            {
+                DebugModeCheckBox.IsChecked = settings.DebugMode;
+                _mapService?.SetVerboseDebugMode(settings.DebugMode);
+            }
+
+            if (HideDuplicateTerritoriesCheckBox != null)
+            {
+                HideDuplicateTerritoriesCheckBox.IsChecked = settings.HideDuplicateTerritories;
+                _hideDuplicateTerritories = settings.HideDuplicateTerritories;
+            }
+
+            if (AutoLoadMenuItem != null)
+            {
+                AutoLoadMenuItem.IsChecked = settings.AutoLoadGameData;
+            }
+
+            LogDebug($"Applied saved settings - Auto-load: {settings.AutoLoadGameData}, Debug: {settings.DebugMode}");
+        }
+
+        private void OpenSettings_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                if (_settingsService != null)
+                {
+                    var settingsWindow = new SettingsWindow(_settingsService, LogDebug)
+                    {
+                        Owner = this
+                    };
+
+                    if (settingsWindow.ShowDialog() == true)
+                    {
+                        ApplySavedSettings();
+                        LogDebug("Settings updated and applied");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                LogDebug($"Error opening settings window: {ex.Message}");
+                WpfMessageBox.Show($"Error opening settings: {ex.Message}", "Error",
+                    MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        private void AutoLoadMenuItem_Changed(object sender, RoutedEventArgs e)
+        {
+            if (_settingsService != null && AutoLoadMenuItem != null)
+            {
+                _settingsService.UpdateAutoLoad(AutoLoadMenuItem.IsChecked);
+                LogDebug($"Auto-load setting changed to: {AutoLoadMenuItem.IsChecked}");
             }
         }
 
@@ -139,7 +209,6 @@ namespace map_editor
                 }
             }
 
-            // Refresh the display with filtered markers
             RefreshMarkersWithFiltered(visibleMarkers);
 
             LogDebug($"Marker visibility changed - showing {visibleMarkers.Count} of {_currentMapMarkers.Count} total markers");
@@ -180,7 +249,8 @@ namespace map_editor
             var dialog = new WinForms.FolderBrowserDialog
             {
                 Description = "Select FFXIV game installation folder",
-                UseDescriptionForTitle = true
+                UseDescriptionForTitle = true,
+                SelectedPath = _settingsService?.Settings.GameInstallationPath ?? ""
             };
 
             if (dialog.ShowDialog() == WinForms.DialogResult.OK)
@@ -188,6 +258,9 @@ namespace map_editor
                 var gamePath = dialog.SelectedPath;
                 if (Directory.Exists(gamePath))
                 {
+                    _settingsService?.UpdateGamePath(gamePath);
+                    LogDebug($"Game path saved to settings: {gamePath}");
+                    
                     await LoadFFXIVDataAsync(gamePath);
                 }
                 else
@@ -220,7 +293,7 @@ namespace map_editor
 
                 LogDebug($"Initialized realm: {(_realm != null ? "Success" : "Failed")}");
 
-                _mapService = new MapService(_realm, LogDebug); // Pass the LogDebug method
+                _mapService = new MapService(_realm, LogDebug); 
                 LogDebug("Initialized map service");
 
                 if (_realm != null)
@@ -228,14 +301,11 @@ namespace map_editor
                     _mapRenderer?.UpdateRealm(_realm);
                 }
 
-                // Initialize the data loader service
                 _dataLoaderService = new DataLoaderService(_realm, LogDebug);
                 LogDebug("Initialized data loader service");
 
-                // Add debug logging
                 LogDebug("Starting to load all data...");
 
-                // Load all data using the service
                 var loadingTasks = new List<Task>
                 {
                     LoadDataAsync(_dataLoaderService.LoadTerritoriesAsync, Territories, _filteredTerritories, _uiUpdateService!.UpdateTerritoryCount, TerritoryCountText),
@@ -249,16 +319,12 @@ namespace map_editor
                 while (!loadingTask.IsCompleted)
                 {
                     await Task.Delay(500);
-                    // Add more detailed status
                     StatusText.Text = $"Loading FFXIV data... Territories: {Territories.Count}, Quests: {Quests.Count}, NPCs: {BNpcs.Count}, Events: {Events.Count}, Fates: {Fates.Count}";
                 }
 
                 await loadingTask;
-
-                // Log final counts
                 LogDebug($"Loading complete - Territories: {Territories.Count}, Quests: {Quests.Count}, NPCs: {BNpcs.Count}, Events: {Events.Count}, Fates: {Fates.Count}");
 
-                // Apply initial territory filter to populate the filtered list
                 if (Territories.Count > 0)
                 {
                     LogDebug("Applying initial territory filters...");
@@ -276,8 +342,8 @@ namespace map_editor
             }
         }
 
-        private async Task LoadDataAsync<T>(Func<Task<List<T>>> loadFunction, 
-            ObservableCollection<T> sourceCollection, 
+        private async Task LoadDataAsync<T>(Func<Task<List<T>>> loadFunction,
+            ObservableCollection<T> sourceCollection,
             ObservableCollection<T> filteredCollection,
             Action<ObservableCollection<T>, TextBlock?> updateCountAction,
             TextBlock? countTextBlock)
@@ -287,16 +353,18 @@ namespace map_editor
                 LogDebug($"LoadDataAsync starting for type: {typeof(T).Name}");
                 var data = await loadFunction();
                 LogDebug($"LoadDataAsync received {data?.Count ?? 0} items of type: {typeof(T).Name}");
-                
-                // Fix: Use WpfApplication alias instead of ambiguous Application
+
                 WpfApplication.Current.Dispatcher.Invoke(() =>
                 {
                     sourceCollection.Clear();
                     filteredCollection.Clear();
-                    foreach (var item in data)
+                    if (data != null)
                     {
-                        sourceCollection.Add(item);
-                        filteredCollection.Add(item);
+                        foreach (var item in data)
+                        {
+                            sourceCollection.Add(item);
+                            filteredCollection.Add(item);
+                        }
                     }
                     updateCountAction(filteredCollection, countTextBlock);
                     LogDebug($"LoadDataAsync completed UI update for {sourceCollection.Count} items of type: {typeof(T).Name}");
@@ -452,6 +520,7 @@ namespace map_editor
                         }
                         catch (Exception ex)
                         {
+                            LogDebug($"Error processing quest {quest.Key}: {ex.Message}");
                         }
                     }
 
@@ -793,9 +862,9 @@ namespace map_editor
                                     Id = (uint)eventRow.Key,
                                     EventId = (uint)eventRow.Key,
                                     Name = eventName,
-                                    EventType = "Event", // Default type
+                                    EventType = "Event", 
                                     Description = eventRow.AsString("Description") ?? "",
-                                    TerritoryId = 0, // Events may not have territory association
+                                    TerritoryId = 0,
                                     TerritoryName = ""
                                 };
 
@@ -877,7 +946,7 @@ namespace map_editor
                                     Description = fateRow.AsString("Description") ?? "",
                                     Level = (uint)Math.Max(0, classJobLevel),
                                     ClassJobLevel = (uint)Math.Max(0, classJobLevel),
-                                    TerritoryId = 0, // Will need to determine from location data
+                                    TerritoryId = 0,
                                     TerritoryName = "",
                                     IconId = (uint)Math.Max(0, iconId)
                                 };
@@ -920,8 +989,7 @@ namespace map_editor
 
         private void MapCanvas_MouseWheel(object sender, MouseWheelEventArgs e)
         {
-            // Fix: Cast MapImageControl to WpfImage to resolve ambiguity
-            _mapInteractionService?.HandleMouseWheel(e, MapCanvas, (WpfImage)MapImageControl, 
+            _mapInteractionService?.HandleMouseWheel(e, MapCanvas, (WpfImage)MapImageControl,
                 ref _currentScale, OverlayCanvas, SyncOverlayWithMap, RefreshMarkers);
             StatusText.Text = $"Zoom: {_currentScale:P0}";
         }
@@ -1312,8 +1380,6 @@ namespace map_editor
 
                         _mapRenderer?.DisplayMapMarkers(_currentMapMarkers, _currentMap, _currentScale, imagePosition, imageSize);
                         SyncOverlayWithMap();
-
-                        // Add this line - debug FATE marker positions
                         DebugFateMarkerPositions();
 
                         _mapRenderer?.AddDebugGridAndBorders();
@@ -1463,6 +1529,92 @@ namespace map_editor
             if (_debugHelper != null)
             {
                 System.Diagnostics.Trace.Listeners.Add(new TextBoxTraceListener(_debugHelper));
+            }
+        }
+
+        private void QuestList_MouseDoubleClick(object sender, System.Windows.Input.MouseButtonEventArgs e)
+        {
+            if (QuestList.SelectedItem is QuestInfo selectedQuest)
+            {
+                try
+                {
+                    var questDetailsWindow = new QuestDetailsWindow(selectedQuest)
+                    {
+                        Owner = this
+                    };
+                    
+                    LogDebug($"Opening quest details for: {selectedQuest.Name} (ID: {selectedQuest.Id})");
+                    questDetailsWindow.Show();
+                }
+                catch (Exception ex)
+                {
+                    LogDebug($"Error opening quest details window: {ex.Message}");
+                    System.Windows.MessageBox.Show($"Error opening quest details: {ex.Message}", 
+                        "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                }
+            }
+        }
+
+        private void OpenSapphireRepo_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                if (_settingsService?.IsValidSapphireServerPath() == true)
+                {
+                    _settingsService.OpenSapphireServerPath();
+                    LogDebug("Opened Sapphire Server repository from menu");
+                }
+                else
+                {
+                    WpfMessageBox.Show("Sapphire Server repository path is not set or invalid.\n\n" +
+                                      "Please configure it in Settings → Preferences.", 
+                                      "Sapphire Server Path", MessageBoxButton.OK, MessageBoxImage.Information);
+                }
+            }
+            catch (Exception ex)
+            {
+                LogDebug($"Error opening Sapphire Server repository: {ex.Message}");
+                WpfMessageBox.Show($"Error opening Sapphire Server repository: {ex.Message}", "Error", 
+                    MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        private void OpenSapphireBuild_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                if (_settingsService?.IsValidSapphireBuildPath() == true)
+                {
+                    _settingsService.OpenSapphireBuildPath();
+                    LogDebug("Opened Sapphire Server build directory from menu");
+                }
+                else
+                {
+                    WpfMessageBox.Show("Sapphire Server build directory path is not set or invalid.\n\n" +
+                                      "Please configure it in Settings → Preferences.", 
+                                      "Sapphire Server Build Path", MessageBoxButton.OK, MessageBoxImage.Information);
+                }
+            }
+            catch (Exception ex)
+            {
+                LogDebug($"Error opening Sapphire Server build directory: {ex.Message}");
+                WpfMessageBox.Show($"Error opening Sapphire Server build directory: {ex.Message}", "Error", 
+                    MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        private void Exit_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                LogDebug("Exit menu item clicked - closing application");
+                WpfApplication.Current.Shutdown();
+            }
+            catch (Exception ex)
+            {
+                LogDebug($"Error during application exit: {ex.Message}");
+                // Force close if there's an error
+                Environment.Exit(0);
             }
         }
     }
