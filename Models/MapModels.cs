@@ -78,13 +78,19 @@ namespace map_editor
         public uint ExpReward { get; set; }
         public uint GilReward { get; set; }
         
-        // Additional fields that could be useful
+        // Location fields
         public string PlaceName { get; set; } = string.Empty;
-        public uint PlaceNameId { get; set; } // Add this to store the PlaceName ID
-        public uint MapId { get; set; } // Add this for Map ID
+        public uint PlaceNameId { get; set; }
+        public uint MapId { get; set; }
         public uint IconId { get; set; }
         public string Description { get; set; } = string.Empty;
         public bool IsRepeatable { get; set; }
+        
+        // Add coordinate fields for LGB data
+        public double X { get; set; } = 0;
+        public double Y { get; set; } = 0;
+        public double Z { get; set; } = 0;
+        public uint TerritoryId { get; set; } = 0;
 
         public override string ToString()
         {

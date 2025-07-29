@@ -4,6 +4,6 @@
              xmlns:local="clr-namespace:map_editor"
              StartupUri="MainWindow.xaml">
     <Application.Resources>
-         
+        <local:QuestHasLocationConverter x:Key="QuestHasLocationConverter"/>
     </Application.Resources>
 </Application>

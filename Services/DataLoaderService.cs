@@ -14,17 +14,19 @@ namespace map_editor
     {
         private readonly ARealmReversed? _realm;
         private readonly Action<string> _logDebug;
+        private LgbLocationParsing? _lgbParser;
 
         public DataLoaderService(ARealmReversed? realm, Action<string> logDebug)
         {
             _realm = realm;
             _logDebug = logDebug;
+            _lgbParser = new LgbLocationParsing(_realm, _logDebug);
         }
 
         // Fixed: Make the method actually async by wrapping the work in Task.Run
         public async Task<List<QuestInfo>> LoadQuestsAsync()
         {
-            return await Task.Run(() =>
+            return await Task.Run(async () =>
             {
                 var tempQuests = new List<QuestInfo>();
 
@@ -155,6 +157,15 @@ namespace map_editor
 
                         tempQuests.Sort((a, b) => a.Id.CompareTo(b.Id));
                         _logDebug($"Loaded {tempQuests.Count} quests successfully (skipped {errorCount} problematic quests)");
+                        
+                        // *** REMOVE THIS SECTION - it's causing duplicate parsing ***
+                        // _logDebug("Starting quest location parsing after quest loading...");
+                        // if (_lgbParser != null)
+                        // {
+                        //     await _lgbParser.ParseQuestLocationsFromLgbAsync();
+                        //     _lgbParser.UpdateQuestLocations(tempQuests);
+                        //     _logDebug("Quest location parsing completed in LoadQuestsAsync");
+                        // }
                     }
                 }
                 catch (Exception ex)
@@ -168,8 +179,7 @@ namespace map_editor
 
         private void ExtractQuestDetailsSafely(Quest quest, QuestInfo questInfo)
         {
-            // Add debug flag to see what's happening
-            bool isDebugQuest = questInfo.Id <= 10; // Debug first 10 quests
+            bool isDebugQuest = questInfo.Id <= 10; 
 
             if (isDebugQuest)
             {
@@ -178,7 +188,6 @@ namespace map_editor
 
             try
             {
-                // ClassJobLevel[0] is at index 4 according to Quest.json
                 var classJobLevel = quest.AsInt32("ClassJobLevel[0]");
                 questInfo.ClassJobLevelRequired = (uint)Math.Max(0, classJobLevel);
                 
@@ -197,7 +206,6 @@ namespace map_editor
 
             try
             {
-                // GilReward is at index 1441 according to Quest.json
                 var gilReward = quest.AsInt32("GilReward");
                 questInfo.GilReward = (uint)Math.Max(0, gilReward);
                 
@@ -214,12 +222,10 @@ namespace map_editor
                 }
             }
 
-            // Try to get location information from multiple sources
             bool locationFound = false;
 
             try
             {
-                // First try: PlaceName is at index 1505 according to Quest.json
                 var placeNameObj = quest.PlaceName;
                 
                 if (isDebugQuest)
@@ -969,6 +975,40 @@ namespace map_editor
                 questInfo.GilReward = (uint)Math.Max(0, gilReward);
             }
             catch { }
+        }
+
+        // Update the LoadQuestLocationsFromLgbAsync method to have forced logging:
+
+        public async Task LoadQuestLocationsFromLgbAsync(List<QuestInfo> quests)
+        {
+            if (_lgbParser == null) 
+            {
+                _logDebug("*** FORCED LOG: _lgbParser is null in LoadQuestLocationsFromLgbAsync ***");
+                return;
+            }
+
+            try
+            {
+                _logDebug("*** FORCED LOG: Starting LGB quest location parsing in DataLoaderService ***");
+
+                // Parse quest locations from LGB files
+                await _lgbParser.ParseQuestLocationsFromLgbAsync();
+
+                // Update quest objects with the parsed location data
+                _lgbParser.UpdateQuestLocations(quests);
+
+                _logDebug("*** FORCED LOG: LGB quest location parsing completed in DataLoaderService ***");
+            }
+            catch (Exception ex)
+            {
+                _logDebug($"*** FORCED LOG: Error in LoadQuestLocationsFromLgbAsync: {ex.Message} ***");
+            }
+        }
+
+        // Add method to set verbose debug mode
+        public void SetVerboseDebugMode(bool enabled)
+        {
+            _lgbParser?.SetVerboseDebugMode(enabled);
         }
     }
 }

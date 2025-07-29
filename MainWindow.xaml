@@ -206,7 +206,61 @@
                              Margin="5,0,5,5">
                         <ListBox.ItemTemplate>
                             <DataTemplate>
-                                <TextBlock Text="{Binding}" ToolTip="{Binding Name}"/>
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+
+                                    <!-- Location Indicator -->
+                                    <TextBlock Grid.Column="0" 
+                                               Text="📍" 
+                                               FontSize="12" 
+                                               Margin="0,0,5,0"
+                                               VerticalAlignment="Center"
+                                               ToolTip="Quest has location data">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding Path=., Converter={StaticResource QuestHasLocationConverter}}" Value="True">
+                                                        <Setter Property="Visibility" Value="Visible"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
+
+                                    <!-- Quest Name -->
+                                    <TextBlock Grid.Column="1" Text="{Binding}" ToolTip="{Binding Name}" 
+                                               VerticalAlignment="Center" Margin="0,2"/>
+
+                                    <!-- Cogwheel Icon for Quest Details -->
+                                    <Button Grid.Column="2" 
+                                            Width="20" Height="20" 
+                                            Margin="5,0,0,0"
+                                            Background="Transparent" 
+                                            BorderThickness="0"
+                                            VerticalAlignment="Center"
+                                            ToolTip="View quest details"
+                                            Click="QuestDetailsButton_Click"
+                                            Tag="{Binding}">
+                                        <Button.Content>
+                                            <TextBlock Text="⚙" FontSize="12" Foreground="Gray"/>
+                                        </Button.Content>
+                                        <Button.Style>
+                                            <Style TargetType="Button">
+                                                <Setter Property="Cursor" Value="Hand"/>
+                                                <Style.Triggers>
+                                                    <Trigger Property="IsMouseOver" Value="True">
+                                                        <Setter Property="Background" Value="LightGray"/>
+                                                    </Trigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Button.Style>
+                                    </Button>
+                                </Grid>
                             </DataTemplate>
                         </ListBox.ItemTemplate>
                     </ListBox>

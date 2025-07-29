@@ -24,6 +24,7 @@ using WpfPanel = System.Windows.Controls.Panel;
 using WpfSaveFileDialog = Microsoft.Win32.SaveFileDialog;
 using WpfApplication = System.Windows.Application;
 using WpfImage = System.Windows.Controls.Image;
+using WpfButton = System.Windows.Controls.Button;
 
 namespace map_editor
 {
@@ -88,8 +89,26 @@ namespace map_editor
             _mapRenderer = new MapRenderer(null); // Will update realm later
                                                   // _dataLoaderService will be initialized when _realm is available
 
+            // Subscribe to debug mode changes to refresh the quest list UI
+            DebugModeManager.DebugModeChanged += OnDebugModeChanged;
+
             RedirectDebugOutput();
             LogDebug("Application started");
+        }
+
+        private void OnDebugModeChanged()
+        {
+            // Refresh the quest list UI to update pin visibility
+            WpfApplication.Current.Dispatcher.InvokeAsync(() =>
+            {
+                // Trigger a refresh of the quest list bindings
+                if (QuestList?.ItemsSource != null)
+                {
+                    var itemsSource = QuestList.ItemsSource;
+                    QuestList.ItemsSource = null;
+                    QuestList.ItemsSource = itemsSource;
+                }
+            });
         }
 
         private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
@@ -126,10 +145,14 @@ namespace map_editor
             if (_settingsService == null) return;
 
             var settings = _settingsService.Settings;
-            
+
             if (DebugModeCheckBox != null)
             {
                 DebugModeCheckBox.IsChecked = settings.DebugMode;
+
+                // Initialize the debug mode manager
+                DebugModeManager.IsDebugModeEnabled = settings.DebugMode;
+
                 _mapService?.SetVerboseDebugMode(settings.DebugMode);
             }
 
@@ -329,6 +352,16 @@ namespace map_editor
                 {
                     LogDebug("Applying initial territory filters...");
                     ApplyTerritoryFilters();
+                }
+
+                // After loading basic data, parse LGB files for quest locations
+                StatusText.Text = "Parsing quest locations from LGB files...";
+                await _dataLoaderService.LoadQuestLocationsFromLgbAsync(Quests.ToList());
+
+                // Also set debug mode if enabled
+                if (_settingsService?.Settings.DebugMode == true)
+                {
+                    _dataLoaderService.SetVerboseDebugMode(true);
                 }
 
                 StatusText.Text = $"Loaded {Territories.Count} territories, {Quests.Count} quests, {BNpcs.Count} NPCs, {Events.Count} events, {Fates.Count} fates from: {gameDirectory}";
@@ -699,38 +732,6 @@ namespace map_editor
             }
 
             UpdateFateCount();
-        }
-
-        private void QuestList_SelectionChanged(object sender, SelectionChangedEventArgs e)
-        {
-            if (QuestList.SelectedItem is QuestInfo selectedQuest)
-            {
-                LogDebug($"Selected quest: {selectedQuest.Name} (ID: {selectedQuest.Id})");
-            }
-        }
-
-        private void BNpcList_SelectionChanged(object sender, SelectionChangedEventArgs e)
-        {
-            if (BNpcList.SelectedItem is BNpcInfo selectedBNpc)
-            {
-                LogDebug($"Selected BNpc: {selectedBNpc.BNpcName} (Base ID: {selectedBNpc.BNpcBaseId})");
-            }
-        }
-
-        private void EventList_SelectionChanged(object sender, SelectionChangedEventArgs e)
-        {
-            if (EventList.SelectedItem is EventInfo selectedEvent)
-            {
-                LogDebug($"Selected Event: {selectedEvent.Name} (ID: {selectedEvent.EventId})");
-            }
-        }
-
-        private void FateList_SelectionChanged(object sender, SelectionChangedEventArgs e)
-        {
-            if (FateList.SelectedItem is FateInfo selectedFate)
-            {
-                LogDebug($"Selected Fate: {selectedFate.Name} (ID: {selectedFate.FateId})");
-            }
         }
 
         private void LoadBNpcs()
@@ -1498,8 +1499,21 @@ namespace map_editor
         {
             if (sender is System.Windows.Controls.CheckBox checkBox)
             {
-                _mapService?.SetVerboseDebugMode(checkBox.IsChecked == true);
-                LogDebug($"Debug mode {(checkBox.IsChecked == true ? "enabled" : "disabled")}");
+                bool debugEnabled = checkBox.IsChecked == true;
+
+                // Update the static debug mode manager
+                DebugModeManager.IsDebugModeEnabled = debugEnabled;
+
+                _mapService?.SetVerboseDebugMode(debugEnabled);
+                _dataLoaderService?.SetVerboseDebugMode(debugEnabled);
+
+                // Save the setting
+                if (_settingsService != null)
+                {
+                    _settingsService.UpdateDebugMode(debugEnabled);
+                }
+
+                LogDebug($"Debug mode {(debugEnabled ? "enabled" : "disabled")}");
             }
         }
 
@@ -1532,9 +1546,99 @@ namespace map_editor
             }
         }
 
-        private void QuestList_MouseDoubleClick(object sender, System.Windows.Input.MouseButtonEventArgs e)
+        private async void QuestList_MouseDoubleClick(object sender, System.Windows.Input.MouseButtonEventArgs e)
         {
             if (QuestList.SelectedItem is QuestInfo selectedQuest)
+            {
+                try
+                {
+                    LogDebug($"Double-clicked quest: {selectedQuest.Name} (ID: {selectedQuest.Id})");
+                    
+                    // Check if the quest has valid map data
+                    if (selectedQuest.MapId > 0)
+                    {
+                        // Find the territory that corresponds to this quest's map
+                        var targetTerritory = FindTerritoryByMapId(selectedQuest.MapId);
+                        
+                        if (targetTerritory != null)
+                        {
+                            LogDebug($"Switching to map for quest '{selectedQuest.Name}' - Territory: {targetTerritory.PlaceName} (MapId: {selectedQuest.MapId})");
+                            
+                            // Update the territory selection in the UI
+                            TerritoryList.SelectedItem = targetTerritory;
+                            
+                            // Load the map for this territory
+                            StatusText.Text = $"Loading map for quest '{selectedQuest.Name}' in {targetTerritory.PlaceName}...";
+                            bool success = await LoadTerritoryMapAsync(targetTerritory);
+                            
+                            if (success)
+                            {
+                                StatusText.Text = $"Map loaded for quest '{selectedQuest.Name}' in {targetTerritory.PlaceName}";
+                            }
+                            else
+                            {
+                                StatusText.Text = $"Failed to load map for quest '{selectedQuest.Name}'";
+                            }
+                        }
+                        else
+                        {
+                            LogDebug($"No territory found for quest MapId: {selectedQuest.MapId}");
+                            WpfMessageBox.Show($"Could not find territory for quest '{selectedQuest.Name}'.\n\nMapId: {selectedQuest.MapId}", 
+                                              "Territory Not Found", MessageBoxButton.OK, MessageBoxImage.Information);
+                        }
+                    }
+                    else if (!string.IsNullOrEmpty(selectedQuest.PlaceName))
+                    {
+                        // Try to find territory by PlaceName if MapId is not available
+                        var targetTerritory = FindTerritoryByPlaceName(selectedQuest.PlaceName);
+                        
+                        if (targetTerritory != null)
+                        {
+                            LogDebug($"Switching to map for quest '{selectedQuest.Name}' by PlaceName - Territory: {targetTerritory.PlaceName}");
+                            
+                            // Update the territory selection in the UI
+                            TerritoryList.SelectedItem = targetTerritory;
+                            
+                            // Load the map for this territory
+                            StatusText.Text = $"Loading map for quest '{selectedQuest.Name}' in {targetTerritory.PlaceName}...";
+                            bool success = await LoadTerritoryMapAsync(targetTerritory);
+                            
+                            if (success)
+                            {
+                                StatusText.Text = $"Map loaded for quest '{selectedQuest.Name}' in {targetTerritory.PlaceName}";
+                            }
+                            else
+                            {
+                                StatusText.Text = $"Failed to load map for quest '{selectedQuest.Name}'";
+                            }
+                        }
+                        else
+                        {
+                            LogDebug($"No territory found for quest PlaceName: {selectedQuest.PlaceName}");
+                            WpfMessageBox.Show($"Could not find territory for quest '{selectedQuest.Name}'.\n\nLocation: {selectedQuest.PlaceName}", 
+                                              "Territory Not Found", MessageBoxButton.OK, MessageBoxImage.Information);
+                        }
+                    }
+                    else
+                    {
+                        LogDebug($"Quest '{selectedQuest.Name}' has no location data (MapId: {selectedQuest.MapId}, PlaceName: '{selectedQuest.PlaceName}')");
+                        WpfMessageBox.Show($"Quest '{selectedQuest.Name}' doesn't have location data.\n\nCannot switch to map.", 
+                                          "No Location Data", MessageBoxButton.OK, MessageBoxImage.Information);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    LogDebug($"Error switching to quest map: {ex.Message}");
+                    WpfMessageBox.Show($"Error switching to quest map: {ex.Message}", 
+                        "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                }
+            }
+        }
+
+        // Add this new method for the cogwheel button click
+        private void QuestDetailsButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is WpfButton button && button.Tag is QuestInfo selectedQuest) // Use WpfButton instead of Button
             {
                 try
                 {
@@ -1549,33 +1653,107 @@ namespace map_editor
                 catch (Exception ex)
                 {
                     LogDebug($"Error opening quest details window: {ex.Message}");
-                    System.Windows.MessageBox.Show($"Error opening quest details: {ex.Message}", 
+                    WpfMessageBox.Show($"Error opening quest details: {ex.Message}", 
                         "Error", MessageBoxButton.OK, MessageBoxImage.Error);
                 }
             }
+        }
+
+        // Helpers
+        private TerritoryInfo? FindTerritoryByMapId(uint mapId)
+        {
+            try
+            {
+                // Search in the filtered territories first (what user can see)
+                var territory = _filteredTerritories.FirstOrDefault(t => t.MapId == mapId);
+                if (territory != null)
+                {
+                    return territory;
+                }
+
+                // If not found in filtered, search in all territories
+                territory = Territories.FirstOrDefault(t => t.MapId == mapId);
+                if (territory != null)
+                {
+                    LogDebug($"Found territory {territory.PlaceName} (ID: {territory.Id}) for MapId {mapId} in full list");
+                    return territory;
+                }
+
+                LogDebug($"No territory found for MapId: {mapId}");
+                return null;
+            }
+            catch (Exception ex)
+            {
+                LogDebug($"Error finding territory by MapId {mapId}: {ex.Message}");
+                return null;
+            }
+        }
+
+        private TerritoryInfo? FindTerritoryByPlaceName(string placeName)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(placeName))
+                    return null;
+
+                // Search in the filtered territories first (what user can see)
+                var territory = _filteredTerritories.FirstOrDefault(t => 
+                    string.Equals(t.PlaceName, placeName, StringComparison.OrdinalIgnoreCase));
+                if (territory != null)
+                {
+                    return territory;
+                }
+
+                // If not found in filtered, search in all territories
+                territory = Territories.FirstOrDefault(t => 
+                    string.Equals(t.PlaceName, placeName, StringComparison.OrdinalIgnoreCase));
+                if (territory != null)
+                {
+                    LogDebug($"Found territory {territory.PlaceName} (ID: {territory.Id}) for PlaceName '{placeName}' in full list");
+                    return territory;
+                }
+
+                LogDebug($"No territory found for PlaceName: '{placeName}'");
+                return null;
+            }
+            catch (Exception ex)
+            {
+                LogDebug($"Error finding territory by PlaceName '{placeName}': {ex.Message}");
+                return null;
+            }
+        }
+
+        // Add these missing event handlers
+        private void Exit_Click(object sender, RoutedEventArgs e)
+        {
+            WpfApplication.Current.Shutdown();
         }
 
         private void OpenSapphireRepo_Click(object sender, RoutedEventArgs e)
         {
             try
             {
-                if (_settingsService?.IsValidSapphireServerPath() == true)
+                if (_settingsService != null && !string.IsNullOrEmpty(_settingsService.Settings.SapphireServerPath))
                 {
-                    _settingsService.OpenSapphireServerPath();
-                    LogDebug("Opened Sapphire Server repository from menu");
+                    System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                    {
+                        FileName = _settingsService.Settings.SapphireServerPath,
+                        UseShellExecute = true,
+                        Verb = "open"
+                    });
+                    LogDebug($"Opened Sapphire Server repository: {_settingsService.Settings.SapphireServerPath}");
                 }
                 else
                 {
-                    WpfMessageBox.Show("Sapphire Server repository path is not set or invalid.\n\n" +
-                                      "Please configure it in Settings → Preferences.", 
-                                      "Sapphire Server Path", MessageBoxButton.OK, MessageBoxImage.Information);
+                    WpfMessageBox.Show("Sapphire Server path not configured. Please set it in Settings.", 
+                        "Path Not Set", MessageBoxButton.OK, MessageBoxImage.Information);
                 }
             }
             catch (Exception ex)
             {
                 LogDebug($"Error opening Sapphire Server repository: {ex.Message}");
-                WpfMessageBox.Show($"Error opening Sapphire Server repository: {ex.Message}", "Error", 
-                    MessageBoxButton.OK, MessageBoxImage.Error);
+                WpfMessageBox.Show($"Failed to open Sapphire Server repository: {ex.Message}", 
+                    "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
@@ -1583,39 +1761,55 @@ namespace map_editor
         {
             try
             {
-                if (_settingsService?.IsValidSapphireBuildPath() == true)
+                if (_settingsService != null && !string.IsNullOrEmpty(_settingsService.Settings.SapphireBuildPath))
                 {
-                    _settingsService.OpenSapphireBuildPath();
-                    LogDebug("Opened Sapphire Server build directory from menu");
+                    System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                    {
+                        FileName = _settingsService.Settings.SapphireBuildPath,
+                        UseShellExecute = true,
+                        Verb = "open"
+                    });
+                    LogDebug($"Opened Sapphire Server build directory: {_settingsService.Settings.SapphireBuildPath}");
                 }
                 else
                 {
-                    WpfMessageBox.Show("Sapphire Server build directory path is not set or invalid.\n\n" +
-                                      "Please configure it in Settings → Preferences.", 
-                                      "Sapphire Server Build Path", MessageBoxButton.OK, MessageBoxImage.Information);
+                    WpfMessageBox.Show("Sapphire Server build path not configured. Please set it in Settings.", 
+                        "Path Not Set", MessageBoxButton.OK, MessageBoxImage.Information);
                 }
             }
             catch (Exception ex)
             {
                 LogDebug($"Error opening Sapphire Server build directory: {ex.Message}");
-                WpfMessageBox.Show($"Error opening Sapphire Server build directory: {ex.Message}", "Error", 
-                    MessageBoxButton.OK, MessageBoxImage.Error);
+                WpfMessageBox.Show($"Failed to open Sapphire Server build directory: {ex.Message}", 
+                    "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
-        private void Exit_Click(object sender, RoutedEventArgs e)
+        private void QuestList_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
-            try
-            {
-                LogDebug("Exit menu item clicked - closing application");
-                WpfApplication.Current.Shutdown();
-            }
-            catch (Exception ex)
-            {
-                LogDebug($"Error during application exit: {ex.Message}");
-                // Force close if there's an error
-                Environment.Exit(0);
-            }
+            // This can be empty or you can add quest selection logic here
+            // The main quest functionality is in QuestList_MouseDoubleClick
+        }
+
+        private void EventList_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            // This can be empty or you can add event selection logic here
+        }
+
+        private void BNpcList_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            // This can be empty or you can add BNpc selection logic here
+        }
+
+        private void FateList_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            // This can be empty or you can add fate selection logic here
+        }
+
+        protected override void OnClosed(EventArgs e)
+        {
+            DebugModeManager.DebugModeChanged -= OnDebugModeChanged;
+            base.OnClosed(e);
         }
     }
 

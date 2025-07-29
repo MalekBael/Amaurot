@@ -168,10 +168,10 @@
     },
     {
       "index": 37,
-      "name": "Mount{Required}",
+      "name": "Issuer{Start}",
       "converter": {
         "type": "link",
-        "target": "Mount"
+        "target": "ENpcResident"
       }
     },
     {
@@ -180,21 +180,18 @@
     },
     {
       "index": 39,
-      "name": "DeliveryQuest",
+      "name": "Target{End}",
       "converter": {
         "type": "link",
-        "target": "DeliveryQuest"
+        "target": "ENpcResident"
       }
     },
     {
       "index": 40,
-      "name": "Issuer{Start}",
+      "name": "Mount{Required}",
       "converter": {
-        "type": "multiref",
-        "targets": [
-          "EObjName",
-          "ENpcResident"
-        ]
+        "type": "link",
+        "target": "Mount"
       }
     },
     {
@@ -207,13 +204,10 @@
     },
     {
       "index": 42,
-      "name": "Target{End}",
+      "name": "DeliveryQuest",
       "converter": {
-        "type": "multiref",
-        "targets": [
-          "EObjName",
-          "ENpcResident"
-        ]
+        "type": "link",
+        "target": "DeliveryQuest"
       }
     },
     {

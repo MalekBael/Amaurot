@@ -102,7 +102,7 @@ namespace map_editor
 
         public void UpdateDebugMode(bool debugMode)
         {
-            _settings.DebugMode = debugMode;
+            Settings.DebugMode = debugMode;
             SaveSettings();
         }
 

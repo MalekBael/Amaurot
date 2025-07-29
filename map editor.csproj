@@ -28,7 +28,6 @@
 		</Reference>
 	</ItemGroup>
 
-	<!-- Add this section to include the definition files -->
 	<ItemGroup>
 		<Content Include="Libs\Definitions\**\*.*">
 			<Link>Definitions\%(RecursiveDir)%(Filename)%(Extension)</Link>
@@ -44,6 +43,7 @@
 		<Compile Include="notes\Coinach CS\Ex\Variant2\SubRow.txt" />
 	</ItemGroup>
 	<ItemGroup>
+	  <Content Update="Libs\Definitions\EObj.json" Link="Definitions\EObj.json" />
 	  <Content Update="Libs\Definitions\Map.json">
 	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
 	  </Content>
@@ -71,6 +71,18 @@
 	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
 	  </None>
 	  <None Update="Libs\Definitions\CompleteJournal.json">
+	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+	  </None>
+	  <None Update="Libs\Definitions\ENpcBase.json">
+	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+	  </None>
+	  <None Update="Libs\Definitions\ENpcResident.json">
+	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+	  </None>
+	  <None Update="Libs\Definitions\EObj.json">
+	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+	  </None>
+	  <None Update="Libs\Definitions\EObjName.json">
 	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
 	  </None>
 	  <None Update="Libs\Definitions\Fate.json">
