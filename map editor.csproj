@@ -33,14 +33,6 @@
 			<Link>Definitions\%(RecursiveDir)%(Filename)%(Extension)</Link>
 			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
 		</Content>
-		<Compile Remove="notes\Map.cs" />
-		<Compile Remove="notes\Quest.cs" />
-		<Content Remove="Libs\Definitions\Lobby.json" />
-		<Content Remove="Libs\Definitions\LogFilter.json" />
-		<None Remove="Libs\Definitions\Lobby.json" />
-		<None Remove="Libs\Definitions\LogFilter.json" />
-		<Compile Include="notes\Coinach CS\Ex\Variant2\RelationalDataRow.txt" />
-		<Compile Include="notes\Coinach CS\Ex\Variant2\SubRow.txt" />
 	</ItemGroup>
 	<ItemGroup>
 	  <Content Update="Libs\Definitions\EObj.json" Link="Definitions\EObj.json" />

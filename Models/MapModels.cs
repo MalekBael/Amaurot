@@ -68,6 +68,10 @@ namespace map_editor
     {
         public uint Id { get; set; }
         public string Name { get; set; } = string.Empty;
+        
+        // ✅ ADD this new property for the Quest ID string from index 1
+        public string QuestIdString { get; set; } = string.Empty;
+        
         public string JournalGenre { get; set; } = string.Empty;
         public uint ClassJobCategoryId { get; set; }
         public uint ClassJobLevelRequired { get; set; }

@@ -56,6 +56,13 @@ namespace map_editor
             // Basic Information Section
             AddSectionHeader("Basic Information", row++);
             AddDetailRow("Quest ID:", questInfo.Id.ToString(), row++);
+            
+            // ✅ ADD this line to show the Quest ID string
+            if (!string.IsNullOrEmpty(questInfo.QuestIdString))
+            {
+                AddDetailRow("Quest Identifier:", questInfo.QuestIdString, row++);
+            }
+            
             AddDetailRow("Name:", questInfo.Name, row++);
             AddDetailRow("Quest Type:", GetQuestTypeDescription(questInfo), row++);
             

@@ -39,6 +39,10 @@
                           ToolTip="Opens the Sapphire Server repository folder in Windows Explorer"/>
                 <MenuItem Header="Open Sapphire Server _Build Directory" Click="OpenSapphireBuild_Click"
                           ToolTip="Opens the Sapphire Server build directory in Windows Explorer"/>
+                <!-- ✅ ADD this new menu item -->
+                <Separator/>
+                <MenuItem Header="_Extract Quest Files" Click="ExtractQuestFiles_Click"
+                          ToolTip="Runs quest_parse.exe to extract quest files from game data"/>
             </MenuItem>
         </Menu>
 
@@ -404,5 +408,27 @@
         <StatusBar Grid.Row="4" Grid.ColumnSpan="3">
             <TextBlock Name="StatusText" Text="Ready - Load FFXIV data to begin"/>
         </StatusBar>
+
+        <!-- ✅ ADD this Progress Overlay - covers the entire window when visible -->
+        <Grid Grid.RowSpan="5" Grid.ColumnSpan="3" x:Name="ProgressOverlay" 
+              Background="#80000000" Visibility="Collapsed" Panel.ZIndex="1000">
+            <Border Background="White" CornerRadius="10" Padding="30" 
+                    HorizontalAlignment="Center" VerticalAlignment="Center"
+                    MinWidth="400" MaxWidth="500">
+                <StackPanel>
+                    <TextBlock Text="Extracting Quest Files" FontSize="18" FontWeight="Bold" 
+                               HorizontalAlignment="Center" Margin="0,0,0,15"/>
+                    
+                    <TextBlock x:Name="ProgressStatusText" Text="Initializing quest_parse.exe..." 
+                               HorizontalAlignment="Center" Margin="0,0,0,15" TextWrapping="Wrap"/>
+                    
+                    <ProgressBar x:Name="QuestExtractionProgressBar" Height="20" 
+                                 IsIndeterminate="True" Margin="0,0,0,15"/>
+                    
+                    <Button x:Name="CancelExtractionButton" Content="Cancel" Width="80" Height="30"
+                            HorizontalAlignment="Center" Click="CancelExtraction_Click"/>
+                </StackPanel>
+            </Border>
+        </Grid>
     </Grid>
 </Window>

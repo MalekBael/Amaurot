@@ -1,5 +1,6 @@
 ﻿using System;
 using System.IO;
+using System.Linq;
 using System.Windows;
 using WinForms = System.Windows.Forms;
 using WpfMessageBox = System.Windows.MessageBox;
@@ -36,129 +37,47 @@ namespace map_editor
             HideDuplicateTerritoriesCheckBox.IsChecked = settings.HideDuplicateTerritories;
         }
 
+        // ✅ ADD this helper method to replace repetitive validation code
+        private (string statusText, System.Windows.Media.Brush color, bool isValid) ValidatePath(string path, string[] indicators, int requiredCount = 2)
+        {
+            if (string.IsNullOrEmpty(path))
+                return ("No path specified", System.Windows.Media.Brushes.Gray, false);
+
+            if (!Directory.Exists(path))
+                return ("✗ Path does not exist", System.Windows.Media.Brushes.Red, false);
+
+            int foundCount = indicators.Count(indicator => 
+                Directory.Exists(Path.Combine(path, indicator)) || File.Exists(Path.Combine(path, indicator)));
+
+            return foundCount >= requiredCount
+                ? ("✓ Valid path detected", System.Windows.Media.Brushes.Green, true)
+                : ("⚠ Path exists but doesn't appear valid", System.Windows.Media.Brushes.Orange, true);
+        }
+
+        // ✅ REPLACE all UpdateXXXPathStatus methods with these simplified versions:
         private void UpdatePathStatus()
         {
-            string path = GamePathTextBox.Text.Trim();
-            
-            if (string.IsNullOrEmpty(path))
-            {
-                PathStatusText.Text = "No path specified";
-                PathStatusText.Foreground = System.Windows.Media.Brushes.Gray;
-            }
-            else if (Directory.Exists(path))
-            {
-                bool hasGameFolder = Directory.Exists(Path.Combine(path, "game"));
-                bool hasBootFolder = Directory.Exists(Path.Combine(path, "boot"));
-                
-                if (hasGameFolder || hasBootFolder)
-                {
-                    PathStatusText.Text = "✓ Valid FFXIV installation path";
-                    PathStatusText.Foreground = System.Windows.Media.Brushes.Green;
-                }
-                else
-                {
-                    PathStatusText.Text = "⚠ Path exists but doesn't appear to be FFXIV installation";
-                    PathStatusText.Foreground = System.Windows.Media.Brushes.Orange;
-                }
-            }
-            else
-            {
-                PathStatusText.Text = "✗ Path does not exist";
-                PathStatusText.Foreground = System.Windows.Media.Brushes.Red;
-            }
+            var (text, color, _) = ValidatePath(GamePathTextBox.Text.Trim(), new[] { "game", "boot" });
+            PathStatusText.Text = text.Replace("Valid path", "Valid FFXIV installation path");
+            PathStatusText.Foreground = color;
         }
 
         private void UpdateSapphirePathStatus()
         {
-            string path = SapphirePathTextBox.Text.Trim();
-            
-            if (string.IsNullOrEmpty(path))
-            {
-                SapphirePathStatusText.Text = "No path specified";
-                SapphirePathStatusText.Foreground = System.Windows.Media.Brushes.Gray;
-                OpenSapphireButton.IsEnabled = false;
-            }
-            else if (Directory.Exists(path))
-            {
-
-                var indicators = new[] { "src", "scripts", "CMakeLists.txt", "README.md" };
-                int foundIndicators = 0;
-                
-                foreach (var indicator in indicators)
-                {
-                    string fullPath = Path.Combine(path, indicator);
-                    if (Directory.Exists(fullPath) || File.Exists(fullPath))
-                    {
-                        foundIndicators++;
-                    }
-                }
-                
-                if (foundIndicators >= 2)
-                {
-                    SapphirePathStatusText.Text = "✓ Valid Sapphire Server repository";
-                    SapphirePathStatusText.Foreground = System.Windows.Media.Brushes.Green;
-                    OpenSapphireButton.IsEnabled = true;
-                }
-                else
-                {
-                    SapphirePathStatusText.Text = "⚠ Path exists but doesn't appear to be Sapphire Server repository";
-                    SapphirePathStatusText.Foreground = System.Windows.Media.Brushes.Orange;
-                    OpenSapphireButton.IsEnabled = true; 
-                }
-            }
-            else
-            {
-                SapphirePathStatusText.Text = "✗ Path does not exist";
-                SapphirePathStatusText.Foreground = System.Windows.Media.Brushes.Red;
-                OpenSapphireButton.IsEnabled = false;
-            }
+            var (text, color, isValid) = ValidatePath(SapphirePathTextBox.Text.Trim(), 
+                new[] { "src", "scripts", "CMakeLists.txt", "README.md" });
+            SapphirePathStatusText.Text = text.Replace("Valid path", "Valid Sapphire Server repository");
+            SapphirePathStatusText.Foreground = color;
+            OpenSapphireButton.IsEnabled = isValid;
         }
 
         private void UpdateSapphireBuildPathStatus()
         {
-            string path = SapphireBuildPathTextBox.Text.Trim();
-            
-            if (string.IsNullOrEmpty(path))
-            {
-                SapphireBuildPathStatusText.Text = "No path specified";
-                SapphireBuildPathStatusText.Foreground = System.Windows.Media.Brushes.Gray;
-                OpenSapphireBuildButton.IsEnabled = false;
-            }
-            else if (Directory.Exists(path))
-            {
-                var indicators = new[] { "compiledscripts", "config", "tools" };
-                int foundIndicators = 0;
-                var foundItems = new System.Collections.Generic.List<string>();
-                
-                foreach (var indicator in indicators)
-                {
-                    string fullPath = Path.Combine(path, indicator);
-                    if (Directory.Exists(fullPath) || File.Exists(fullPath))
-                    {
-                        foundIndicators++;
-                        foundItems.Add(indicator);
-                    }
-                }
-                
-                if (foundIndicators >= 2)
-                {
-                    SapphireBuildPathStatusText.Text = "✓ Valid Sapphire Server build directory";
-                    SapphireBuildPathStatusText.Foreground = System.Windows.Media.Brushes.Green;
-                    OpenSapphireBuildButton.IsEnabled = true;
-                }
-                else
-                {
-                    SapphireBuildPathStatusText.Text = "⚠ Path exists but doesn't appear to be Sapphire Server build directory";
-                    SapphireBuildPathStatusText.Foreground = System.Windows.Media.Brushes.Orange;
-                    OpenSapphireBuildButton.IsEnabled = true; 
-                }
-            }
-            else
-            {
-                SapphireBuildPathStatusText.Text = "✗ Path does not exist";
-                SapphireBuildPathStatusText.Foreground = System.Windows.Media.Brushes.Red;
-                OpenSapphireBuildButton.IsEnabled = false;
-            }
+            var (text, color, isValid) = ValidatePath(SapphireBuildPathTextBox.Text.Trim(), 
+                new[] { "compiledscripts", "config", "tools" });
+            SapphireBuildPathStatusText.Text = text.Replace("Valid path", "Valid Sapphire Server build directory");
+            SapphireBuildPathStatusText.Foreground = color;
+            OpenSapphireBuildButton.IsEnabled = isValid;
         }
 
         private void UpdateSettingsLocationText()
@@ -219,14 +138,12 @@ namespace map_editor
             }
         }
 
-        private void TestButton_Click(object sender, RoutedEventArgs e)
+        // ✅ ADD this generic test method
+        private void TestPath(string path, string[] indicators, string pathType, int requiredCount = 2)
         {
-            UpdatePathStatus();
-            
-            string path = GamePathTextBox.Text.Trim();
             if (string.IsNullOrEmpty(path))
             {
-                WpfMessageBox.Show("Please specify a path first.", "Test Path", 
+                WpfMessageBox.Show($"Please specify a {pathType} path first.", "Test Path", 
                     MessageBoxButton.OK, MessageBoxImage.Information);
                 return;
             }
@@ -238,114 +155,36 @@ namespace map_editor
                 return;
             }
 
-            bool hasGameFolder = Directory.Exists(Path.Combine(path, "game"));
-            bool hasBootFolder = Directory.Exists(Path.Combine(path, "boot"));
-            
-            if (hasGameFolder || hasBootFolder)
-            {
-                WpfMessageBox.Show("✓ Valid FFXIV installation detected!", "Test Path", 
-                    MessageBoxButton.OK, MessageBoxImage.Information);
-            }
-            else
-            {
-                WpfMessageBox.Show("The path exists but doesn't appear to contain a valid FFXIV installation.\n\n" +
-                               "Make sure you select the main FFXIV folder that contains 'game' and 'boot' subdirectories.", 
-                               "Test Path", MessageBoxButton.OK, MessageBoxImage.Warning);
-            }
+            var foundItems = indicators.Where(indicator => 
+                Directory.Exists(Path.Combine(path, indicator)) || File.Exists(Path.Combine(path, indicator))).ToList();
+
+            string message = foundItems.Count >= requiredCount
+                ? $"✓ Valid {pathType} detected!\n\nFound: {string.Join(", ", foundItems)}"
+                : $"Path exists but doesn't appear to be a valid {pathType}.\n\n" +
+                  $"Expected at least {requiredCount} of: {string.Join(", ", indicators)}\n" +
+                  $"Found: {(foundItems.Any() ? string.Join(", ", foundItems) : "none")}";
+
+            WpfMessageBox.Show(message, "Test Path", MessageBoxButton.OK, 
+                foundItems.Count >= requiredCount ? MessageBoxImage.Information : MessageBoxImage.Warning);
+        }
+
+        // ✅ REPLACE the three test methods with these simple calls:
+        private void TestButton_Click(object sender, RoutedEventArgs e)
+        {
+            UpdatePathStatus();
+            TestPath(GamePathTextBox.Text.Trim(), new[] { "game", "boot" }, "FFXIV installation");
         }
 
         private void TestSapphireButton_Click(object sender, RoutedEventArgs e)
         {
             UpdateSapphirePathStatus();
-            
-            string path = SapphirePathTextBox.Text.Trim();
-            if (string.IsNullOrEmpty(path))
-            {
-                WpfMessageBox.Show("Please specify a Sapphire Server path first.", "Test Path", 
-                    MessageBoxButton.OK, MessageBoxImage.Information);
-                return;
-            }
-
-            if (!Directory.Exists(path))
-            {
-                WpfMessageBox.Show("The specified path does not exist.", "Test Path", 
-                    MessageBoxButton.OK, MessageBoxImage.Warning);
-                return;
-            }
-
-            var indicators = new[] { "src", "scripts", "CMakeLists.txt", "README.md" };
-            int foundIndicators = 0;
-            var foundItems = new System.Collections.Generic.List<string>();
-            
-            foreach (var indicator in indicators)
-            {
-                string fullPath = Path.Combine(path, indicator);
-                if (Directory.Exists(fullPath) || File.Exists(fullPath))
-                {
-                    foundIndicators++;
-                    foundItems.Add(indicator);
-                }
-            }
-            
-            if (foundIndicators >= 2)
-            {
-                WpfMessageBox.Show($"✓ Valid Sapphire Server repository detected!\n\nFound: {string.Join(", ", foundItems)}", 
-                    "Test Path", MessageBoxButton.OK, MessageBoxImage.Information);
-            }
-            else
-            {
-                WpfMessageBox.Show($"The path exists but doesn't appear to contain a Sapphire Server repository.\n\n" +
-                               $"Expected to find at least 2 of: {string.Join(", ", indicators)}\n" +
-                               $"Found: {(foundItems.Count > 0 ? string.Join(", ", foundItems) : "none")}", 
-                               "Test Path", MessageBoxButton.OK, MessageBoxImage.Warning);
-            }
+            TestPath(SapphirePathTextBox.Text.Trim(), new[] { "src", "scripts", "CMakeLists.txt", "README.md" }, "Sapphire Server repository");
         }
 
         private void TestSapphireBuildButton_Click(object sender, RoutedEventArgs e)
         {
             UpdateSapphireBuildPathStatus();
-            
-            string path = SapphireBuildPathTextBox.Text.Trim();
-            if (string.IsNullOrEmpty(path))
-            {
-                WpfMessageBox.Show("Please specify a Sapphire Server build path first.", "Test Path", 
-                    MessageBoxButton.OK, MessageBoxImage.Information);
-                return;
-            }
-
-            if (!Directory.Exists(path))
-            {
-                WpfMessageBox.Show("The specified path does not exist.", "Test Path", 
-                    MessageBoxButton.OK, MessageBoxImage.Warning);
-                return;
-            }
-
-            var indicators = new[] { "sapphire_datacenter.exe", "sapphire_datacenter", "bin", "lib", "tools", "share" };
-            int foundIndicators = 0;
-            var foundItems = new System.Collections.Generic.List<string>();
-            
-            foreach (var indicator in indicators)
-            {
-                string fullPath = Path.Combine(path, indicator);
-                if (Directory.Exists(fullPath) || File.Exists(fullPath))
-                {
-                    foundIndicators++;
-                    foundItems.Add(indicator);
-                }
-            }
-            
-            if (foundIndicators >= 2)
-            {
-                WpfMessageBox.Show($"✓ Valid Sapphire Server build directory detected!\n\nFound: {string.Join(", ", foundItems)}", 
-                    "Test Path", MessageBoxButton.OK, MessageBoxImage.Information);
-            }
-            else
-            {
-                WpfMessageBox.Show($"The path exists but doesn't appear to contain a Sapphire Server build directory.\n\n" +
-                               $"Expected to find at least 2 of: {string.Join(", ", indicators)}\n" +
-                               $"Found: {(foundItems.Count > 0 ? string.Join(", ", foundItems) : "none")}", 
-                               "Test Path", MessageBoxButton.OK, MessageBoxImage.Warning);
-            }
+            TestPath(SapphireBuildPathTextBox.Text.Trim(), new[] { "config", "world.exe", "bin", "lobby.exe", "tools", "api.exe" }, "Sapphire Server build directory");
         }
 
         private void OpenSapphireButton_Click(object sender, RoutedEventArgs e)
@@ -420,21 +259,6 @@ namespace map_editor
                 WpfMessageBox.Show($"Failed to open folder: {ex.Message}", "Error", 
                     MessageBoxButton.OK, MessageBoxImage.Error);
             }
-        }
-
-        private void AutoLoadCheckBox_Changed(object sender, RoutedEventArgs e)
-        {
-
-        }
-
-        private void DebugModeCheckBox_Changed(object sender, RoutedEventArgs e)
-        {
-
-        }
-
-        private void HideDuplicateTerritoriesCheckBox_Changed(object sender, RoutedEventArgs e)
-        {
-
         }
 
         private void ResetButton_Click(object sender, RoutedEventArgs e)

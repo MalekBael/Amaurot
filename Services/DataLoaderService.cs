@@ -111,6 +111,7 @@ namespace map_editor
                                 {
                                     Id = questId,
                                     Name = questName,
+                                    QuestIdString = "",  // ✅ ADD this line
                                     JournalGenre = journalGenre,
                                     ClassJobCategoryId = 0,
                                     ClassJobLevelRequired = 0,
@@ -184,6 +185,29 @@ namespace map_editor
             if (isDebugQuest)
             {
                 _logDebug($"=== Extracting details for Quest {questInfo.Id}: '{questInfo.Name}' ===");
+            }
+
+            // ✅ ADD this section to extract Quest ID string from index 1
+            try
+            {
+                // Extract the Quest ID string from index 1 (like "SubFst010_00001")
+                var questIdStringValue = quest[1];
+                if (questIdStringValue != null)
+                {
+                    questInfo.QuestIdString = questIdStringValue.ToString() ?? "";
+                    
+                    if (isDebugQuest)
+                    {
+                        _logDebug($"  QuestIdString: '{questInfo.QuestIdString}'");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                if (isDebugQuest)
+                {
+                    _logDebug($"  QuestIdString extraction failed: {ex.Message}");
+                }
             }
 
             try
@@ -445,6 +469,7 @@ namespace map_editor
             {
                 _logDebug($"=== Final Quest {questInfo.Id} Details ===");
                 _logDebug($"  Name: '{questInfo.Name}'");
+                _logDebug($"  QuestIdString: '{questInfo.QuestIdString}'");  // ✅ ADD this line
                 _logDebug($"  PlaceName: '{questInfo.PlaceName}' (ID: {questInfo.PlaceNameId})");
                 _logDebug($"  MapId: {questInfo.MapId}");
                 _logDebug($"  ClassJobLevel: {questInfo.ClassJobLevelRequired}");
@@ -506,177 +531,79 @@ namespace map_editor
         {
             return await Task.Run(() =>
             {
-                _logDebug("Starting to load BNpcs from CSV...");
+                _logDebug("Loading BNpcs from CSV...");
                 var tempBNpcs = new List<BNpcInfo>();
 
                 try
                 {
-                    // Load from CSV file instead of SaintCoinach
-                    string csvPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Libs", "MonsterData.csv");
+                    var csvPath = FindCsvFile("MonsterData.csv");
+                    if (csvPath == null) return tempBNpcs;
 
-                    _logDebug($"Looking for CSV at: {csvPath}");
-                    _logDebug($"Base directory: {AppDomain.CurrentDomain.BaseDirectory}");
-                    _logDebug($"File exists: {File.Exists(csvPath)}");
+                    var lines = File.ReadAllLines(csvPath).Skip(1); // Skip header
+                    var processedEntries = new HashSet<string>();
 
-                    if (!File.Exists(csvPath))
+                    foreach (var line in lines)
                     {
-                        _logDebug($"ERROR: MonsterData.csv not found at {csvPath}");
-
-                        // Try alternative paths
-                        string altPath1 = Path.Combine(Directory.GetCurrentDirectory(), "Libs", "MonsterData.csv");
-                        string altPath2 = Path.Combine(Environment.CurrentDirectory, "Libs", "MonsterData.csv");
-
-                        _logDebug($"Alternative path 1: {altPath1} - Exists: {File.Exists(altPath1)}");
-                        _logDebug($"Alternative path 2: {altPath2} - Exists: {File.Exists(altPath2)}");
-
-                        if (File.Exists(altPath1))
+                        if (TryParseBNpcLine(line, processedEntries, out var bnpcInfo))
                         {
-                            csvPath = altPath1;
-                            _logDebug($"Using alternative path 1: {csvPath}");
-                        }
-                        else if (File.Exists(altPath2))
-                        {
-                            csvPath = altPath2;
-                            _logDebug($"Using alternative path 2: {csvPath}");
-                        }
-                        else
-                        {
-                            return tempBNpcs;
-                        }
-                    }
-
-                    _logDebug($"Loading BNpcs from CSV file: {csvPath}");
-
-                    var lines = File.ReadAllLines(csvPath);
-                    _logDebug($"Read {lines.Length} lines from CSV");
-
-                    if (lines.Length <= 1)
-                    {
-                        _logDebug("ERROR: CSV file is empty or has no data rows");
-                        return tempBNpcs;
-                    }
-
-                    // Log the header for verification
-                    _logDebug($"CSV Header: {lines[0]}");
-
-                    // Skip header line
-                    var dataLines = lines.Skip(1);
-                    var processedEntries = new HashSet<string>(); // To avoid duplicates
-
-                    int processedCount = 0;
-                    int skippedCount = 0;
-                    int totalLines = dataLines.Count();
-
-                    _logDebug($"Processing {totalLines} CSV lines...");
-
-                    foreach (var line in dataLines)
-                    {
-                        try
-                        {
-                            if (string.IsNullOrWhiteSpace(line))
-                            {
-                                skippedCount++;
-                                continue;
-                            }
-
-                            var parts = line.Split(',');
-                            if (parts.Length < 3)
-                            {
-                                _logDebug($"Skipping line with insufficient columns ({parts.Length}): {line}");
-                                skippedCount++;
-                                continue;
-                            }
-
-                            string bnpcName = parts[0].Trim();
-                            string bnpcNameIdStr = parts[1].Trim();
-                            string bnpcBaseIdStr = parts[2].Trim();
-
-                            // Log first few entries for debugging
-                            if (processedCount < 5)
-                            {
-                                _logDebug($"Processing line: Name='{bnpcName}', NameId='{bnpcNameIdStr}', BaseId='{bnpcBaseIdStr}'");
-                            }
-
-                            // Skip entries with empty names
-                            if (string.IsNullOrEmpty(bnpcName))
-                            {
-                                skippedCount++;
-                                continue;
-                            }
-
-                            // Parse IDs
-                            if (!uint.TryParse(bnpcNameIdStr, out uint bnpcNameId) || bnpcNameId == 0)
-                            {
-                                if (processedCount < 5)
-                                {
-                                    _logDebug($"Failed to parse NameId: '{bnpcNameIdStr}'");
-                                }
-                                skippedCount++;
-                                continue;
-                            }
-
-                            if (!uint.TryParse(bnpcBaseIdStr, out uint bnpcBaseId))
-                            {
-                                bnpcBaseId = 0; // Default to 0 if parsing fails
-                            }
-
-                            // Create unique key to avoid duplicates
-                            string uniqueKey = $"{bnpcNameId}_{bnpcName}";
-                            if (processedEntries.Contains(uniqueKey))
-                            {
-                                skippedCount++;
-                                continue;
-                            }
-
-                            processedEntries.Add(uniqueKey);
-
-                            var bnpcInfo = new BNpcInfo
-                            {
-                                BNpcNameId = bnpcNameId,
-                                BNpcName = bnpcName,
-                                BNpcBaseId = bnpcBaseId, // Now using actual base ID from CSV
-                                Title = "",
-                                TribeId = 0,
-                                TribeName = ""
-                            };
-
                             tempBNpcs.Add(bnpcInfo);
-                            processedCount++;
-
-                            // Log some examples for verification
-                            if (processedCount <= 10)
-                            {
-                                _logDebug($"  Added: '{bnpcName}' (NameId: {bnpcNameId}) -> BaseId: {bnpcBaseId}");
-                            }
-
-                            if (processedCount % 500 == 0)
-                            {
-                                _logDebug($"Processed {processedCount}/{totalLines} CSV lines (skipped {skippedCount})...");
-                            }
-                        }
-                        catch (Exception ex)
-                        {
-                            _logDebug($"Error processing CSV line: {line} - {ex.Message}");
-                            skippedCount++;
                         }
                     }
 
-                    _logDebug($"Finished processing CSV:");
-                    _logDebug($"  - Total processed: {processedCount}");
-                    _logDebug($"  - Skipped: {skippedCount}");
-                    _logDebug($"  - Unique entries: {tempBNpcs.Count}");
-
-                    // Sort by name for better user experience
                     tempBNpcs.Sort((a, b) => string.Compare(a.BNpcName, b.BNpcName, StringComparison.OrdinalIgnoreCase));
+                    _logDebug($"Loaded {tempBNpcs.Count} BNpcs from CSV");
                 }
                 catch (Exception ex)
                 {
-                    _logDebug($"Critical error loading BNpcs from CSV: {ex.Message}\n{ex.StackTrace}");
+                    _logDebug($"Error loading BNpcs: {ex.Message}");
                 }
 
-                _logDebug($"Returning {tempBNpcs.Count} BNpcs from LoadBNpcsAsync");
                 return tempBNpcs;
             });
+        }
+
+        private string? FindCsvFile(string filename)
+        {
+            var paths = new[]
+            {
+                Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Libs", filename),
+                Path.Combine(Directory.GetCurrentDirectory(), "Libs", filename),
+                Path.Combine(Environment.CurrentDirectory, "Libs", filename)
+            };
+
+            return paths.FirstOrDefault(File.Exists);
+        }
+
+        private bool TryParseBNpcLine(string line, HashSet<string> processedEntries, out BNpcInfo bnpcInfo)
+        {
+            bnpcInfo = null;
+            
+            if (string.IsNullOrWhiteSpace(line)) return false;
+
+            var parts = line.Split(',');
+            if (parts.Length < 3) return false;
+
+            var name = parts[0].Trim();
+            if (string.IsNullOrEmpty(name) || !uint.TryParse(parts[1].Trim(), out uint nameId) || nameId == 0)
+                return false;
+
+            var uniqueKey = $"{nameId}_{name}";
+            if (processedEntries.Contains(uniqueKey)) return false;
+
+            processedEntries.Add(uniqueKey);
+            uint.TryParse(parts[2].Trim(), out uint baseId);
+
+            bnpcInfo = new BNpcInfo
+            {
+                BNpcNameId = nameId,
+                BNpcName = name,
+                BNpcBaseId = baseId,
+                Title = "",
+                TribeId = 0,
+                TribeName = ""
+            };
+
+            return true;
         }
 
         public async Task<List<EventInfo>> LoadEventsAsync()
@@ -793,34 +720,6 @@ namespace map_editor
 
                 return tempFates;
             });
-        }
-
-        private uint ConvertToTerritoryId(object territoryValue)
-        {
-            if (territoryValue is SaintCoinach.Xiv.TerritoryType territoryType)
-            {
-                return (uint)territoryType.Key;
-            }
-            else
-            {
-                try
-                {
-                    return Convert.ToUInt32(territoryValue);
-                }
-                catch
-                {
-                    var keyProp = territoryValue.GetType().GetProperty("Key");
-                    if (keyProp != null)
-                    {
-                        var keyValue = keyProp.GetValue(territoryValue);
-                        if (keyValue != null)
-                        {
-                            return Convert.ToUInt32(keyValue);
-                        }
-                    }
-                }
-            }
-            return 0;
         }
 
         public async Task<List<TerritoryInfo>> LoadTerritoriesAsync()
@@ -953,31 +852,7 @@ namespace map_editor
             });
         }
 
-        private void ExtractQuestDetails(Quest quest, QuestInfo questInfo)
-        {
-            try
-            {
-                var classJobLevel = quest.AsInt32("ClassJobLevelRequired");
-                questInfo.ClassJobLevelRequired = (uint)Math.Max(0, classJobLevel);
-            }
-            catch { }
-
-            try
-            {
-                var expReward = quest.AsInt32("ExpReward");
-                questInfo.ExpReward = (uint)Math.Max(0, expReward);
-            }
-            catch { }
-
-            try
-            {
-                var gilReward = quest.AsInt32("GilReward");
-                questInfo.GilReward = (uint)Math.Max(0, gilReward);
-            }
-            catch { }
-        }
-
-        // Update the LoadQuestLocationsFromLgbAsync method to have forced logging:
+        
 
         public async Task LoadQuestLocationsFromLgbAsync(List<QuestInfo> quests)
         {

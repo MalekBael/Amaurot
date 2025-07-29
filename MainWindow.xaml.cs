@@ -47,8 +47,6 @@ namespace map_editor
         private bool _isDragging = false;
         private bool _hideDuplicateTerritories = false;
 
-        private bool _debugLoggingEnabled = false;
-
         public ObservableCollection<TerritoryInfo> Territories { get; set; } = new ObservableCollection<TerritoryInfo>();
         public ObservableCollection<QuestInfo> Quests { get; set; } = new ObservableCollection<QuestInfo>();
         public ObservableCollection<BNpcInfo> BNpcs { get; set; } = new ObservableCollection<BNpcInfo>();
@@ -68,6 +66,9 @@ namespace map_editor
         public ObservableCollection<BNpcInfo> FilteredBNpcs => _filteredBNpcs;
         public ObservableCollection<FateInfo> FilteredFates => _filteredFates;
         public ObservableCollection<QuestInfo> FilteredQuests => _filteredQuests;
+
+        private System.Diagnostics.Process? _questExtractionProcess;
+        private System.Threading.CancellationTokenSource? _extractionCancellationSource;
 
         public MainWindow()
         {
@@ -267,6 +268,197 @@ namespace map_editor
             }
         }
 
+        // ✅ ADD these new methods for progress bar functionality
+
+        private void ShowProgressOverlay()
+        {
+            ProgressOverlay.Visibility = Visibility.Visible;
+            ProgressStatusText.Text = "Initializing quest_parse.exe...";
+            QuestExtractionProgressBar.IsIndeterminate = true;
+            CancelExtractionButton.IsEnabled = true;
+
+            // Create cancellation token
+            _extractionCancellationSource = new System.Threading.CancellationTokenSource();
+
+            LogDebug("Progress overlay shown");
+        }
+
+        private void HideProgressOverlay()
+        {
+            ProgressOverlay.Visibility = Visibility.Collapsed;
+            _questExtractionProcess = null;
+            _extractionCancellationSource?.Dispose();
+            _extractionCancellationSource = null;
+
+            LogDebug("Progress overlay hidden");
+        }
+
+        private void UpdateProgressStatus(string message)
+        {
+            WpfApplication.Current.Dispatcher.Invoke(() =>
+            {
+                ProgressStatusText.Text = message;
+                StatusText.Text = message;
+                LogDebug($"Progress: {message}");
+            });
+        }
+
+        private void CancelExtraction_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                LogDebug("User requested cancellation of quest extraction");
+
+                // Kill the process if it's running
+                if (_questExtractionProcess != null && !_questExtractionProcess.HasExited)
+                {
+                    _questExtractionProcess.Kill();
+                    LogDebug("quest_parse.exe process terminated");
+                }
+
+                // Cancel the operation
+                _extractionCancellationSource?.Cancel();
+
+                HideProgressOverlay();
+                StatusText.Text = "Quest extraction cancelled by user";
+
+                WpfMessageBox.Show("Quest extraction has been cancelled.", "Extraction Cancelled",
+                    MessageBoxButton.OK, MessageBoxImage.Information);
+            }
+            catch (Exception ex)
+            {
+                LogDebug($"Error cancelling extraction: {ex.Message}");
+                HideProgressOverlay();
+            }
+        }
+
+        private async Task RunQuestParseToolWithProgressAsync(string questParseExe, string sqpackPath)
+        {
+            try
+            {
+                UpdateProgressStatus("Starting quest_parse.exe...");
+                LogDebug($"Starting quest_parse.exe: {questParseExe}");
+                LogDebug($"Arguments: \"{sqpackPath}\"");
+
+                var processInfo = new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = questParseExe,
+                    Arguments = $"\"{sqpackPath}\"",
+                    WorkingDirectory = Path.GetDirectoryName(questParseExe),
+                    UseShellExecute = false,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    CreateNoWindow = true
+                };
+
+                _questExtractionProcess = new System.Diagnostics.Process { StartInfo = processInfo };
+
+                // Capture output for logging and progress updates
+                _questExtractionProcess.OutputDataReceived += (sender, e) =>
+                {
+                    if (!string.IsNullOrEmpty(e.Data))
+                    {
+                        WpfApplication.Current.Dispatcher.InvokeAsync(() =>
+                        {
+                            LogDebug($"[quest_parse] {e.Data}");
+
+                            // Update progress based on output keywords
+                            if (e.Data.Contains("Loading"))
+                            {
+                                UpdateProgressStatus("Loading game data files...");
+                            }
+                            else if (e.Data.Contains("Processing"))
+                            {
+                                UpdateProgressStatus("Processing quest data...");
+                            }
+                            else if (e.Data.Contains("Writing") || e.Data.Contains("Saving"))
+                            {
+                                UpdateProgressStatus("Saving extracted files...");
+                            }
+                            else if (e.Data.Contains("Complete") || e.Data.Contains("Done"))
+                            {
+                                UpdateProgressStatus("Finalizing extraction...");
+                            }
+                        });
+                    }
+                };
+
+                _questExtractionProcess.ErrorDataReceived += (sender, e) =>
+                {
+                    if (!string.IsNullOrEmpty(e.Data))
+                    {
+                        WpfApplication.Current.Dispatcher.InvokeAsync(() =>
+                            LogDebug($"[quest_parse Error] {e.Data}"));
+                    }
+                };
+
+                _questExtractionProcess.Start();
+                _questExtractionProcess.BeginOutputReadLine();
+                _questExtractionProcess.BeginErrorReadLine();
+
+                UpdateProgressStatus("Quest extraction in progress...");
+
+                // Wait for completion with cancellation support
+                await Task.Run(() =>
+                {
+                    while (!_questExtractionProcess.HasExited)
+                    {
+                        if (_extractionCancellationSource?.Token.IsCancellationRequested == true)
+                        {
+                            return; // Exit if cancelled
+                        }
+                        System.Threading.Thread.Sleep(100);
+                    }
+                }, _extractionCancellationSource?.Token ?? System.Threading.CancellationToken.None);
+
+                // Check if we were cancelled
+                if (_extractionCancellationSource?.Token.IsCancellationRequested == true)
+                {
+                    return;
+                }
+
+                WpfApplication.Current.Dispatcher.Invoke(() =>
+                {
+                    HideProgressOverlay();
+
+                    if (_questExtractionProcess.ExitCode == 0)
+                    {
+                        LogDebug("quest_parse.exe completed successfully");
+                        StatusText.Text = "Quest file extraction completed successfully";
+                        WpfMessageBox.Show("Quest file extraction completed successfully!\n\nquest_parse.exe finished processing the game data.",
+                            "Extraction Complete", MessageBoxButton.OK, MessageBoxImage.Information);
+                    }
+                    else
+                    {
+                        LogDebug($"quest_parse.exe failed with exit code: {_questExtractionProcess.ExitCode}");
+                        StatusText.Text = $"Quest extraction failed (Exit code: {_questExtractionProcess.ExitCode})";
+                        WpfMessageBox.Show($"quest_parse.exe failed with exit code: {_questExtractionProcess.ExitCode}\n\nCheck the debug log for details.",
+                            "Extraction Failed", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    }
+                });
+            }
+            catch (System.OperationCanceledException)
+            {
+                // Operation was cancelled
+                WpfApplication.Current.Dispatcher.Invoke(() =>
+                {
+                    HideProgressOverlay();
+                    StatusText.Text = "Quest extraction cancelled";
+                });
+            }
+            catch (Exception ex)
+            {
+                WpfApplication.Current.Dispatcher.Invoke(() =>
+                {
+                    LogDebug($"Exception during quest_parse.exe execution: {ex.Message}");
+                    HideProgressOverlay();
+                    StatusText.Text = "Quest extraction failed";
+                    WpfMessageBox.Show($"An error occurred during quest extraction:\n\n{ex.Message}",
+                        "Extraction Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                });
+            }
+        }
+
         private async void LoadGameData_Click(object sender, RoutedEventArgs e)
         {
             var dialog = new WinForms.FolderBrowserDialog
@@ -439,145 +631,8 @@ namespace map_editor
             if (_hideDuplicateTerritories != newValue)
             {
                 _hideDuplicateTerritories = newValue;
-                if (_debugLoggingEnabled)
-                {
-                    LogDebug($"Hide duplicates checkbox changed to: {_hideDuplicateTerritories}");
-                }
+                LogDebug($"Hide duplicates checkbox changed to: {_hideDuplicateTerritories}");
                 ApplyTerritoryFilters();
-            }
-        }
-
-        private void UpdateQuestCount()
-        {
-            if (QuestCountText != null)
-            {
-                QuestCountText.Text = $"({_filteredQuests.Count})";
-            }
-        }
-
-        private void UpdateBNpcCount()
-        {
-            if (BNpcCountText != null)
-            {
-                BNpcCountText.Text = $"({_filteredBNpcs.Count})";
-            }
-        }
-
-        private void UpdateTerritoryCount()
-        {
-            if (TerritoryCountText != null)
-            {
-                TerritoryCountText.Text = $"({_filteredTerritories.Count})";
-            }
-        }
-
-        private void UpdateEventCount()
-        {
-            if (EventCountText != null)
-            {
-                EventCountText.Text = $"({_filteredEvents.Count})";
-            }
-        }
-
-        private void UpdateFateCount()
-        {
-            if (FateCountText != null)
-            {
-                FateCountText.Text = $"({_filteredFates.Count})";
-            }
-        }
-
-        private void LoadQuests()
-        {
-            var tempQuests = new List<QuestInfo>();
-
-            try
-            {
-                if (_realm != null)
-                {
-                    LogDebug("Loading quests from SaintCoinach...");
-                    var questSheet = _realm.GameData.GetSheet<Quest>();
-
-                    int processedCount = 0;
-                    int totalCount = questSheet.Count();
-
-                    foreach (var quest in questSheet)
-                    {
-                        try
-                        {
-                            if (string.IsNullOrWhiteSpace(quest.Name)) continue;
-
-                            var questInfo = new QuestInfo
-                            {
-                                Id = (uint)quest.Key,
-                                Name = quest.Name?.ToString() ?? "",
-                                JournalGenre = quest.JournalGenre?.Name?.ToString() ?? "",
-                                ClassJobCategoryId = 0,
-                                ClassJobLevelRequired = 0,
-                                ClassJobCategoryName = "",
-                                IsMainScenarioQuest = quest.JournalGenre?.Name?.ToString().Contains("Main Scenario") == true,
-                                IsFeatureQuest = quest.JournalGenre?.Name?.ToString().Contains("Feature") == true,
-                                PreviousQuestId = 0,
-                                ExpReward = 0,
-                                GilReward = 0
-                            };
-
-                            try
-                            {
-                                var classJobLevel = quest.AsInt32("ClassJobLevelRequired");
-                                questInfo.ClassJobLevelRequired = (uint)Math.Max(0, classJobLevel);
-                            }
-                            catch { }
-
-                            try
-                            {
-                                var expReward = quest.AsInt32("ExpReward");
-                                questInfo.ExpReward = (uint)Math.Max(0, expReward);
-                            }
-                            catch { }
-
-                            try
-                            {
-                                var gilReward = quest.AsInt32("GilReward");
-                                questInfo.GilReward = (uint)Math.Max(0, gilReward);
-                            }
-                            catch { }
-
-                            tempQuests.Add(questInfo);
-
-                            processedCount++;
-                            if (processedCount % 500 == 0)
-                            {
-                                LogDebug($"Processed {processedCount}/{totalCount} quests...");
-                            }
-                        }
-                        catch (Exception ex)
-                        {
-                            LogDebug($"Error processing quest {quest.Key}: {ex.Message}");
-                        }
-                    }
-
-                    tempQuests.Sort((a, b) => a.Id.CompareTo(b.Id));
-
-                    WpfApplication.Current.Dispatcher.Invoke(() =>
-                    {
-                        Quests.Clear();
-                        _filteredQuests.Clear();
-
-                        foreach (var quest in tempQuests)
-                        {
-                            Quests.Add(quest);
-                            _filteredQuests.Add(quest);
-                        }
-
-                        LogDebug($"Loaded {Quests.Count} quests");
-                        UpdateQuestCount();
-                    });
-                }
-            }
-            catch (Exception ex)
-            {
-                LogDebug($"Error loading quests: {ex.Message}");
             }
         }
 
@@ -606,7 +661,7 @@ namespace map_editor
                 }
             }
 
-            UpdateBNpcCount();
+            _uiUpdateService?.UpdateBNpcCount(_filteredBNpcs, BNpcCountText);
         }
 
         private void TerritorySearchBox_TextChanged(object sender, TextChangedEventArgs e)
@@ -685,7 +740,7 @@ namespace map_editor
                         _filteredTerritories.Add(territory);
                     }
                     LogDebug($"Added {_filteredTerritories.Count} territories to _filteredTerritories");
-                    UpdateTerritoryCount();
+                    _uiUpdateService?.UpdateTerritoryCount(_filteredTerritories, TerritoryCountText);
                 });
 
                 LogDebug($"=== ApplyTerritoryFilters END ===");
@@ -710,7 +765,7 @@ namespace map_editor
                 }
             }
 
-            UpdateEventCount();
+            _uiUpdateService?.UpdateEventCount(_filteredEvents, EventCountText);
         }
 
         private void FateSearchBox_TextChanged(object sender, TextChangedEventArgs e)
@@ -731,261 +786,7 @@ namespace map_editor
                 }
             }
 
-            UpdateFateCount();
-        }
-
-        private void LoadBNpcs()
-        {
-            var tempBNpcs = new List<BNpcInfo>();
-
-            try
-            {
-                if (_realm != null)
-                {
-                    LogDebug("Loading BNpcs from SaintCoinach...");
-
-                    SaintCoinach.Xiv.IXivSheet<SaintCoinach.Xiv.BNpcName>? bnpcNameSheet = null;
-
-                    try
-                    {
-                        bnpcNameSheet = _realm.GameData.GetSheet<SaintCoinach.Xiv.BNpcName>();
-                        if (bnpcNameSheet != null)
-                        {
-                            LogDebug($"Found BNpcName sheet with {bnpcNameSheet.Count} entries");
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        LogDebug($"Failed to load BNpcName sheet: {ex.Message}");
-                        return;
-                    }
-
-                    if (bnpcNameSheet == null)
-                    {
-                        LogDebug("ERROR: BNpcName sheet is null!");
-                        return;
-                    }
-
-                    int processedCount = 0;
-                    int skippedCount = 0;
-                    int totalCount = bnpcNameSheet.Count;
-                    LogDebug($"Processing {totalCount} BNpcName entries...");
-
-                    foreach (var bnpcName in bnpcNameSheet)
-                    {
-                        try
-                        {
-                            string name = bnpcName.Singular ?? "";
-
-                            if (string.IsNullOrWhiteSpace(name))
-                            {
-                                skippedCount++;
-                                continue;
-                            }
-
-                            uint nameId = (uint)bnpcName.Key;
-
-                            var bnpcInfo = new BNpcInfo
-                            {
-                                BNpcNameId = nameId,
-                                BNpcName = name,
-                                BNpcBaseId = 0,
-                                Title = "",
-                                TribeId = 0,
-                                TribeName = ""
-                            };
-
-                            tempBNpcs.Add(bnpcInfo);
-                            processedCount++;
-                            if (processedCount % 1000 == 0)
-                            {
-                                LogDebug($"Processed {processedCount}/{totalCount} BNpc names (skipped {skippedCount} empty)...");
-                            }
-                        }
-                        catch (Exception ex)
-                        {
-                            if (_debugLoggingEnabled)
-                            {
-                                LogDebug($"Error processing BNpcName {bnpcName.Key}: {ex.Message}");
-                            }
-                        }
-                    }
-
-                    LogDebug($"Finished processing BNpcs: {processedCount} processed, {skippedCount} skipped");
-
-                    tempBNpcs.Sort((a, b) => string.Compare(a.BNpcName, b.BNpcName, StringComparison.OrdinalIgnoreCase));
-                    LogDebug($"Sorted {tempBNpcs.Count} BNpcs");
-
-                    WpfApplication.Current.Dispatcher.Invoke(() =>
-                    {
-                        BNpcs.Clear();
-                        _filteredBNpcs.Clear();
-
-                        foreach (var bnpc in tempBNpcs)
-                        {
-                            BNpcs.Add(bnpc);
-                            _filteredBNpcs.Add(bnpc);
-                        }
-
-                        LogDebug($"Loaded {BNpcs.Count} BNpcs to UI");
-                        UpdateBNpcCount();
-                    });
-                }
-            }
-            catch (Exception ex)
-            {
-                LogDebug($"Error loading BNpcs: {ex.Message}\n{ex.StackTrace}");
-            }
-        }
-
-        private void LoadEvents()
-        {
-            var tempEvents = new List<EventInfo>();
-
-            try
-            {
-                if (_realm != null)
-                {
-                    LogDebug("Loading events from SaintCoinach...");
-                    var eventSheet = _realm.GameData.GetSheet("Event");
-
-                    if (eventSheet != null)
-                    {
-                        foreach (var eventRow in eventSheet)
-                        {
-                            try
-                            {
-                                string eventName = eventRow.AsString("Name") ?? "";
-                                if (string.IsNullOrWhiteSpace(eventName)) continue;
-
-                                var eventInfo = new EventInfo
-                                {
-                                    Id = (uint)eventRow.Key,
-                                    EventId = (uint)eventRow.Key,
-                                    Name = eventName,
-                                    EventType = "Event", 
-                                    Description = eventRow.AsString("Description") ?? "",
-                                    TerritoryId = 0,
-                                    TerritoryName = ""
-                                };
-
-                                tempEvents.Add(eventInfo);
-                            }
-                            catch (Exception ex)
-                            {
-                                if (_debugLoggingEnabled)
-                                {
-                                    LogDebug($"Failed to process event with key {eventRow.Key}. Error: {ex.Message}");
-                                }
-                            }
-                        }
-                    }
-
-                    tempEvents.Sort((a, b) => a.EventId.CompareTo(b.EventId));
-
-                    WpfApplication.Current.Dispatcher.Invoke(() =>
-                    {
-                        Events.Clear();
-                        _filteredEvents.Clear();
-
-                        foreach (var evt in tempEvents)
-                        {
-                            Events.Add(evt);
-                            _filteredEvents.Add(evt);
-                        }
-
-                        LogDebug($"Loaded {Events.Count} events");
-                        UpdateEventCount();
-                    });
-                }
-            }
-            catch (Exception ex)
-            {
-                LogDebug($"Error loading events: {ex.Message}");
-            }
-        }
-
-        private void LoadFates()
-        {
-            var tempFates = new List<FateInfo>();
-
-            try
-            {
-                if (_realm != null)
-                {
-                    LogDebug("Loading fates from SaintCoinach...");
-                    var fateSheet = _realm.GameData.GetSheet("Fate");
-
-                    if (fateSheet != null)
-                    {
-                        foreach (var fateRow in fateSheet)
-                        {
-                            try
-                            {
-                                string fateName = fateRow.AsString("Name") ?? "";
-                                if (string.IsNullOrWhiteSpace(fateName)) continue;
-
-                                var classJobLevel = 0;
-                                try
-                                {
-                                    classJobLevel = fateRow.AsInt32("ClassJobLevel");
-                                }
-                                catch { }
-
-                                var iconId = 0;
-                                try
-                                {
-                                    iconId = fateRow.AsInt32("Icon");
-                                }
-                                catch { }
-
-                                var fateInfo = new FateInfo
-                                {
-                                    Id = (uint)fateRow.Key,
-                                    FateId = (uint)fateRow.Key,
-                                    Name = fateName,
-                                    Description = fateRow.AsString("Description") ?? "",
-                                    Level = (uint)Math.Max(0, classJobLevel),
-                                    ClassJobLevel = (uint)Math.Max(0, classJobLevel),
-                                    TerritoryId = 0,
-                                    TerritoryName = "",
-                                    IconId = (uint)Math.Max(0, iconId)
-                                };
-
-                                tempFates.Add(fateInfo);
-                            }
-                            catch (Exception ex)
-                            {
-                                if (_debugLoggingEnabled)
-                                {
-                                    LogDebug($"Failed to process fate with key {fateRow.Key}. Error: {ex.Message}");
-                                }
-                            }
-                        }
-                    }
-
-                    tempFates.Sort((a, b) => a.FateId.CompareTo(b.FateId));
-
-                    WpfApplication.Current.Dispatcher.Invoke(() =>
-                    {
-                        Fates.Clear();
-                        _filteredFates.Clear();
-
-                        foreach (var fate in tempFates)
-                        {
-                            Fates.Add(fate);
-                            _filteredFates.Add(fate);
-                        }
-
-                        LogDebug($"Loaded {Fates.Count} fates");
-                        UpdateFateCount();
-                    });
-                }
-            }
-            catch (Exception ex)
-            {
-                LogDebug($"Error loading fates: {ex.Message}");
-            }
+            _uiUpdateService?.UpdateFateCount(_filteredFates, FateCountText);
         }
 
         private void MapCanvas_MouseWheel(object sender, MouseWheelEventArgs e)
@@ -1041,246 +842,7 @@ namespace map_editor
 
                 SyncOverlayWithMap();
             }
-            else if (!_isDragging)
-            {
-                var mousePosition = e.GetPosition(MapCanvas);
-                _mapRenderer?.HandleMouseMove(mousePosition, _currentMap);
-
-                if (_debugLoggingEnabled && DateTime.Now.Millisecond < 50) // ~5% of the time
-                {
-                    var transformGroup = MapImageControl.RenderTransform as TransformGroup;
-                    var translateTransform = transformGroup?.Children.OfType<TranslateTransform>().FirstOrDefault();
-                    var imagePosition = new System.Windows.Point(
-                        translateTransform?.X ?? 0,
-                        translateTransform?.Y ?? 0
-                    );
-
-                    if (MapImageControl.Source is BitmapSource bitmapSource)
-                    {
-                        _mapService?.LogCursorPosition(
-                            mousePosition,
-                            imagePosition,
-                            _currentScale,
-                            new System.Windows.Size(bitmapSource.PixelWidth, bitmapSource.PixelHeight),
-                            _currentMap);
-                    }
-                }
-            }
-        }
-
-        private void LoadTerritories()
-        {
-            LogDebug("Starting to load territories...");
-
-            var tempTerritories = new List<TerritoryInfo>();
-
-            try
-            {
-                if (_realm != null)
-                {
-                    LogDebug("Loading territories from SaintCoinach...");
-                    var territorySheet = _realm.GameData.GetSheet<SaintCoinach.Xiv.TerritoryType>();
-
-                    int processedCount = 0;
-                    int totalCount = territorySheet.Count();
-                    LogDebug($"Found {totalCount} territories in game data");
-
-                    foreach (var territory in territorySheet)
-                    {
-                        try
-                        {
-                            string placeName;
-                            uint placeNameId = 0;
-
-                            if (territory.PlaceName != null && !string.IsNullOrWhiteSpace(territory.PlaceName.Name))
-                            {
-                                placeName = territory.PlaceName.Name.ToString();
-                                placeNameId = (uint)territory.PlaceName.Key;
-                            }
-                            else
-                            {
-                                placeName = $"[Territory ID: {territory.Key}]";
-                            }
-
-                            string territoryNameId = territory.Name?.ToString() ?? string.Empty;
-                            string regionName = "Unknown";
-                            uint regionId = 0;
-                            bool regionFound = false;
-
-                            try
-                            {
-                                if (territory.RegionPlaceName != null && territory.RegionPlaceName.Key != 0)
-                                {
-                                    string? name = territory.RegionPlaceName.Name?.ToString();
-                                    if (!string.IsNullOrEmpty(name))
-                                    {
-                                        regionName = name;
-                                        regionId = (uint)territory.RegionPlaceName.Key;
-                                        regionFound = true;
-                                    }
-                                }
-                            }
-                            catch (KeyNotFoundException) { }
-
-
-                            if (!regionFound)
-                            {
-                                try
-                                {
-                                    if (territory.ZonePlaceName != null && territory.ZonePlaceName.Key != 0)
-                                    {
-                                        string? name = territory.ZonePlaceName.Name?.ToString();
-                                        if (!string.IsNullOrEmpty(name))
-                                        {
-                                            regionName = name;
-                                            regionId = (uint)territory.ZonePlaceName.Key;
-                                        }
-                                    }
-                                }
-                                catch (KeyNotFoundException)
-                                {
-                                }
-                            }
-
-
-                            uint mapId = 0;
-                            try
-                            {
-                                if (territory.Map != null)
-                                {
-                                    mapId = (uint)territory.Map.Key;
-                                }
-                            }
-                            catch (KeyNotFoundException)
-                            {
-                                LogDebug($"Territory {territory.Key} ('{placeName}') has no Map. Defaulting to 0.");
-                            }
-
-                            var territoryInfo = new TerritoryInfo
-                            {
-                                Id = (uint)territory.Key,
-                                Name = placeName,
-                                TerritoryNameId = territoryNameId,
-                                PlaceNameId = placeNameId,
-                                PlaceName = placeName,
-                                RegionId = regionId,
-                                RegionName = regionName,
-                                Region = regionName,
-                                MapId = mapId,
-                            };
-
-                            tempTerritories.Add(territoryInfo);
-
-                            processedCount++;
-                            if (processedCount % 100 == 0)
-                            {
-                                LogDebug($"Processed {processedCount}/{totalCount} territories...");
-                            }
-                        }
-                        catch (Exception ex)
-                        {
-                            LogDebug($"Failed to process territory with key {territory.Key}. Error: {ex.Message}");
-                        }
-                    }
-
-                    LogDebug($"Finished processing {tempTerritories.Count} territories");
-                }
-
-                if (tempTerritories.Count == 0)
-                {
-                    LogDebug("No territories loaded from SaintCoinach, trying CSV files...");
-                    LoadTerritoriesFromCsv();
-                    return;
-                }
-
-                tempTerritories.Sort((a, b) => a.Id.CompareTo(b.Id));
-
-                WpfApplication.Current.Dispatcher.Invoke(() =>
-                {
-                    Territories.Clear();
-                    _filteredTerritories.Clear();
-
-                    foreach (var territory in tempTerritories)
-                    {
-                        Territories.Add(territory);
-                    }
-
-                    LogDebug($"Territory list updated with {Territories.Count} entries");
-
-                    ApplyTerritoryFilters();
-                });
-            }
-            catch (Exception ex)
-            {
-                LogDebug($"Critical error loading territories: {ex.Message}\n{ex.StackTrace}");
-            }
-        }
-
-        private void LoadTerritoriesFromCsv()
-        {
-            try
-            {
-                var territoryData = LoadCsvFile("Sheets/TerritoryType.csv");
-                var placeNameData = LoadCsvFile("Sheets/PlaceName.csv");
-
-                if (territoryData == null || placeNameData == null)
-                {
-                    LogDebug("Failed to load CSV files.");
-                    return;
-                }
-
-                var placeNameLookup = placeNameData.Skip(3)
-                    .Where(row => row.Length > 1 && uint.TryParse(row[0], out _))
-                    .ToDictionary(row => uint.Parse(row[0]), row => row[1]);
-
-                foreach (var row in territoryData.Skip(3))
-                {
-                    if (row.Length < 8 || !uint.TryParse(row[0], out uint territoryId)) continue;
-
-                    uint.TryParse(row.ElementAtOrDefault(4), out uint regionNameId);
-                    uint.TryParse(row.ElementAtOrDefault(6), out uint placeNameId);
-                    uint.TryParse(row.ElementAtOrDefault(7), out uint mapId);
-
-                    var territoryInfo = new TerritoryInfo
-                    {
-                        Id = territoryId,
-                        Name = placeNameLookup.GetValueOrDefault(placeNameId, "Unknown"),
-                        TerritoryNameId = row.ElementAtOrDefault(1) ?? "",
-                        PlaceNameId = placeNameId,
-                        PlaceName = placeNameLookup.GetValueOrDefault(placeNameId, "Unknown"),
-                        RegionId = regionNameId,
-                        RegionName = placeNameLookup.GetValueOrDefault(regionNameId, "Unknown"),
-                        Region = placeNameLookup.GetValueOrDefault(regionNameId, "Unknown"),
-                        MapId = mapId,
-                    };
-
-                    Territories.Add(territoryInfo);
-                    _filteredTerritories.Add(territoryInfo);
-                }
-            }
-            catch (Exception ex)
-            {
-                LogDebug($"Error loading territories from CSV: {ex.Message}");
-            }
-        }
-
-        private List<string[]>? LoadCsvFile(string filePath)
-        {
-            try
-            {
-                string fullPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, filePath);
-                if (!File.Exists(fullPath))
-                {
-                    StatusText.Text = $"CSV file not found: {filePath}";
-                    return null;
-                }
-                return File.ReadAllLines(fullPath).Select(line => line.Split(',')).ToList();
-            }
-            catch (Exception ex)
-            {
-                StatusText.Text = $"Error loading CSV file {filePath}: {ex.Message}";
-                return null;
-            }
+            // Removed the debug logging section since _debugLoggingEnabled is always false
         }
 
         private async void TerritoryList_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -1806,10 +1368,255 @@ namespace map_editor
             // This can be empty or you can add fate selection logic here
         }
 
-        protected override void OnClosed(EventArgs e)
+        private async void ExtractQuestFiles_Click(object sender, RoutedEventArgs e)
         {
-            DebugModeManager.DebugModeChanged -= OnDebugModeChanged;
-            base.OnClosed(e);
+            try
+            {
+                // Check if Sapphire build path is configured
+                if (_settingsService == null || string.IsNullOrEmpty(_settingsService.Settings.SapphireBuildPath))
+                {
+                    WpfMessageBox.Show("Sapphire Server build path is not configured.\n\nPlease set it in Settings first.",
+                        "Build Path Not Set", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    return;
+                }
+
+                // Check if FFXIV game path is configured
+                if (string.IsNullOrEmpty(_settingsService.Settings.GameInstallationPath))
+                {
+                    WpfMessageBox.Show("FFXIV game installation path is not configured.\n\nPlease set it in Settings first.",
+                        "Game Path Not Set", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    return;
+                }
+
+                if (!_settingsService.IsValidSapphireBuildPath())
+                {
+                    WpfMessageBox.Show("The configured Sapphire Server build path appears to be invalid.\n\nPlease check your settings.",
+                        "Invalid Build Path", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    return;
+                }
+
+                if (!_settingsService.IsValidGamePath())
+                {
+                    WpfMessageBox.Show("The configured FFXIV game path appears to be invalid.\n\nPlease check your settings.",
+                        "Invalid Game Path", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    return;
+                }
+
+                // Look for quest_parse.exe in the tools directory
+                string toolsDir = Path.Combine(_settingsService.Settings.SapphireBuildPath, "tools");
+                string questParseExe = Path.Combine(toolsDir, "quest_parse.exe");
+
+                if (!Directory.Exists(toolsDir))
+                {
+                    WpfMessageBox.Show($"Tools directory not found at:\n{toolsDir}\n\nPlease ensure you have a complete Sapphire Server build.",
+                        "Tools Directory Not Found", MessageBoxButton.OK, MessageBoxImage.Error);
+                    return;
+                }
+
+                if (!File.Exists(questParseExe))
+                {
+                    // Show available tools for debugging
+                    var availableFiles = Directory.GetFiles(toolsDir, "*.exe");
+                    string availableList = availableFiles.Length > 0
+                        ? string.Join("\n", availableFiles.Select(Path.GetFileName))
+                        : "No .exe files found";
+
+                    WpfMessageBox.Show($"quest_parse.exe not found in tools directory.\n\n" +
+                                     $"Expected location: {questParseExe}\n\n" +
+                                     $"Available executables:\n{availableList}\n\n" +
+                                     $"Please ensure quest_parse.exe is built and available.",
+                        "quest_parse.exe Not Found", MessageBoxButton.OK, MessageBoxImage.Error);
+                    return;
+                }
+
+                // Construct the sqpack path by appending \game\sqpack to the game installation path
+                string sqpackPath = Path.Combine(_settingsService.Settings.GameInstallationPath, "game", "sqpack");
+
+                if (!Directory.Exists(sqpackPath))
+                {
+                    WpfMessageBox.Show($"Game sqpack directory not found at:\n{sqpackPath}\n\nPlease ensure your FFXIV installation is complete.",
+                        "Sqpack Directory Not Found", MessageBoxButton.OK, MessageBoxImage.Error);
+                    return;
+                }
+
+                LogDebug($"Found quest_parse.exe: {questParseExe}");
+                LogDebug($"Using sqpack path: {sqpackPath}");
+
+                // Show confirmation dialog
+                var result = WpfMessageBox.Show($"This will run quest_parse.exe with the following parameters:\n\n" +
+                                               $"Tool: {Path.GetFileName(questParseExe)}\n" +
+                                               $"Sqpack Path: {sqpackPath}\n\n" +
+                                               "This may take some time to complete. Continue?",
+                                               "Extract Quest Files", MessageBoxButton.YesNo, MessageBoxImage.Question);
+
+                if (result != MessageBoxResult.Yes)
+                {
+                    return;
+                }
+
+                // ✅ Show progress overlay
+                ShowProgressOverlay();
+
+                // Run the tool asynchronously
+                await RunQuestParseToolWithProgressAsync(questParseExe, sqpackPath);
+            }
+            catch (Exception ex)
+            {
+                LogDebug($"Error running quest_parse.exe: {ex.Message}");
+                WpfMessageBox.Show($"Failed to run quest_parse.exe:\n\n{ex.Message}",
+                    "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                HideProgressOverlay();
+            }
+        }
+
+        private async Task RunQuestParseToolAsync(string questParseExe, string sqpackPath)
+        {
+            try
+            {
+                LogDebug($"Starting quest_parse.exe: {questParseExe}");
+                LogDebug($"Arguments: \"{sqpackPath}\"");
+
+                var processInfo = new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = questParseExe,
+                    Arguments = $"\"{sqpackPath}\"", // Pass the sqpack path as argument
+                    WorkingDirectory = Path.GetDirectoryName(questParseExe),
+                    UseShellExecute = false,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    CreateNoWindow = true
+                };
+
+                using var process = new System.Diagnostics.Process { StartInfo = processInfo };
+
+                // Capture output for logging
+                process.OutputDataReceived += (sender, e) =>
+                {
+                    if (!string.IsNullOrEmpty(e.Data))
+                    {
+                        WpfApplication.Current.Dispatcher.InvokeAsync(() =>
+                            LogDebug($"[quest_parse] {e.Data}"));
+                    }
+                };
+
+                process.ErrorDataReceived += (sender, e) =>
+                {
+                    if (!string.IsNullOrEmpty(e.Data))
+                    {
+                        WpfApplication.Current.Dispatcher.InvokeAsync(() =>
+                            LogDebug($"[quest_parse Error] {e.Data}"));
+                    }
+                };
+
+                process.Start();
+                process.BeginOutputReadLine();
+                process.BeginErrorReadLine();
+
+                // Wait for completion
+                await Task.Run(() => process.WaitForExit());
+
+                WpfApplication.Current.Dispatcher.Invoke(() =>
+                {
+                    if (process.ExitCode == 0)
+                    {
+                        LogDebug("quest_parse.exe completed successfully");
+                        StatusText.Text = "Quest file extraction completed successfully";
+                        WpfMessageBox.Show("Quest file extraction completed successfully!\n\nquest_parse.exe finished processing the game data.",
+                            "Extraction Complete", MessageBoxButton.OK, MessageBoxImage.Information);
+                    }
+                    else
+                    {
+                        LogDebug($"quest_parse.exe failed with exit code: {process.ExitCode}");
+                        StatusText.Text = $"Quest extraction failed (Exit code: {process.ExitCode})";
+                        WpfMessageBox.Show($"quest_parse.exe failed with exit code: {process.ExitCode}\n\nCheck the debug log for details.",
+                            "Extraction Failed", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    }
+                });
+            }
+            catch (Exception ex)
+            {
+                WpfApplication.Current.Dispatcher.Invoke(() =>
+                {
+                    LogDebug($"Exception during quest_parse.exe execution: {ex.Message}");
+                    StatusText.Text = "Quest extraction failed";
+                    WpfMessageBox.Show($"An error occurred during quest extraction:\n\n{ex.Message}",
+                        "Extraction Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                });
+            }
+        }
+
+        private async Task RunQuestExtractionToolAsync(string toolPath)
+        {
+            try
+            {
+                LogDebug($"Starting quest extraction tool: {toolPath}");
+
+                var processInfo = new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = toolPath,
+                    WorkingDirectory = Path.GetDirectoryName(toolPath),
+                    UseShellExecute = false,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    CreateNoWindow = true
+                };
+
+                using var process = new System.Diagnostics.Process { StartInfo = processInfo };
+                
+                // Capture output for logging
+                process.OutputDataReceived += (sender, e) =>
+                {
+                    if (!string.IsNullOrEmpty(e.Data))
+                    {
+                        WpfApplication.Current.Dispatcher.InvokeAsync(() => 
+                            LogDebug($"[Quest Tool] {e.Data}"));
+                    }
+                };
+
+                process.ErrorDataReceived += (sender, e) =>
+                {
+                    if (!string.IsNullOrEmpty(e.Data))
+                    {
+                        WpfApplication.Current.Dispatcher.InvokeAsync(() => 
+                            LogDebug($"[Quest Tool Error] {e.Data}"));
+                    }
+                };
+
+                process.Start();
+                process.BeginOutputReadLine();
+                process.BeginErrorReadLine();
+
+                // Wait for completion
+                await Task.Run(() => process.WaitForExit());
+
+                WpfApplication.Current.Dispatcher.Invoke(() =>
+                {
+                    if (process.ExitCode == 0)
+                    {
+                        LogDebug("Quest extraction completed successfully");
+                        StatusText.Text = "Quest file extraction completed successfully";
+                        WpfMessageBox.Show("Quest file extraction completed successfully!", 
+                            "Extraction Complete", MessageBoxButton.OK, MessageBoxImage.Information);
+                    }
+                    else
+                    {
+                        LogDebug($"Quest extraction failed with exit code: {process.ExitCode}");
+                        StatusText.Text = $"Quest extraction failed (Exit code: {process.ExitCode})";
+                        WpfMessageBox.Show($"Quest extraction failed with exit code: {process.ExitCode}\n\nCheck the debug log for details.", 
+                            "Extraction Failed", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    }
+                });
+            }
+            catch (Exception ex)
+            {
+                WpfApplication.Current.Dispatcher.Invoke(() =>
+                {
+                    LogDebug($"Exception during quest extraction: {ex.Message}");
+                    StatusText.Text = "Quest extraction failed";
+                    WpfMessageBox.Show($"An error occurred during quest extraction:\n\n{ex.Message}", 
+                        "Extraction Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                });
+            }
         }
     }
 

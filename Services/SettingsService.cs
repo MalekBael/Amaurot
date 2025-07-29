@@ -2,6 +2,7 @@
 using System.IO;
 using System.Text.Json;
 using System.Diagnostics;
+using System.Linq;
 
 namespace map_editor
 {
@@ -124,73 +125,22 @@ namespace map_editor
             SaveSettings();
         }
 
-        public bool IsValidGamePath()
+        private bool IsValidPath(string path, string[] indicators, int requiredCount = 2)
         {
-            return !string.IsNullOrEmpty(_settings.GameInstallationPath) &&
-                   Directory.Exists(_settings.GameInstallationPath) &&
-                   (Directory.Exists(Path.Combine(_settings.GameInstallationPath, "game")) ||
-                    Directory.Exists(Path.Combine(_settings.GameInstallationPath, "boot")));
+            if (string.IsNullOrEmpty(path) || !Directory.Exists(path))
+                return false;
+
+            return indicators.Count(indicator => 
+                Directory.Exists(Path.Combine(path, indicator)) || File.Exists(Path.Combine(path, indicator))) >= requiredCount;
         }
 
-        public bool IsValidSapphireServerPath()
-        {
-            if (string.IsNullOrEmpty(_settings.SapphireServerPath))
-                return false;
+        public bool IsValidGamePath() => IsValidPath(_settings.GameInstallationPath, new[] { "game", "boot" });
 
-            if (!Directory.Exists(_settings.SapphireServerPath))
-                return false;
+        public bool IsValidSapphireServerPath() => IsValidPath(_settings.SapphireServerPath, 
+            new[] { "src", "scripts", "CMakeLists.txt", "README.md" });
 
- 
-            var sapphireIndicators = new[]
-            {
-                "src",
-                "scripts",
-                "CMakeLists.txt",
-                "README.md"
-            };
-
-            int foundIndicators = 0;
-            foreach (var indicator in sapphireIndicators)
-            {
-                string fullPath = Path.Combine(_settings.SapphireServerPath, indicator);
-                if (Directory.Exists(fullPath) || File.Exists(fullPath))
-                {
-                    foundIndicators++;
-                }
-            }
-
-
-            return foundIndicators >= 2;
-        }
-
-        public bool IsValidSapphireBuildPath()
-        {
-            if (string.IsNullOrEmpty(_settings.SapphireBuildPath))
-                return false;
-
-            if (!Directory.Exists(_settings.SapphireBuildPath))
-                return false;
-
-
-            var buildIndicators = new[]
-            {
-                "config",
-                "tools",
-                "compiledscripts"
-            };
-
-            int foundIndicators = 0;
-            foreach (var indicator in buildIndicators)
-            {
-                string fullPath = Path.Combine(_settings.SapphireBuildPath, indicator);
-                if (Directory.Exists(fullPath) || File.Exists(fullPath))
-                {
-                    foundIndicators++;
-                }
-            }
-
-            return foundIndicators >= 2;
-        }
+        public bool IsValidSapphireBuildPath() => IsValidPath(_settings.SapphireBuildPath, 
+            new[] { "compiledscripts", "config", "tools" });
 
         public void OpenSapphireServerPath()
         {
