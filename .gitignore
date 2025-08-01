@@ -19,6 +19,7 @@ mono_crash.*
 notes/
 notes/*.csv
 notes/Lumina/
+Libs/app_data.sqlite
 Libs/SaintCoinach.History.zip
 
 
@@ -367,3 +368,4 @@ MigrationBackup/
 
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
+/Libs/app_data.sqlite
