@@ -16,7 +16,9 @@
 		<PackageReference Include="Lumina" Version="6.3.0" />
 		<PackageReference Include="Lumina.Excel" Version="7.2.3" />
 		<PackageReference Include="Lumina.Generated" Version="5.30.2" />
+		<PackageReference Include="Machina.FFXIV" Version="2.4.1" />
 		<PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+		<PackageReference Include="System.Data.SQLite.Core" Version="1.0.119" />
 	</ItemGroup>
 
 	<ItemGroup>
@@ -56,6 +58,9 @@
 	  <Folder Include="Sheets\" />
 	</ItemGroup>
 	<ItemGroup>
+	  <None Update="Libs\app_data.sqlite">
+	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+	  </None>
 	  <None Update="Libs\Definitions\BNpcBase.json">
 	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
 	  </None>
@@ -81,6 +86,9 @@
 	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
 	  </None>
 	  <None Update="Libs\Definitions\game.ver">
+	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+	  </None>
+	  <None Update="Libs\Definitions\JournalGenre.json">
 	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
 	  </None>
 	  <None Update="Libs\Definitions\Level.json">

@@ -8,25 +8,24 @@ using System.Linq;
 using System.Threading.Tasks;
 using System.Windows;
 
-namespace map_editor
+namespace map_editor.Services
 {
     public class DataLoaderService
     {
         private readonly ARealmReversed? _realm;
         private readonly Action<string> _logDebug;
-        private LgbLocationParsing? _lgbParser;
+        private readonly QuestLocationService? _questLocationService; // ✅ Renamed
 
         public DataLoaderService(ARealmReversed? realm, Action<string> logDebug)
         {
             _realm = realm;
             _logDebug = logDebug;
-            _lgbParser = new LgbLocationParsing(_realm, _logDebug);
+            _questLocationService = new QuestLocationService(_realm, _logDebug); // ✅ Renamed
         }
 
-        // Fixed: Make the method actually async by wrapping the work in Task.Run
         public async Task<List<QuestInfo>> LoadQuestsAsync()
         {
-            return await Task.Run(async () =>
+            return await Task.Run(() =>
             {
                 var tempQuests = new List<QuestInfo>();
 
@@ -39,33 +38,30 @@ namespace map_editor
 
                         int processedCount = 0;
                         int errorCount = 0;
-                        int totalCount = questSheet.Count();
-                        
+                        int totalCount = questSheet.Count;
+
                         _logDebug($"Found {totalCount} quests in sheet");
 
-                        foreach (var quest in questSheet)
+                        foreach (var quest in questSheet
+                        .OrderBy(q => q.Key)) // ✅ Sort by key (ID) for consistent processing
                         {
                             try
                             {
-                                // More defensive checks for quest data
                                 if (quest == null)
                                 {
                                     errorCount++;
                                     continue;
                                 }
 
-                                // Use the row key as ID and try to get the name safely
                                 uint questId = (uint)quest.Key;
                                 string questName = "";
-                                
+
                                 try
                                 {
-                                    // Quest.json shows Name is at index 0 (default column)
                                     questName = quest.Name?.ToString() ?? "";
                                 }
-                                catch (Exception ex)
+                                catch (Exception)
                                 {
-                                    // If we can't get the name, try to get it by index
                                     try
                                     {
                                         if (quest is SaintCoinach.Xiv.XivRow xivRow)
@@ -74,30 +70,27 @@ namespace map_editor
                                         }
                                         else
                                         {
-                                            // Fallback: try to access as generic row
-                                            var nameValue = quest[0]; // Index 0 according to Quest.json
+                                            var nameValue = quest[0];
                                             questName = nameValue?.ToString() ?? "";
                                         }
                                     }
-                                    catch
+                                    catch (Exception)
                                     {
-                                        // If all else fails, use a placeholder name
                                         questName = $"Quest {questId}";
                                     }
                                 }
 
                                 if (string.IsNullOrWhiteSpace(questName))
                                 {
-                                    questName = $"Quest {questId}"; // Fallback name
+                                    questName = $"Quest {questId}";
                                 }
 
                                 string journalGenre = "";
                                 bool isMainScenario = false;
                                 bool isFeature = false;
-                                
+
                                 try
                                 {
-                                    // JournalGenre is at index 1506 according to Quest.json
                                     journalGenre = quest.JournalGenre?.Name?.ToString() ?? "";
                                     isMainScenario = journalGenre.Contains("Main Scenario", StringComparison.OrdinalIgnoreCase);
                                     isFeature = journalGenre.Contains("Feature", StringComparison.OrdinalIgnoreCase);
@@ -111,7 +104,7 @@ namespace map_editor
                                 {
                                     Id = questId,
                                     Name = questName,
-                                    QuestIdString = "",  // ✅ ADD this line
+                                    QuestIdString = "",
                                     JournalGenre = journalGenre,
                                     ClassJobCategoryId = 0,
                                     ClassJobLevelRequired = 0,
@@ -158,15 +151,6 @@ namespace map_editor
 
                         tempQuests.Sort((a, b) => a.Id.CompareTo(b.Id));
                         _logDebug($"Loaded {tempQuests.Count} quests successfully (skipped {errorCount} problematic quests)");
-                        
-                        // *** REMOVE THIS SECTION - it's causing duplicate parsing ***
-                        // _logDebug("Starting quest location parsing after quest loading...");
-                        // if (_lgbParser != null)
-                        // {
-                        //     await _lgbParser.ParseQuestLocationsFromLgbAsync();
-                        //     _lgbParser.UpdateQuestLocations(tempQuests);
-                        //     _logDebug("Quest location parsing completed in LoadQuestsAsync");
-                        // }
                     }
                 }
                 catch (Exception ex)
@@ -178,24 +162,116 @@ namespace map_editor
             });
         }
 
+        // CORRECTED: Helper method to extract NPC data from Quest references
+        private QuestNpcInfo? ExtractNpcFromRow(SaintCoinach.Ex.Relational.IRelationalRow npcRow, string role, uint questId)
+        {
+            try
+            {
+                if (_realm == null) return null;
+
+                // Get NPC ID and name
+                uint npcId = (uint)npcRow.Key;
+
+                // FIXED: Use indexer instead of AsString
+                string npcName;
+                try
+                {
+                    var nameValue = npcRow[2]; // Name is typically at index 2 in ENpcResident
+                    npcName = nameValue?.ToString() ?? $"NPC_{npcId}";
+                }
+                catch
+                {
+                    npcName = $"NPC_{npcId}";
+                }
+
+                // Find this NPC in Level data to get coordinates
+                var levelSheet = _realm.GameData.GetSheet<SaintCoinach.Xiv.Level>();
+                foreach (var level in levelSheet)
+                {
+                    try
+                    {
+                        // Check if this Level entry references our NPC (Object field = NPC ID)
+                        var objectValue = level[6]; // Object field at index 6
+                        if (objectValue != null && Convert.ToUInt32(objectValue) == npcId)
+                        {
+                            // FIXED: Get coordinates using indexer instead of AsFloat
+                            float worldX = Convert.ToSingle(level[0]); // X at index 0
+                            float worldY = Convert.ToSingle(level[1]); // Y at index 1
+                            float worldZ = Convert.ToSingle(level[2]); // Z at index 2
+
+                            // FIXED: Get territory and map info using indexer
+                            var territoryValue = level[9]; // Territory at index 9
+                            var mapValue = level[8]; // Map at index 8
+
+                            if (territoryValue is SaintCoinach.Xiv.TerritoryType territory &&
+                                mapValue is SaintCoinach.Xiv.Map map)
+                            {
+                                uint territoryId = (uint)territory.Key;
+                                uint mapId = (uint)map.Key;
+                                string territoryName = territory.PlaceName?.Name?.ToString() ?? $"Territory_{territoryId}";
+
+                                // Convert world coordinates to map coordinates
+                                var mapCoords = ConvertWorldToMapCoordinates(worldX, worldY, worldZ, mapId);
+
+                                return new QuestNpcInfo
+                                {
+                                    NpcId = npcId,
+                                    NpcName = npcName,
+                                    TerritoryId = territoryId,
+                                    TerritoryName = territoryName,
+                                    MapId = mapId,
+                                    MapX = mapCoords.X,
+                                    MapY = mapCoords.Y,
+                                    MapZ = mapCoords.Z,
+                                    WorldX = worldX,
+                                    WorldY = worldY,
+                                    WorldZ = worldZ,
+                                    Role = role
+                                };
+                            }
+                        }
+                    }
+                    catch
+                    {
+                        // Continue searching if this level entry has issues
+                        continue;
+                    }
+                }
+
+                // If not found in Level, return basic info without coordinates
+                return new QuestNpcInfo
+                {
+                    NpcId = npcId,
+                    NpcName = npcName,
+                    Role = role,
+                    TerritoryName = "Unknown Location"
+                };
+            }
+            catch (Exception ex)
+            {
+                _logDebug($"Error extracting NPC data: {ex.Message}");
+                return null;
+            }
+        }
+
+        // Fixed and simplified ExtractQuestDetailsSafely method
         private void ExtractQuestDetailsSafely(Quest quest, QuestInfo questInfo)
         {
-            bool isDebugQuest = questInfo.Id <= 10; 
+            bool isDebugQuest = questInfo.Id <= 10;
 
             if (isDebugQuest)
             {
                 _logDebug($"=== Extracting details for Quest {questInfo.Id}: '{questInfo.Name}' ===");
             }
 
-            // ✅ ADD this section to extract Quest ID string from index 1
+            // Extract Quest ID string from index 1
             try
             {
-                // Extract the Quest ID string from index 1 (like "SubFst010_00001")
                 var questIdStringValue = quest[1];
                 if (questIdStringValue != null)
                 {
                     questInfo.QuestIdString = questIdStringValue.ToString() ?? "";
-                    
+
                     if (isDebugQuest)
                     {
                         _logDebug($"  QuestIdString: '{questInfo.QuestIdString}'");
@@ -210,11 +286,77 @@ namespace map_editor
                 }
             }
 
+            // ✅ ENHANCED: Extract Quest Giver using your research method
+            try
+            {
+                if (isDebugQuest)
+                {
+                    _logDebug($"  Extracting Quest Giver from index 37 using research method...");
+                }
+
+                var questGiverValue = quest[37]; // IssuerStart at index 37
+                if (questGiverValue != null)
+                {
+                    if (isDebugQuest)
+                    {
+                        _logDebug($"  Quest Giver NPC ID from index 37: {questGiverValue}");
+                    }
+
+                    // Try to parse as NPC ID
+                    if (uint.TryParse(questGiverValue.ToString(), out uint npcId) && npcId > 0)
+                    {
+                        var questGiver = ExtractQuestGiverByResearch(npcId, questInfo.Id);
+                        if (questGiver != null)
+                        {
+                            questInfo.StartNpcs.Add(questGiver);
+
+                            if (isDebugQuest)
+                            {
+                                _logDebug($"  ✅ Research-based Quest Giver: {questGiver.NpcName} at {questGiver.TerritoryName} ({questGiver.MapX:F1}, {questGiver.MapY:F1})");
+                            }
+                        }
+                        else if (isDebugQuest)
+                        {
+                            _logDebug($"  ⚠️ Could not extract coordinates for NPC ID: {npcId}");
+                        }
+                    }
+                    else
+                    {
+                        // Fallback for non-numeric values
+                        var fallbackQuestGiver = new QuestNpcInfo
+                        {
+                            NpcId = (uint)Math.Abs(questGiverValue.ToString()?.GetHashCode() ?? (int)questInfo.Id),
+                            NpcName = $"Quest Giver ({questGiverValue})",
+                            Role = "Quest Giver",
+                            TerritoryName = questInfo.PlaceName ?? "Location TBD",
+                            MapId = questInfo.MapId,
+                            MapX = 0,
+                            MapY = 0,
+                            MapZ = 0
+                        };
+
+                        questInfo.StartNpcs.Add(fallbackQuestGiver);
+
+                        if (isDebugQuest)
+                        {
+                            _logDebug($"  ✅ Fallback Quest Giver: {fallbackQuestGiver.NpcName}");
+                        }
+                    }
+                }
+            }
+            catch (Exception npcEx)
+            {
+                if (isDebugQuest)
+                {
+                    _logDebug($"  ❌ Quest Giver extraction failed: {npcEx.Message}");
+                }
+            }
+
             try
             {
                 var classJobLevel = quest.AsInt32("ClassJobLevel[0]");
                 questInfo.ClassJobLevelRequired = (uint)Math.Max(0, classJobLevel);
-                
+
                 if (isDebugQuest)
                 {
                     _logDebug($"  ClassJobLevel: {questInfo.ClassJobLevelRequired}");
@@ -232,7 +374,7 @@ namespace map_editor
             {
                 var gilReward = quest.AsInt32("GilReward");
                 questInfo.GilReward = (uint)Math.Max(0, gilReward);
-                
+
                 if (isDebugQuest)
                 {
                     _logDebug($"  GilReward: {questInfo.GilReward}");
@@ -251,7 +393,7 @@ namespace map_editor
             try
             {
                 var placeNameObj = quest.PlaceName;
-                
+
                 if (isDebugQuest)
                 {
                     _logDebug($"  PlaceName object: {(placeNameObj != null ? "Found" : "NULL")}");
@@ -261,28 +403,28 @@ namespace map_editor
                 {
                     var placeName = placeNameObj.Name?.ToString() ?? "";
                     var placeNameKey = (uint)placeNameObj.Key;
-                    
+
                     if (!string.IsNullOrEmpty(placeName))
                     {
                         questInfo.PlaceName = placeName;
                         questInfo.PlaceNameId = placeNameKey;
-                        
+
                         if (isDebugQuest)
                         {
                             _logDebug($"  PlaceName: '{placeName}' (ID: {placeNameKey})");
                         }
-                        
+
                         // Try to find the corresponding MapId by looking up territories with this PlaceName
                         if (placeNameKey > 0)
                         {
                             questInfo.MapId = FindMapIdForPlaceName(questInfo.PlaceNameId);
-                            
+
                             if (isDebugQuest)
                             {
                                 _logDebug($"  MapId lookup result: {questInfo.MapId}");
                             }
                         }
-                        
+
                         locationFound = true;
                     }
                 }
@@ -295,144 +437,11 @@ namespace map_editor
                 }
             }
 
-            // Second try: Get location from ToDoMainLocation (Level data)
-            if (!locationFound)
-            {
-                try
-                {
-                    if (isDebugQuest)
-                    {
-                        _logDebug($"  Trying ToDoMainLocation extraction...");
-                    }
-
-                    // ToDoMainLocation is at index 1222+ (24 entries)
-                    // Let's try the first ToDoMainLocation entry
-                    var todoLocationValue = quest[1222]; // First ToDoMainLocation
-                    
-                    if (todoLocationValue != null)
-                    {
-                        if (isDebugQuest)
-                        {
-                            _logDebug($"  ToDoMainLocation found: {todoLocationValue.GetType().Name}");
-                        }
-
-                        // If it's a Level object, we can get Map and Territory info
-                        if (todoLocationValue is SaintCoinach.Ex.Relational.IRelationalRow levelRow)
-                        {
-                            try
-                            {
-                                // Get Map from Level (index 8 in Level.json)
-                                var mapValue = levelRow[8];
-                                if (mapValue != null && mapValue is SaintCoinach.Xiv.Map mapObj)
-                                {
-                                    questInfo.MapId = (uint)mapObj.Key;
-                                    
-                                    // Try to get PlaceName from the map
-                                    if (mapObj.PlaceName != null)
-                                    {
-                                        questInfo.PlaceName = mapObj.PlaceName.Name?.ToString() ?? "";
-                                        questInfo.PlaceNameId = (uint)mapObj.PlaceName.Key;
-                                    }
-                                    
-                                    locationFound = true;
-                                    
-                                    if (isDebugQuest)
-                                    {
-                                        _logDebug($"  Level->Map found: MapId={questInfo.MapId}, PlaceName='{questInfo.PlaceName}'");
-                                    }
-                                }
-                                
-                                // If no map, try Territory (index 9 in Level.json)
-                                if (!locationFound)
-                                {
-                                    var territoryValue = levelRow[9];
-                                    if (territoryValue != null && territoryValue is SaintCoinach.Xiv.TerritoryType territoryObj)
-                                    {
-                                        // Get map from territory
-                                        if (territoryObj.Map != null)
-                                        {
-                                            questInfo.MapId = (uint)territoryObj.Map.Key;
-                                        }
-                                        
-                                        // Get place name from territory
-                                        if (territoryObj.PlaceName != null)
-                                        {
-                                            questInfo.PlaceName = territoryObj.PlaceName.Name?.ToString() ?? "";
-                                            questInfo.PlaceNameId = (uint)territoryObj.PlaceName.Key;
-                                        }
-                                        
-                                        locationFound = true;
-                                        
-                                        if (isDebugQuest)
-                                        {
-                                            _logDebug($"  Level->Territory found: MapId={questInfo.MapId}, PlaceName='{questInfo.PlaceName}'");
-                                        }
-                                    }
-                                }
-                            }
-                            catch (Exception levelEx)
-                            {
-                                if (isDebugQuest)
-                                {
-                                    _logDebug($"  Error processing Level data: {levelEx.Message}");
-                                }
-                            }
-                        }
-                    }
-                }
-                catch (Exception ex)
-                {
-                    if (isDebugQuest)
-                    {
-                        _logDebug($"  ToDoMainLocation extraction failed: {ex.Message}");
-                    }
-                }
-            }
-
-            // Third try: Alternative PlaceName access methods
-            if (!locationFound)
-            {
-                try
-                {
-                    if (isDebugQuest)
-                    {
-                        _logDebug($"  Trying alternative PlaceName extraction methods...");
-                    }
-
-                    // Try accessing by index directly
-                    var placeNameValue = quest[1505]; // Index 1505 from Quest.json
-                    if (placeNameValue != null)
-                    {
-                        if (placeNameValue is SaintCoinach.Xiv.PlaceName altPlaceName)
-                        {
-                            questInfo.PlaceName = altPlaceName.Name?.ToString() ?? "";
-                            questInfo.PlaceNameId = (uint)altPlaceName.Key;
-                            questInfo.MapId = FindMapIdForPlaceName(questInfo.PlaceNameId);
-                            
-                            locationFound = true;
-                            
-                            if (isDebugQuest)
-                            {
-                                _logDebug($"  Alternative PlaceName found: '{questInfo.PlaceName}' (ID: {questInfo.PlaceNameId}) -> MapId: {questInfo.MapId}");
-                            }
-                        }
-                    }
-                }
-                catch (Exception altEx)
-                {
-                    if (isDebugQuest)
-                    {
-                        _logDebug($"  Alternative PlaceName extraction failed: {altEx.Message}");
-                    }
-                }
-            }
-
             try
             {
-                // Icon is at index 1508 according to Quest.json
                 var iconId = quest.AsInt32("Icon");
                 questInfo.IconId = (uint)Math.Max(0, iconId);
-                
+
                 if (isDebugQuest)
                 {
                     _logDebug($"  IconId: {questInfo.IconId}");
@@ -448,10 +457,9 @@ namespace map_editor
 
             try
             {
-                // IsRepeatable is at index 43 according to Quest.json
                 var isRepeatable = quest.AsBoolean("IsRepeatable");
                 questInfo.IsRepeatable = isRepeatable;
-                
+
                 if (isDebugQuest)
                 {
                     _logDebug($"  IsRepeatable: {questInfo.IsRepeatable}");
@@ -469,17 +477,92 @@ namespace map_editor
             {
                 _logDebug($"=== Final Quest {questInfo.Id} Details ===");
                 _logDebug($"  Name: '{questInfo.Name}'");
-                _logDebug($"  QuestIdString: '{questInfo.QuestIdString}'");  // ✅ ADD this line
+                _logDebug($"  QuestIdString: '{questInfo.QuestIdString}'");
+                _logDebug($"  Start NPCs: {questInfo.StartNpcs.Count}");
+                foreach (var npc in questInfo.StartNpcs)
+                {
+                    _logDebug($"    - {npc.NpcName}: MapId={npc.MapId}, Coords=({npc.MapX:F1}, {npc.MapY:F1}), Territory={npc.TerritoryName}");
+                }
                 _logDebug($"  PlaceName: '{questInfo.PlaceName}' (ID: {questInfo.PlaceNameId})");
                 _logDebug($"  MapId: {questInfo.MapId}");
-                _logDebug($"  ClassJobLevel: {questInfo.ClassJobLevelRequired}");
-                _logDebug($"  GilReward: {questInfo.GilReward}");
-                _logDebug($"  IconId: {questInfo.IconId}");
-                _logDebug($"  IsRepeatable: {questInfo.IsRepeatable}");
-                _logDebug($"  Location Found: {locationFound}");
                 _logDebug($"===============================");
             }
         }
+
+        private (double X, double Y, double Z) ConvertWorldToMapCoordinates(float worldX, float worldY, float worldZ, uint mapId)
+        {
+            try
+            {
+                if (_realm == null) return (0, 0, 0);
+
+                var mapSheet = _realm.GameData.GetSheet<SaintCoinach.Xiv.Map>();
+                var map = mapSheet.FirstOrDefault(m => m.Key == mapId);
+
+                if (map != null)
+                {
+                    float sizeFactor = 200.0f;
+                    float offsetX = 0;
+                    float offsetY = 0;
+
+                    try
+                    {
+                        var type = map.GetType();
+                        var indexer = type.GetProperty("Item", new[] { typeof(string) });
+
+                        if (indexer != null)
+                        {
+                            sizeFactor = (float)Convert.ChangeType(indexer.GetValue(map, new object[] { "SizeFactor" }), typeof(float));
+                            offsetX = (float)Convert.ChangeType(indexer.GetValue(map, new object[] { "OffsetX" }), typeof(float));
+                            offsetY = (float)Convert.ChangeType(indexer.GetValue(map, new object[] { "OffsetY" }), typeof(float));
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logDebug($"    Error getting map properties: {ex.Message}");
+                    }
+
+                    // ✅ REVERSE the MapRenderer coordinate conversion to get the raw marker coordinates
+                    // MapRenderer does: gameX = (41.0 / c) * (normalizedX) + 1.0
+                    // Where: normalizedX = (marker.X + offsetX) / 2048.0
+                    // And: c = sizeFactor / 100.0
+
+                    double c = sizeFactor / 100.0;
+
+
+                    // From MapRenderer: gameCoord = (41.0 / c) * ((rawCoord + offset) / 2048.0) + 1.0
+                    // Solving for rawCoord: rawCoord = ((gameCoord - 1.0) * c * 2048.0 / 41.0) - offset
+
+                    double rawMarkerX = worldX * sizeFactor / 100.0;
+                    double rawMarkerY = worldZ * sizeFactor / 100.0; // Note: Y in map = Z in world
+
+
+                    double normalizedX = (rawMarkerX + offsetX) / 2048.0;
+                    double normalizedY = (rawMarkerY + offsetY) / 2048.0;
+                    double gameX = (41.0 / c) * (normalizedX) + 1.0;
+                    double gameY = (41.0 / c) * (normalizedY) + 1.0;
+
+                    _logDebug($"    COORDINATE CONVERSION DEBUG:");
+                    _logDebug($"      World: ({worldX:F1}, {worldY:F1}, {worldZ:F1})");
+                    _logDebug($"      Map {mapId}: SizeFactor={sizeFactor}, OffsetX={offsetX}, OffsetY={offsetY}");
+                    _logDebug($"      Raw Marker: ({rawMarkerX:F1}, {rawMarkerY:F1})");
+                    _logDebug($"      Normalized: ({normalizedX:F3}, {normalizedY:F3})");
+                    _logDebug($"      Game Coordinates: ({gameX:F1}, {gameY:F1}) - should be (11.7, 13.5) for Mother Miounne");
+
+                    return (gameX, gameY, worldY);
+                }
+                else
+                {
+                    _logDebug($"    Map {mapId} not found in map sheet");
+                }
+            }
+            catch (Exception ex)
+            {
+                _logDebug($"Error converting coordinates for MapId {mapId}: {ex.Message}");
+            }
+
+            return (0, 0, 0);
+        }
+
 
         private uint FindMapIdForPlaceName(uint placeNameId)
         {
@@ -487,17 +570,16 @@ namespace map_editor
             {
                 if (_realm != null && placeNameId > 0)
                 {
-                    // Use a more efficient lookup with debugging
                     var territorySheet = _realm.GameData.GetSheet<SaintCoinach.Xiv.TerritoryType>();
-                    
+
                     int checkedTerritories = 0;
-                    int maxCheck = 100; // Limit checks for performance
-                    
+                    int maxCheck = 100;
+
                     foreach (var territory in territorySheet)
                     {
                         checkedTerritories++;
-                        if (checkedTerritories > maxCheck) break; // Prevent long searches
-                        
+                        if (checkedTerritories > maxCheck) break;
+
                         try
                         {
                             if (territory.PlaceName != null && territory.PlaceName.Key == placeNameId)
@@ -512,10 +594,9 @@ namespace map_editor
                         }
                         catch
                         {
-                            // Continue searching if this territory has issues
                         }
                     }
-                    
+
                     _logDebug($"  No MapId found for PlaceNameId {placeNameId} (checked {checkedTerritories} territories)");
                 }
             }
@@ -523,8 +604,8 @@ namespace map_editor
             {
                 _logDebug($"  Error in FindMapIdForPlaceName for PlaceNameId {placeNameId}: {ex.Message}");
             }
-            
-            return 0; // No map found
+
+            return 0;
         }
 
         public async Task<List<BNpcInfo>> LoadBNpcsAsync()
@@ -539,12 +620,12 @@ namespace map_editor
                     var csvPath = FindCsvFile("MonsterData.csv");
                     if (csvPath == null) return tempBNpcs;
 
-                    var lines = File.ReadAllLines(csvPath).Skip(1); // Skip header
+                    var lines = File.ReadAllLines(csvPath).Skip(1);
                     var processedEntries = new HashSet<string>();
 
                     foreach (var line in lines)
                     {
-                        if (TryParseBNpcLine(line, processedEntries, out var bnpcInfo))
+                        if (TryParseBNpcLine(line, processedEntries, out var bnpcInfo) && bnpcInfo != null)
                         {
                             tempBNpcs.Add(bnpcInfo);
                         }
@@ -562,7 +643,7 @@ namespace map_editor
             });
         }
 
-        private string? FindCsvFile(string filename)
+        private static string? FindCsvFile(string filename)
         {
             var paths = new[]
             {
@@ -574,10 +655,10 @@ namespace map_editor
             return paths.FirstOrDefault(File.Exists);
         }
 
-        private bool TryParseBNpcLine(string line, HashSet<string> processedEntries, out BNpcInfo bnpcInfo)
+        private static bool TryParseBNpcLine(string line, HashSet<string> processedEntries, out BNpcInfo? bnpcInfo)
         {
             bnpcInfo = null;
-            
+
             if (string.IsNullOrWhiteSpace(line)) return false;
 
             var parts = line.Split(',');
@@ -591,7 +672,7 @@ namespace map_editor
             if (processedEntries.Contains(uniqueKey)) return false;
 
             processedEntries.Add(uniqueKey);
-            uint.TryParse(parts[2].Trim(), out uint baseId);
+            _ = uint.TryParse(parts[2].Trim(), out uint baseId);
 
             bnpcInfo = new BNpcInfo
             {
@@ -686,8 +767,6 @@ namespace map_editor
                                 string fateName = fateRow.AsString("Name") ?? "";
                                 if (string.IsNullOrWhiteSpace(fateName)) continue;
 
-                                // Since we can't reliably look up Level data due to key mismatch,
-                                // we'll create FATEs without specific location data for now
                                 var fateInfo = new FateInfo
                                 {
                                     Id = (uint)fateRow.Key,
@@ -696,10 +775,10 @@ namespace map_editor
                                     Description = fateRow.AsString("Description") ?? "",
                                     Level = (uint)Math.Max(0, fateRow.AsInt32("ClassJobLevel")),
                                     ClassJobLevel = (uint)Math.Max(0, fateRow.AsInt32("ClassJobLevel")),
-                                    TerritoryId = 0, // We don't have reliable territory data without Level lookup
+                                    TerritoryId = 0, 
                                     TerritoryName = "",
                                     IconId = (uint)Math.Max(0, fateRow.AsInt32("Icon")),
-                                    X = 0, // Default coordinates
+                                    X = 0, 
                                     Y = 0,
                                     Z = 0
                                 };
@@ -737,7 +816,7 @@ namespace map_editor
                         var territorySheet = _realm.GameData.GetSheet<SaintCoinach.Xiv.TerritoryType>();
 
                         int processedCount = 0;
-                        int totalCount = territorySheet.Count();
+                        int totalCount = territorySheet.Count;
                         _logDebug($"Found {totalCount} territories in game data");
 
                         foreach (var territory in territorySheet)
@@ -852,38 +931,120 @@ namespace map_editor
             });
         }
 
-        
-
-        public async Task LoadQuestLocationsFromLgbAsync(List<QuestInfo> quests)
+        public async Task LoadQuestLocationsAsync(List<QuestInfo> quests)
         {
-            if (_lgbParser == null) 
+            if (_questLocationService == null)
             {
-                _logDebug("*** FORCED LOG: _lgbParser is null in LoadQuestLocationsFromLgbAsync ***");
+                _logDebug("Quest location service is null");
                 return;
             }
 
             try
             {
-                _logDebug("*** FORCED LOG: Starting LGB quest location parsing in DataLoaderService ***");
+                _logDebug("🎯 Starting quest location extraction using Libra Eorzea...");
 
-                // Parse quest locations from LGB files
-                await _lgbParser.ParseQuestLocationsFromLgbAsync();
+                await _questLocationService.ExtractQuestLocationsAsync();
 
-                // Update quest objects with the parsed location data
-                _lgbParser.UpdateQuestLocations(quests);
+                _questLocationService.UpdateQuestLocations(quests);
 
-                _logDebug("*** FORCED LOG: LGB quest location parsing completed in DataLoaderService ***");
+                _logDebug("🎯 Quest location extraction completed using Libra Eorzea");
             }
             catch (Exception ex)
             {
-                _logDebug($"*** FORCED LOG: Error in LoadQuestLocationsFromLgbAsync: {ex.Message} ***");
+                _logDebug($"❌ Error in quest location extraction: {ex.Message}");
             }
         }
 
-        // Add method to set verbose debug mode
         public void SetVerboseDebugMode(bool enabled)
         {
-            _lgbParser?.SetVerboseDebugMode(enabled);
+            _questLocationService?.SetVerboseDebugMode(enabled);
+        }
+
+        private QuestNpcInfo? ExtractQuestGiverByResearch(uint npcId, uint questId)
+        {
+            try
+            {
+                if (_realm == null) return null;
+
+                _logDebug($"    Research method: Looking up NPC ID {npcId} for Quest {questId}...");
+
+                if (_questLocationService != null)
+                {
+                    var questLocationData = _questLocationService.GetQuestLocationData(questId);
+                    if (questLocationData != null)
+                    {
+                        _logDebug($"    ✅ Using quest location service data for Quest {questId}");
+                        _logDebug($"    Coordinates: ({questLocationData.MapX:F1}, {questLocationData.MapY:F1}) - should be (11.7, 13.5) for Mother Miounne");
+
+                        string npcName = $"NPC_{npcId}";
+                        try
+                        {
+                            var enpcSheet = _realm.GameData.GetSheet<SaintCoinach.Xiv.ENpcResident>();
+                            var npcData = enpcSheet.FirstOrDefault(npc => npc.Key == npcId);
+                            if (npcData != null)
+                            {
+                                npcName = npcData.Singular?.ToString() ?? $"NPC_{npcId}";
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            _logDebug($"    Warning: Could not get NPC name: {ex.Message}");
+                        }
+
+                        var questGiver = new QuestNpcInfo
+                        {
+                            NpcId = npcId,
+                            NpcName = npcName,
+                            TerritoryId = questLocationData.TerritoryId,
+                            TerritoryName = questLocationData.ObjectName.Replace("NPC_", "").Replace($"_{questLocationData.TerritoryId}", ""), // Clean up territory name
+                            MapId = questLocationData.MapId,
+                            MapX = questLocationData.MapX,
+                            MapY = questLocationData.MapY,  
+                            MapZ = questLocationData.MapZ,
+                            WorldX = questLocationData.WorldX,
+                            WorldY = questLocationData.WorldY,
+                            WorldZ = questLocationData.WorldZ,
+                            Role = "Quest Giver"
+                        };
+
+                        _logDebug($"    ✅ Created Quest Giver from location service data: {questGiver.NpcName} at {questGiver.TerritoryName} ({questGiver.MapX:F1}, {questGiver.MapY:F1})");
+                        return questGiver;
+                    }
+                    else
+                    {
+                        _logDebug($"    ⚠️ Quest location service has no location data for Quest {questId}");
+                    }
+                }
+
+                var enpcSheet2 = _realm.GameData.GetSheet<SaintCoinach.Xiv.ENpcResident>();
+                var npcData2 = enpcSheet2.FirstOrDefault(npc => npc.Key == npcId);
+
+                if (npcData2 == null)
+                {
+                    _logDebug($"    NPC ID {npcId} not found in ENpcResident sheet");
+                    return null;
+                }
+
+                string npcName2 = npcData2.Singular?.ToString() ?? $"NPC_{npcId}";
+                _logDebug($"    Found NPC: {npcName2} but no location data from quest location service");
+
+                return new QuestNpcInfo
+                {
+                    NpcId = npcId,
+                    NpcName = npcName2,
+                    Role = "Quest Giver",
+                    TerritoryName = "Coordinates from quest location service not found",
+                    MapId = 0,
+                    MapX = 0,
+                    MapY = 0,
+                    MapZ = 0
+                };
+            }
+            catch (Exception ex)
+            {
+                _logDebug($"    Error in research method for NPC {npcId}: {ex.Message}");
+                return null;
+            }
         }
     }
 }

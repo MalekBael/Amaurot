@@ -4,7 +4,7 @@ using System.Text.Json;
 using System.Diagnostics;
 using System.Linq;
 
-namespace map_editor
+namespace map_editor.Services  // ✅ Fix namespace to match folder structure
 {
     public class AppSettings
     {
@@ -24,6 +24,17 @@ namespace map_editor
             "settings.json");
 
         private static readonly string SettingsDirectory = Path.GetDirectoryName(SettingsFilePath)!;
+
+        // ✅ Cache JsonSerializerOptions to avoid creating new instances
+        private static readonly JsonSerializerOptions SerializerOptions = new()
+        {
+            WriteIndented = true
+        };
+
+        // ✅ Create static readonly arrays for better performance
+        private static readonly string[] GamePathIndicators = ["game", "boot"];
+        private static readonly string[] SapphireRepoIndicators = ["src", "scripts", "CMakeLists.txt", "README.md"];
+        private static readonly string[] SapphireBuildIndicators = ["compiledscripts", "config", "tools"];
 
         private AppSettings _settings;
         private readonly Action<string>? _logDebug;
@@ -73,12 +84,8 @@ namespace map_editor
                     Directory.CreateDirectory(SettingsDirectory);
                 }
 
-                var options = new JsonSerializerOptions
-                {
-                    WriteIndented = true
-                };
-
-                string json = JsonSerializer.Serialize(_settings, options);
+                // ✅ Use cached JsonSerializerOptions
+                string json = JsonSerializer.Serialize(_settings, SerializerOptions);
                 File.WriteAllText(SettingsFilePath, json);
 
                 _logDebug?.Invoke($"Settings saved to: {SettingsFilePath}");
@@ -125,7 +132,8 @@ namespace map_editor
             SaveSettings();
         }
 
-        private bool IsValidPath(string path, string[] indicators, int requiredCount = 2)
+        // ✅ Make static since it doesn't use instance data
+        private static bool IsValidPath(string path, string[] indicators, int requiredCount = 2)
         {
             if (string.IsNullOrEmpty(path) || !Directory.Exists(path))
                 return false;
@@ -134,13 +142,12 @@ namespace map_editor
                 Directory.Exists(Path.Combine(path, indicator)) || File.Exists(Path.Combine(path, indicator))) >= requiredCount;
         }
 
-        public bool IsValidGamePath() => IsValidPath(_settings.GameInstallationPath, new[] { "game", "boot" });
+        // ✅ Use static readonly arrays instead of creating new arrays each time
+        public bool IsValidGamePath() => IsValidPath(_settings.GameInstallationPath, GamePathIndicators);
 
-        public bool IsValidSapphireServerPath() => IsValidPath(_settings.SapphireServerPath, 
-            new[] { "src", "scripts", "CMakeLists.txt", "README.md" });
+        public bool IsValidSapphireServerPath() => IsValidPath(_settings.SapphireServerPath, SapphireRepoIndicators);
 
-        public bool IsValidSapphireBuildPath() => IsValidPath(_settings.SapphireBuildPath, 
-            new[] { "compiledscripts", "config", "tools" });
+        public bool IsValidSapphireBuildPath() => IsValidPath(_settings.SapphireBuildPath, SapphireBuildIndicators);
 
         public void OpenSapphireServerPath()
         {
@@ -153,7 +160,6 @@ namespace map_editor
             try
             {
                 _logDebug?.Invoke($"Opening Sapphire Server path: {_settings.SapphireServerPath}");
-
 
                 Process.Start(new ProcessStartInfo
                 {
@@ -192,8 +198,5 @@ namespace map_editor
                 _logDebug?.Invoke($"Error opening Sapphire Server build path: {ex.Message}");
             }
         }
-
-
-        
     }
 }

@@ -1,15 +1,54 @@
 ﻿using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using System.Collections.Generic;
+using System.Linq;
+using System.Windows.Input;
 
 namespace map_editor
 {
     public partial class QuestDetailsWindow : Window
     {
-        public QuestDetailsWindow(QuestInfo questInfo)
+        private QuestInfo _questInfo;
+
+        public QuestDetailsWindow(QuestInfo questInfo, Window? owner = null)
         {
             InitializeComponent();
+
+            // ✅ FIX: Proper window ownership to prevent app minimization
+            if (owner != null)
+            {
+                this.Owner = owner;
+                this.WindowStartupLocation = WindowStartupLocation.CenterOwner;
+            }
+            else
+            {
+                // Find the main window automatically
+                var mainWindow = System.Windows.Application.Current.MainWindow;
+                if (mainWindow != null && mainWindow != this)
+                {
+                    this.Owner = mainWindow;
+                    this.WindowStartupLocation = WindowStartupLocation.CenterOwner;
+                }
+                else
+                {
+                    this.WindowStartupLocation = WindowStartupLocation.CenterScreen;
+                }
+            }
+
+            // ✅ FIX: Critical properties to prevent app minimization
+            this.ShowInTaskbar = false;        // Don't show in taskbar (owned window)
+            this.Topmost = false;              // Don't force always on top
+            this.WindowState = WindowState.Normal;  // Ensure normal state
+
+            _questInfo = questInfo;
             PopulateQuestDetails(questInfo);
+        }
+
+        // ✅ FIX: Simple close handler
+        private void CloseButton_Click(object sender, RoutedEventArgs e)
+        {
+            this.Close();
         }
 
         private void PopulateQuestDetails(QuestInfo questInfo)
@@ -50,14 +89,12 @@ namespace map_editor
             QuestDetailsGrid.RowDefinitions.Clear();
             QuestDetailsGrid.Children.Clear();
 
-            // Add quest details with better organization
             int row = 0;
             
             // Basic Information Section
             AddSectionHeader("Basic Information", row++);
-            AddDetailRow("Quest ID:", questInfo.Id.ToString(), row++);
+            AddDetailRow("Quest ID:", questInfo.Id.ToString(), row++); // ✅ Fixed missing )
             
-            // ✅ ADD this line to show the Quest ID string
             if (!string.IsNullOrEmpty(questInfo.QuestIdString))
             {
                 AddDetailRow("Quest Identifier:", questInfo.QuestIdString, row++);
@@ -65,11 +102,33 @@ namespace map_editor
             
             AddDetailRow("Name:", questInfo.Name, row++);
             AddDetailRow("Quest Type:", GetQuestTypeDescription(questInfo), row++);
+
+            // ✅ Start NPCs Section
+            if (questInfo.StartNpcs.Any())
+            {
+                AddSectionHeader("Start NPCs", row++); // ✅ Fixed missing )
+                
+                foreach (var startNpc in questInfo.StartNpcs)
+                {
+                    string npcDetails = $"{startNpc.NpcName}";
+                    if (!string.IsNullOrEmpty(startNpc.TerritoryName))
+                    {
+                        npcDetails += $" - {startNpc.TerritoryName}";
+                    }
+                    if (startNpc.MapX > 0 || startNpc.MapY > 0)
+                    {
+                        npcDetails += $" ({startNpc.MapX:F1}, {startNpc.MapY:F1})";
+                    }
+                    
+                    AddDetailRowWithButton("Start NPC:", npcDetails, row++, 
+                        () => ShowQuestGiverOnMap_Click(startNpc), "Show on Map");
+                }
+            }
             
             // Location Information Section
             if (!string.IsNullOrEmpty(questInfo.PlaceName) || questInfo.MapId > 0)
             {
-                AddSectionHeader("Location Information", row++);
+                AddSectionHeader("Location Information", row++); // ✅ Fixed missing )
                 
                 if (!string.IsNullOrEmpty(questInfo.PlaceName))
                 {
@@ -86,11 +145,11 @@ namespace map_editor
                     AddDetailRow("Place Name ID:", questInfo.PlaceNameId.ToString(), row++);
                 }
             }
-            
+
             // Requirements Section
             if (questInfo.ClassJobLevelRequired > 0 || questInfo.ClassJobCategoryId > 0 || questInfo.PreviousQuestId > 0)
             {
-                AddSectionHeader("Requirements", row++);
+                AddSectionHeader("Requirements", row++); // ✅ Fixed missing )
                 
                 if (questInfo.ClassJobLevelRequired > 0)
                 {
@@ -116,7 +175,7 @@ namespace map_editor
             // Rewards Section
             if (questInfo.ExpReward > 0 || questInfo.GilReward > 0)
             {
-                AddSectionHeader("Rewards", row++);
+                AddSectionHeader("Rewards", row++); // ✅ Fixed missing )
                 
                 if (questInfo.ExpReward > 0)
                 {
@@ -145,6 +204,205 @@ namespace map_editor
             if (questInfo.IsRepeatable)
             {
                 AddDetailRow("Repeatable:", "Yes", row++);
+            }
+        }
+
+        // ✅ Fixed namespace conflicts with explicit types
+        private void AddDetailRowWithButton(string label, string value, int row, System.Action buttonAction, string buttonText)
+        {
+            QuestDetailsGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+
+            var labelBlock = new TextBlock
+            {
+                Text = label,
+                FontWeight = FontWeights.SemiBold,
+                Margin = new Thickness(0, 3, 10, 3),
+                VerticalAlignment = VerticalAlignment.Top
+            };
+            Grid.SetRow(labelBlock, row);
+            Grid.SetColumn(labelBlock, 0);
+            QuestDetailsGrid.Children.Add(labelBlock);
+
+            var valuePanel = new StackPanel
+            {
+                Orientation = System.Windows.Controls.Orientation.Horizontal, // ✅ Explicit namespace
+                Margin = new Thickness(0, 3, 0, 3)
+            };
+
+            var valueBlock = new TextBlock
+            {
+                Text = value,
+                TextWrapping = TextWrapping.Wrap,
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(0, 0, 10, 0)
+            };
+            valuePanel.Children.Add(valueBlock);
+
+            var showButton = new System.Windows.Controls.Button // ✅ Explicit namespace
+            {
+                Content = buttonText,
+                Padding = new Thickness(8, 4, 8, 4),
+                Background = new SolidColorBrush(Colors.LightBlue),
+                BorderBrush = new SolidColorBrush(Colors.Blue),
+                FontSize = 11,
+                VerticalAlignment = VerticalAlignment.Center,
+                Cursor = System.Windows.Input.Cursors.Hand
+            };
+            showButton.Click += (s, e) => buttonAction();
+            valuePanel.Children.Add(showButton);
+
+            Grid.SetRow(valuePanel, row);
+            Grid.SetColumn(valuePanel, 1);
+            QuestDetailsGrid.Children.Add(valuePanel);
+        }
+
+        // ✅ Fixed namespace conflicts
+        private void ShowQuestGiverOnMap_Click(QuestNpcInfo questGiver)
+        {
+            try
+            {
+                System.Diagnostics.Debug.WriteLine($"=== ShowQuestGiverOnMap_Click Debug ===");
+                System.Diagnostics.Debug.WriteLine($"Quest: {_questInfo.Name} (ID: {_questInfo.Id})");
+                System.Diagnostics.Debug.WriteLine($"NPC Name: {questGiver.NpcName}");
+                System.Diagnostics.Debug.WriteLine($"NPC ID: {questGiver.NpcId}");
+                System.Diagnostics.Debug.WriteLine($"MapId: {questGiver.MapId}");
+                System.Diagnostics.Debug.WriteLine($"Territory: {questGiver.TerritoryName} (ID: {questGiver.TerritoryId})");
+                System.Diagnostics.Debug.WriteLine($"Coordinates: ({questGiver.MapX:F1}, {questGiver.MapY:F1}, {questGiver.MapZ:F1})");
+                System.Diagnostics.Debug.WriteLine($"==============================");
+
+                // Get the main window
+                var mainWindow = System.Windows.Application.Current.MainWindow as MainWindow;
+                if (mainWindow == null) 
+                {
+                    var message = "Could not access main window for map navigation";
+                    System.Diagnostics.Debug.WriteLine($"ERROR: {message}");
+                    System.Windows.MessageBox.Show(message, "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                    return;
+                }
+
+                System.Diagnostics.Debug.WriteLine($"Found main window: {mainWindow.GetType().Name}");
+
+                // Enhanced coordinate validation
+                bool hasValidMapId = questGiver.MapId > 0;
+                bool hasValidCoordinates = questGiver.MapX != 0 || questGiver.MapY != 0;
+
+                System.Diagnostics.Debug.WriteLine($"Valid MapId: {hasValidMapId} (MapId: {questGiver.MapId})");
+                System.Diagnostics.Debug.WriteLine($"Valid Coordinates: {hasValidCoordinates} (Coords: {questGiver.MapX:F1}, {questGiver.MapY:F1})");
+
+                if (!hasValidMapId)
+                {
+                    var message = $"Quest Giver has invalid Map ID.\n\n" +
+                                 $"Debug Info:\n" +
+                                 $"• Quest: {_questInfo.Name} (ID: {_questInfo.Id})\n" +
+                                 $"• NPC: {questGiver.NpcName} (ID: {questGiver.NpcId})\n" +
+                                 $"• Territory: {questGiver.TerritoryName} (ID: {questGiver.TerritoryId})\n" +
+                                 $"• Map ID: {questGiver.MapId} (INVALID - should be > 0)\n" +
+                                 $"• Coordinates: ({questGiver.MapX:F1}, {questGiver.MapY:F1})\n\n" +
+                                 $"This indicates the LGB parser didn't find location data for this quest.";
+                    
+                    System.Diagnostics.Debug.WriteLine($"ERROR: {message}");
+                    System.Windows.MessageBox.Show(message, "Debug: No Valid Map Data", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    return;
+                }
+
+                if (!hasValidCoordinates)
+                {
+                    var message = $"Quest Giver has Map ID but invalid coordinates.\n\n" +
+                                 $"Debug Info:\n" +
+                                 $"• Quest: {_questInfo.Name} (ID: {_questInfo.Id})\n" +
+                                 $"• NPC: {questGiver.NpcName} (ID: {questGiver.NpcId})\n" +
+                                 $"• Map ID: {questGiver.MapId} (Valid)\n" +
+                                 $"• Coordinates: ({questGiver.MapX:F1}, {questGiver.MapY:F1}) (INVALID - both are 0)\n\n" +
+                                 $"This indicates coordinate conversion failed.";
+                    
+                    System.Diagnostics.Debug.WriteLine($"WARNING: {message}");
+                    System.Windows.MessageBox.Show(message, "Debug: Invalid Coordinates", MessageBoxButton.OK, MessageBoxImage.Warning);
+                }
+
+                // Find the territory for this quest giver
+                System.Diagnostics.Debug.WriteLine($"Searching for territory with MapId: {questGiver.MapId}");
+                System.Diagnostics.Debug.WriteLine($"Available territories count: {mainWindow.Territories?.Count ?? 0}");
+
+                var targetTerritory = mainWindow.Territories?.FirstOrDefault(t => t.MapId == questGiver.MapId);
+                if (targetTerritory == null)
+                {
+                    var availableMapIds = mainWindow.Territories?.Take(10).Select(t => t.MapId.ToString()).ToArray() ?? new string[0];
+                    var message = $"Could not find territory for Map ID: {questGiver.MapId}\n\n" +
+                                 $"Debug Info:\n" +
+                                 $"• Quest Giver: {questGiver.NpcName}\n" +
+                                 $"• Looking for Map ID: {questGiver.MapId}\n" +
+                                 $"• Available Territories: {mainWindow.Territories?.Count ?? 0}\n" +
+                                 $"• Sample Map IDs: {string.Join(", ", availableMapIds)}\n\n" +
+                                 $"This indicates a mismatch between the quest data and territory data.";
+                    
+                    System.Diagnostics.Debug.WriteLine($"ERROR: {message}");
+                    System.Windows.MessageBox.Show(message, "Debug: Territory Not Found", MessageBoxButton.OK, MessageBoxImage.Error);
+                    return;
+                }
+
+                System.Diagnostics.Debug.WriteLine($"Found target territory: {targetTerritory.PlaceName} (ID: {targetTerritory.Id}, MapId: {targetTerritory.MapId})");
+
+                // Switch to the territory
+                System.Diagnostics.Debug.WriteLine($"Switching to territory: {targetTerritory.PlaceName}");
+                mainWindow.TerritoryList.SelectedItem = targetTerritory;
+
+                // Create and add quest marker for this quest giver
+                System.Diagnostics.Debug.WriteLine($"Creating quest marker...");
+                AddQuestGiverMarkerToMap(questGiver, mainWindow);
+
+                var successMessage = $"Map Updated Successfully!\n\n" +
+                                   $"• Switched to: {targetTerritory.PlaceName}\n" +
+                                   $"• Added marker for: {questGiver.NpcName}\n" +
+                                   $"• Map ID: {questGiver.MapId}\n" +
+                                   $"• Coordinates: ({questGiver.MapX:F1}, {questGiver.MapY:F1})\n" +
+                                   $"• Marker ID: {1000000 + questGiver.NpcId}";
+                
+                System.Diagnostics.Debug.WriteLine($"SUCCESS: {successMessage}");
+                System.Windows.MessageBox.Show(successMessage, "Debug: Map Navigation Successful", MessageBoxButton.OK, MessageBoxImage.Information);
+            }
+            catch (System.Exception ex)
+            {
+                var errorMessage = $"Error in ShowQuestGiverOnMap_Click:\n\n" +
+                                  $"• Exception: {ex.GetType().Name}\n" +
+                                  $"• Message: {ex.Message}\n" +
+                                  $"• Quest: {_questInfo?.Name ?? "Unknown"}\n" +
+                                  $"• Quest Giver: {questGiver?.NpcName ?? "Unknown"}";
+                
+                System.Diagnostics.Debug.WriteLine($"ERROR: {errorMessage}");
+                System.Diagnostics.Debug.WriteLine($"Stack trace: {ex.StackTrace}");
+                
+                System.Windows.MessageBox.Show(errorMessage, "Debug: Error in Show on Map", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        // ✅ Add quest giver marker to the map
+        private void AddQuestGiverMarkerToMap(QuestNpcInfo questGiver, MainWindow mainWindow)
+        {
+            try
+            {
+                // Create a quest marker for this quest giver using the specified icon
+                var questMarker = new MapMarker
+                {
+                    Id = 1000000 + questGiver.NpcId, // High ID to distinguish custom markers
+                    MapId = questGiver.MapId,
+                    PlaceNameId = 0,
+                    PlaceName = $"{questGiver.NpcName} (Quest Giver)",
+                    X = questGiver.MapX,
+                    Y = questGiver.MapY,
+                    Z = questGiver.MapZ,
+                    IconId = 61411, // ✅ Using the specified quest icon ID
+                    IconPath = "ui/icon/061000/061411.tex", // ✅ Using the specified path
+                    Type = MarkerType.Quest, 
+                    IsVisible = true
+                };
+
+                // Add to current map markers using AddCustomMarker (the method that exists)
+                mainWindow.AddCustomMarker(questMarker); // ✅ Fixed to use existing method
+            }
+            catch (System.Exception ex)
+            {
+                System.Windows.MessageBox.Show($"Error adding quest marker: {ex.Message}", // ✅ Explicit namespace
+                    "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
@@ -202,11 +460,6 @@ namespace map_editor
                 return "Feature Quest";
             else
                 return "Side Quest";
-        }
-
-        private void CloseButton_Click(object sender, RoutedEventArgs e)
-        {
-            this.Close();
         }
     }
 }

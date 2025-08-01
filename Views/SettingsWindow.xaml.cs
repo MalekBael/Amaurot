@@ -2,6 +2,7 @@
 using System.IO;
 using System.Linq;
 using System.Windows;
+using map_editor.Services;  // ✅ Add this using directive
 using WinForms = System.Windows.Forms;
 using WpfMessageBox = System.Windows.MessageBox;
 
@@ -12,12 +13,17 @@ namespace map_editor
         private readonly SettingsService _settingsService;
         private readonly Action<string>? _logDebug;
 
+        // ✅ Updated with C# 12 collection initialization syntax
+        private static readonly string[] GamePathIndicators = ["game", "boot"];
+        private static readonly string[] SapphireRepoIndicators = ["src", "scripts", "CMakeLists.txt", "README.md"];
+        private static readonly string[] SapphireBuildIndicators = ["tools", "bin", "lib"];
+
         public SettingsWindow(SettingsService settingsService, Action<string>? logDebug = null)
         {
             InitializeComponent();
             _settingsService = settingsService;
             _logDebug = logDebug;
-            
+
             LoadCurrentSettings();
             UpdatePathStatus();
             UpdateSapphirePathStatus();
@@ -28,7 +34,7 @@ namespace map_editor
         private void LoadCurrentSettings()
         {
             var settings = _settingsService.Settings;
-            
+
             GamePathTextBox.Text = settings.GameInstallationPath;
             SapphirePathTextBox.Text = settings.SapphireServerPath;
             SapphireBuildPathTextBox.Text = settings.SapphireBuildPath;
@@ -37,8 +43,7 @@ namespace map_editor
             HideDuplicateTerritoriesCheckBox.IsChecked = settings.HideDuplicateTerritories;
         }
 
-        // ✅ ADD this helper method to replace repetitive validation code
-        private (string statusText, System.Windows.Media.Brush color, bool isValid) ValidatePath(string path, string[] indicators, int requiredCount = 2)
+        private static (string statusText, System.Windows.Media.Brush color, bool isValid) ValidatePath(string path, string[] indicators, int requiredCount = 2)
         {
             if (string.IsNullOrEmpty(path))
                 return ("No path specified", System.Windows.Media.Brushes.Gray, false);
@@ -46,7 +51,7 @@ namespace map_editor
             if (!Directory.Exists(path))
                 return ("✗ Path does not exist", System.Windows.Media.Brushes.Red, false);
 
-            int foundCount = indicators.Count(indicator => 
+            int foundCount = indicators.Count(indicator =>
                 Directory.Exists(Path.Combine(path, indicator)) || File.Exists(Path.Combine(path, indicator)));
 
             return foundCount >= requiredCount
@@ -54,18 +59,17 @@ namespace map_editor
                 : ("⚠ Path exists but doesn't appear valid", System.Windows.Media.Brushes.Orange, true);
         }
 
-        // ✅ REPLACE all UpdateXXXPathStatus methods with these simplified versions:
         private void UpdatePathStatus()
         {
-            var (text, color, _) = ValidatePath(GamePathTextBox.Text.Trim(), new[] { "game", "boot" });
+            var (text, color, _) = ValidatePath(GamePathTextBox.Text.Trim(), GamePathIndicators);
             PathStatusText.Text = text.Replace("Valid path", "Valid FFXIV installation path");
             PathStatusText.Foreground = color;
         }
 
         private void UpdateSapphirePathStatus()
         {
-            var (text, color, isValid) = ValidatePath(SapphirePathTextBox.Text.Trim(), 
-                new[] { "src", "scripts", "CMakeLists.txt", "README.md" });
+            var (text, color, isValid) = ValidatePath(SapphirePathTextBox.Text.Trim(),
+                SapphireRepoIndicators);
             SapphirePathStatusText.Text = text.Replace("Valid path", "Valid Sapphire Server repository");
             SapphirePathStatusText.Foreground = color;
             OpenSapphireButton.IsEnabled = isValid;
@@ -73,8 +77,8 @@ namespace map_editor
 
         private void UpdateSapphireBuildPathStatus()
         {
-            var (text, color, isValid) = ValidatePath(SapphireBuildPathTextBox.Text.Trim(), 
-                new[] { "compiledscripts", "config", "tools" });
+            var (text, color, isValid) = ValidatePath(SapphireBuildPathTextBox.Text.Trim(),
+                SapphireBuildIndicators);
             SapphireBuildPathStatusText.Text = text.Replace("Valid path", "Valid Sapphire Server build directory");
             SapphireBuildPathStatusText.Foreground = color;
             OpenSapphireBuildButton.IsEnabled = isValid;
@@ -86,7 +90,7 @@ namespace map_editor
                 Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
                 "FFXIVMapEditor",
                 "settings.json");
-            
+
             SettingsLocationText.Text = $"Settings are stored at: {settingsPath}";
         }
 
@@ -138,69 +142,68 @@ namespace map_editor
             }
         }
 
-        // ✅ ADD this generic test method
-        private void TestPath(string path, string[] indicators, string pathType, int requiredCount = 2)
+        // ✅ Made this method static
+        private static void TestPath(string path, string[] indicators, string pathType, int requiredCount = 2)
         {
             if (string.IsNullOrEmpty(path))
             {
-                WpfMessageBox.Show($"Please specify a {pathType} path first.", "Test Path", 
+                WpfMessageBox.Show($"Please specify a {pathType} path first.", "Test Path",
                     MessageBoxButton.OK, MessageBoxImage.Information);
                 return;
             }
 
             if (!Directory.Exists(path))
             {
-                WpfMessageBox.Show("The specified path does not exist.", "Test Path", 
+                WpfMessageBox.Show("The specified path does not exist.", "Test Path",
                     MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
             }
 
-            var foundItems = indicators.Where(indicator => 
+            var foundItems = indicators.Where(indicator =>
                 Directory.Exists(Path.Combine(path, indicator)) || File.Exists(Path.Combine(path, indicator))).ToList();
 
             string message = foundItems.Count >= requiredCount
                 ? $"✓ Valid {pathType} detected!\n\nFound: {string.Join(", ", foundItems)}"
                 : $"Path exists but doesn't appear to be a valid {pathType}.\n\n" +
                   $"Expected at least {requiredCount} of: {string.Join(", ", indicators)}\n" +
-                  $"Found: {(foundItems.Any() ? string.Join(", ", foundItems) : "none")}";
+                  $"Found: {(foundItems.Count > 0 ? string.Join(", ", foundItems) : "none")}";
 
-            WpfMessageBox.Show(message, "Test Path", MessageBoxButton.OK, 
+            WpfMessageBox.Show(message, "Test Path", MessageBoxButton.OK,
                 foundItems.Count >= requiredCount ? MessageBoxImage.Information : MessageBoxImage.Warning);
         }
 
-        // ✅ REPLACE the three test methods with these simple calls:
         private void TestButton_Click(object sender, RoutedEventArgs e)
         {
             UpdatePathStatus();
-            TestPath(GamePathTextBox.Text.Trim(), new[] { "game", "boot" }, "FFXIV installation");
+            TestPath(GamePathTextBox.Text.Trim(), GamePathIndicators, "FFXIV installation");
         }
 
         private void TestSapphireButton_Click(object sender, RoutedEventArgs e)
         {
             UpdateSapphirePathStatus();
-            TestPath(SapphirePathTextBox.Text.Trim(), new[] { "src", "scripts", "CMakeLists.txt", "README.md" }, "Sapphire Server repository");
+            TestPath(SapphirePathTextBox.Text.Trim(), SapphireRepoIndicators, "Sapphire Server repository");
         }
 
         private void TestSapphireBuildButton_Click(object sender, RoutedEventArgs e)
         {
             UpdateSapphireBuildPathStatus();
-            TestPath(SapphireBuildPathTextBox.Text.Trim(), new[] { "config", "world.exe", "bin", "lobby.exe", "tools", "api.exe" }, "Sapphire Server build directory");
+            TestPath(SapphireBuildPathTextBox.Text.Trim(), SapphireBuildIndicators, "Sapphire Server build directory");
         }
 
         private void OpenSapphireButton_Click(object sender, RoutedEventArgs e)
         {
             string path = SapphirePathTextBox.Text.Trim();
-            
+
             if (string.IsNullOrEmpty(path))
             {
-                WpfMessageBox.Show("Please specify a Sapphire Server path first.", "Open Folder", 
+                WpfMessageBox.Show("Please specify a Sapphire Server path first.", "Open Folder",
                     MessageBoxButton.OK, MessageBoxImage.Information);
                 return;
             }
 
             if (!Directory.Exists(path))
             {
-                WpfMessageBox.Show("The specified path does not exist.", "Open Folder", 
+                WpfMessageBox.Show("The specified path does not exist.", "Open Folder",
                     MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
             }
@@ -208,7 +211,7 @@ namespace map_editor
             try
             {
                 _logDebug?.Invoke($"Opening Sapphire Server folder: {path}");
-                
+
                 System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
                 {
                     FileName = path,
@@ -219,7 +222,7 @@ namespace map_editor
             catch (Exception ex)
             {
                 _logDebug?.Invoke($"Error opening Sapphire Server folder: {ex.Message}");
-                WpfMessageBox.Show($"Failed to open folder: {ex.Message}", "Error", 
+                WpfMessageBox.Show($"Failed to open folder: {ex.Message}", "Error",
                     MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
@@ -227,17 +230,17 @@ namespace map_editor
         private void OpenSapphireBuildButton_Click(object sender, RoutedEventArgs e)
         {
             string path = SapphireBuildPathTextBox.Text.Trim();
-            
+
             if (string.IsNullOrEmpty(path))
             {
-                WpfMessageBox.Show("Please specify a Sapphire Server build path first.", "Open Folder", 
+                WpfMessageBox.Show("Please specify a Sapphire Server build path first.", "Open Folder",
                     MessageBoxButton.OK, MessageBoxImage.Information);
                 return;
             }
 
             if (!Directory.Exists(path))
             {
-                WpfMessageBox.Show("The specified path does not exist.", "Open Folder", 
+                WpfMessageBox.Show("The specified path does not exist.", "Open Folder",
                     MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
             }
@@ -245,7 +248,7 @@ namespace map_editor
             try
             {
                 _logDebug?.Invoke($"Opening Sapphire Server build folder: {path}");
-                
+
                 System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
                 {
                     FileName = path,
@@ -256,16 +259,16 @@ namespace map_editor
             catch (Exception ex)
             {
                 _logDebug?.Invoke($"Error opening Sapphire Server build folder: {ex.Message}");
-                WpfMessageBox.Show($"Failed to open folder: {ex.Message}", "Error", 
+                WpfMessageBox.Show($"Failed to open folder: {ex.Message}", "Error",
                     MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
         private void ResetButton_Click(object sender, RoutedEventArgs e)
         {
-            var result = WpfMessageBox.Show("Are you sure you want to reset all settings to their defaults?", 
+            var result = WpfMessageBox.Show("Are you sure you want to reset all settings to their defaults?",
                 "Reset Settings", MessageBoxButton.YesNo, MessageBoxImage.Question);
-            
+
             if (result == MessageBoxResult.Yes)
             {
                 GamePathTextBox.Text = "";
@@ -288,9 +291,9 @@ namespace map_editor
             _settingsService.UpdateAutoLoad(AutoLoadCheckBox.IsChecked == true);
             _settingsService.UpdateDebugMode(DebugModeCheckBox.IsChecked == true);
             _settingsService.UpdateHideDuplicateTerritories(HideDuplicateTerritoriesCheckBox.IsChecked == true);
-            
+
             _logDebug?.Invoke("Settings saved successfully");
-            
+
             DialogResult = true;
             Close();
         }

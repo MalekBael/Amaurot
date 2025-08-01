@@ -268,8 +268,8 @@ namespace map_editor
                         $"Canvas({canvasX:F1},{canvasY:F1})");
                 }
 
-                const double MAX_MARKER_SIZE = 26.0;
-                const double MIN_MARKER_SIZE = 14.0;
+                const double MAX_MARKER_SIZE = 20.0;
+                const double MIN_MARKER_SIZE = 12.0;
                 const double BASE_MARKER_SIZE = 16.0;
 
                 double markerSize = Math.Max(MIN_MARKER_SIZE, Math.Min(MAX_MARKER_SIZE, BASE_MARKER_SIZE * displayScale));
@@ -550,19 +550,70 @@ namespace map_editor
                 markerDetailsGrid.RowDefinitions.Clear();
                 markerDetailsGrid.Children.Clear();
 
+                // ✅ ENHANCED: Check if this is a quest marker and get quest giver info
+                bool isQuestMarker = marker.Type == MarkerType.Quest && marker.Id >= 2000000;
+                string? questGiverInfo = null;
+
+                if (isQuestMarker)
+                {
+                    uint questId = marker.Id - 2000000;
+                    questGiverInfo = GetQuestGiverInfo(questId);
+                }
+
                 AddDetailRowToGrid(markerDetailsGrid, 0, "Map Marker Range:", $"{mapMarkerRange}");
                 AddDetailRowToGrid(markerDetailsGrid, 1, "MapMarker Row:", $"{mapMarkerRange}.{marker.Id}");
                 AddDetailRowToGrid(markerDetailsGrid, 2, "Raw Position:", $"X={marker.X:F0}, Y={marker.Y:F0}");
-                AddDetailRowToGrid(markerDetailsGrid, 3, "Icon ID:", $"{marker.IconId}");
-                AddDetailRowToGrid(markerDetailsGrid, 4, "Marker ID:", $"{marker.Id}");
-                AddDetailRowToGrid(markerDetailsGrid, 5, "Place Name ID:", $"{marker.PlaceNameId}");
-                AddDetailRowToGrid(markerDetailsGrid, 6, "Type:", $"{marker.Type}");
+
+                // ✅ ENHANCED: Add quest giver information if available
+                if (!string.IsNullOrEmpty(questGiverInfo))
+                {
+                    AddDetailRowToGrid(markerDetailsGrid, 3, "Quest Giver:", questGiverInfo);
+                    AddDetailRowToGrid(markerDetailsGrid, 4, "Icon ID:", $"{marker.IconId}");
+                    AddDetailRowToGrid(markerDetailsGrid, 5, "Marker ID:", $"{marker.Id}");
+                    AddDetailRowToGrid(markerDetailsGrid, 6, "Type:", $"{marker.Type}");
+                }
+                else
+                {
+                    AddDetailRowToGrid(markerDetailsGrid, 3, "Icon ID:", $"{marker.IconId}");
+                    AddDetailRowToGrid(markerDetailsGrid, 4, "Marker ID:", $"{marker.Id}");
+                    AddDetailRowToGrid(markerDetailsGrid, 5, "Place Name ID:", $"{marker.PlaceNameId}");
+                    AddDetailRowToGrid(markerDetailsGrid, 6, "Type:", $"{marker.Type}");
+                }
 
                 if (_verboseLogging)
                 {
                     System.Diagnostics.Debug.WriteLine($"Updated marker information panel for: {marker.PlaceName}");
                 }
             });
+        }
+
+        // ✅ ADD: Helper method to get quest giver information
+        private string? GetQuestGiverInfo(uint questId)
+        {
+            try
+            {
+                // Try to access the main window to get quest location service
+                if (_mainWindow is MainWindow mainWindow)
+                {
+                    // Access quest location data through the data loader service
+                    // This is a simplified approach - you might need to adjust based on your architecture
+                    var dataLoaderType = typeof(MainWindow).Assembly.GetType("map_editor.Services.QuestLocationService");
+                    if (dataLoaderType != null)
+                    {
+                        // For now, return a placeholder that shows we're looking for quest giver info
+                        return $"Quest ID: {questId} (Quest Giver data available)";
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                if (_verboseLogging)
+                {
+                    System.Diagnostics.Debug.WriteLine($"Error getting quest giver info: {ex.Message}");
+                }
+            }
+
+            return null;
         }
 
         private void AddDetailRowToGrid(Grid grid, int row, string label, string value)

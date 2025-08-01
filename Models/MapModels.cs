@@ -69,7 +69,6 @@ namespace map_editor
         public uint Id { get; set; }
         public string Name { get; set; } = string.Empty;
         
-        // ✅ ADD this new property for the Quest ID string from index 1
         public string QuestIdString { get; set; } = string.Empty;
         
         public string JournalGenre { get; set; } = string.Empty;
@@ -82,7 +81,6 @@ namespace map_editor
         public uint ExpReward { get; set; }
         public uint GilReward { get; set; }
         
-        // Location fields
         public string PlaceName { get; set; } = string.Empty;
         public uint PlaceNameId { get; set; }
         public uint MapId { get; set; }
@@ -90,16 +88,41 @@ namespace map_editor
         public string Description { get; set; } = string.Empty;
         public bool IsRepeatable { get; set; }
         
-        // Add coordinate fields for LGB data
+
         public double X { get; set; } = 0;
         public double Y { get; set; } = 0;
         public double Z { get; set; } = 0;
         public uint TerritoryId { get; set; } = 0;
 
+        public List<QuestNpcInfo> StartNpcs { get; set; } = new List<QuestNpcInfo>();
+        public List<QuestNpcInfo> ObjectiveNpcs { get; set; } = new List<QuestNpcInfo>();
+        public List<QuestNpcInfo> EndNpcs { get; set; } = new List<QuestNpcInfo>();
+
         public override string ToString()
         {
             string prefix = IsMainScenarioQuest ? "[MSQ] " : IsFeatureQuest ? "[FEATURE] " : "";
             return $"{Id} - {prefix}{Name}";
+        }
+    }
+
+    public class QuestNpcInfo
+    {
+        public uint NpcId { get; set; }
+        public string NpcName { get; set; } = string.Empty;
+        public uint TerritoryId { get; set; }
+        public string TerritoryName { get; set; } = string.Empty;
+        public uint MapId { get; set; }
+        public double MapX { get; set; }
+        public double MapY { get; set; }
+        public double MapZ { get; set; }
+        public float WorldX { get; set; }
+        public float WorldY { get; set; }
+        public float WorldZ { get; set; }
+        public string Role { get; set; } = string.Empty; 
+
+        public override string ToString()
+        {
+            return $"{NpcName} ({Role}) - {TerritoryName} ({MapX:F1}, {MapY:F1})";
         }
     }
 
@@ -227,7 +250,7 @@ namespace map_editor
             return type switch
             {
                 MarkerType.Aetheryte => Colors.Blue,
-                MarkerType.Quest => Colors.Gold,
+                MarkerType.Quest => Colors.Gold,   
                 MarkerType.Shop => Colors.Green,
                 MarkerType.Landmark => Colors.Purple,
                 MarkerType.Entrance => Colors.Brown,
@@ -243,7 +266,7 @@ namespace map_editor
             return type switch
             {
                 MarkerType.Aetheryte => Colors.LightBlue,
-                MarkerType.Quest => Colors.Orange,
+                MarkerType.Quest => Colors.DarkGoldenrod, 
                 MarkerType.Shop => Colors.LightGreen,
                 MarkerType.Landmark => Colors.Violet,
                 MarkerType.Entrance => Colors.SandyBrown,

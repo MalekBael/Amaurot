@@ -6,6 +6,12 @@
         xmlns:local="clr-namespace:map_editor"
         mc:Ignorable="d"
         Title="FFXIV Map Editor" Height="1000" Width="1600">
+
+    <!-- ✅ ADD: Window Resources with the converter -->
+    <Window.Resources>
+        <local:QuestHasLocationConverter x:Key="QuestHasLocationConverter"/>
+    </Window.Resources>
+
     <Grid>
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="0*"/>
@@ -15,9 +21,12 @@
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
-            <RowDefinition Height="Auto"/>  <!-- Marker Visibility Controls -->
-            <RowDefinition Height="Auto"/>  <!-- Debug Information -->
-            <RowDefinition Height="Auto"/>  <!-- Status Bar -->
+            <RowDefinition Height="Auto"/>
+            <!-- Marker Visibility Controls -->
+            <RowDefinition Height="Auto"/>
+            <!-- Debug Information -->
+            <RowDefinition Height="Auto"/>
+            <!-- Status Bar -->
         </Grid.RowDefinitions>
 
         <!-- Menu Bar -->
@@ -273,23 +282,27 @@
                 <!-- Horizontal Splitter -->
                 <GridSplitter Grid.Row="1" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"/>
 
-                <!-- Events Panel (Bottom) -->
+                <!-- NPC Panel (Bottom) - RENAMED from Events Panel -->
                 <DockPanel Grid.Row="2">
                     <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="5">
-                        <TextBlock Text="Events" FontWeight="Bold" VerticalAlignment="Center"/>
-                        <TextBlock x:Name="EventCountText" Text="(0)" Margin="5,0,0,0" Foreground="Gray" VerticalAlignment="Center"/>
+                        <TextBlock Text="NPCs" FontWeight="Bold" VerticalAlignment="Center"/>
+                        <TextBlock x:Name="NpcCountText" Text="(0)" Margin="5,0,0,0" Foreground="Gray" VerticalAlignment="Center"/>
                     </StackPanel>
-                    <TextBox DockPanel.Dock="Top" x:Name="EventSearchBox" Margin="5,0,5,5" 
-                             Text="" TextChanged="EventSearchBox_TextChanged"
+                    <TextBox DockPanel.Dock="Top" x:Name="NpcSearchBox" Margin="5,0,5,5" 
+                             Text="" TextChanged="NpcSearchBox_TextChanged"
                              Background="White" BorderThickness="1" BorderBrush="Gray"
-                             ToolTip="Search events by name or ID"/>
-                    <ListBox Name="EventList" 
-                             ItemsSource="{Binding Events}"
-                             SelectionChanged="EventList_SelectionChanged"
+                             ToolTip="Search NPCs by name or ID"/>
+                    <ListBox Name="NpcList" 
+                             SelectionChanged="NpcList_SelectionChanged"
+                             MouseDoubleClick="NpcList_MouseDoubleClick"
                              Margin="5,0,5,5">
                         <ListBox.ItemTemplate>
                             <DataTemplate>
-                                <TextBlock Text="{Binding}" ToolTip="{Binding Name}"/>
+                                <StackPanel Margin="2">
+                                    <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold"/>
+                                    <TextBlock Text="{Binding QuestCount, StringFormat={}{0} quest(s)}" 
+                                               FontSize="10" Foreground="Gray"/>
+                                </StackPanel>
                             </DataTemplate>
                         </ListBox.ItemTemplate>
                     </ListBox>
@@ -409,7 +422,6 @@
             <TextBlock Name="StatusText" Text="Ready - Load FFXIV data to begin"/>
         </StatusBar>
 
-        <!-- ✅ ADD this Progress Overlay - covers the entire window when visible -->
         <Grid Grid.RowSpan="5" Grid.ColumnSpan="3" x:Name="ProgressOverlay" 
               Background="#80000000" Visibility="Collapsed" Panel.ZIndex="1000">
             <Border Background="White" CornerRadius="10" Padding="30" 
@@ -418,13 +430,13 @@
                 <StackPanel>
                     <TextBlock Text="Extracting Quest Files" FontSize="18" FontWeight="Bold" 
                                HorizontalAlignment="Center" Margin="0,0,0,15"/>
-                    
+
                     <TextBlock x:Name="ProgressStatusText" Text="Initializing quest_parse.exe..." 
                                HorizontalAlignment="Center" Margin="0,0,0,15" TextWrapping="Wrap"/>
-                    
+
                     <ProgressBar x:Name="QuestExtractionProgressBar" Height="20" 
                                  IsIndeterminate="True" Margin="0,0,0,15"/>
-                    
+
                     <Button x:Name="CancelExtractionButton" Content="Cancel" Width="80" Height="30"
                             HorizontalAlignment="Center" Click="CancelExtraction_Click"/>
                 </StackPanel>
