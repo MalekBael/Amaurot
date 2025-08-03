@@ -235,9 +235,13 @@ namespace map_editor
 
                         if (indexer != null)
                         {
-                            sizeFactor = (float)Convert.ChangeType(indexer.GetValue(_currentMap, new object[] { "SizeFactor" }), typeof(float));
-                            offsetX = (float)Convert.ChangeType(indexer.GetValue(_currentMap, new object[] { "OffsetX" }), typeof(float));
-                            offsetY = (float)Convert.ChangeType(indexer.GetValue(_currentMap, new object[] { "OffsetY" }), typeof(float));
+                            var sizeFactorValue = indexer.GetValue(_currentMap, new object[] { "SizeFactor" });
+                            var offsetXValue = indexer.GetValue(_currentMap, new object[] { "OffsetX" });
+                            var offsetYValue = indexer.GetValue(_currentMap, new object[] { "OffsetY" });
+
+                            sizeFactor = sizeFactorValue != null ? (float)Convert.ChangeType(sizeFactorValue, typeof(float)) : 200.0f;
+                            offsetX = offsetXValue != null ? (float)Convert.ChangeType(offsetXValue, typeof(float)) : 0f;
+                            offsetY = offsetYValue != null ? (float)Convert.ChangeType(offsetYValue, typeof(float)) : 0f;
                         }
                     }
                     catch (Exception ex)
@@ -395,7 +399,8 @@ namespace map_editor
                             var indexer = type.GetProperty("Item", new[] { typeof(string) });
                             if (indexer != null)
                             {
-                                mapMarkerRange = (uint)Convert.ChangeType(indexer.GetValue(_currentMap, new object[] { "MapMarkerRange" }), typeof(uint));
+                                var mapMarkerRangeValue = indexer.GetValue(_currentMap, new object[] { "MapMarkerRange" });
+                                mapMarkerRange = mapMarkerRangeValue != null ? (uint)Convert.ChangeType(mapMarkerRangeValue, typeof(uint)) : 0u;
                             }
                         }
                         catch (Exception ex)
@@ -506,7 +511,8 @@ namespace map_editor
                     var indexer = type.GetProperty("Item", new[] { typeof(string) });
                     if (indexer != null)
                     {
-                        mapMarkerRange = (uint)Convert.ChangeType(indexer.GetValue(_currentMap, new object[] { "MapMarkerRange" }), typeof(uint));
+                        var mapMarkerRangeValue = indexer.GetValue(_currentMap, new object[] { "MapMarkerRange" });
+                        mapMarkerRange = mapMarkerRangeValue != null ? (uint)Convert.ChangeType(mapMarkerRangeValue, typeof(uint)) : 0u;
                     }
                 }
                 catch (Exception ex)
@@ -1046,6 +1052,12 @@ namespace map_editor
 
         public void HandleMouseMove(WpfPoint mousePosition, Map? map)
         {
+            double currentTime = Environment.TickCount64;
+            if (currentTime - _lastHoverCheckTime < HOVER_CHECK_THROTTLE_MS)
+                return;
+
+            _lastHoverCheckTime = currentTime;
+
             if (_verboseLogging && _hoveredMarker != null)
             {
                 System.Diagnostics.Debug.WriteLine($"Mouse at ({mousePosition.X:F1}, {mousePosition.Y:F1}), hovering: {_hoveredMarker.PlaceName}");

@@ -36,85 +36,159 @@
 			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
 		</Content>
 	</ItemGroup>
+
 	<ItemGroup>
-	  <Content Update="Libs\Definitions\EObj.json" Link="Definitions\EObj.json" />
-	  <Content Update="Libs\Definitions\Map.json">
-	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-	  </Content>
-	  <Content Update="Libs\Definitions\MapMarker.json">
-	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-	  </Content>
-	  <Content Update="Libs\Definitions\MapSymbol.json">
-	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-	  </Content>
-	  <Content Update="Libs\Definitions\PlaceName.json">
-	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-	  </Content>
-	  <Content Update="Libs\Definitions\TerritoryType.json">
-	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-	  </Content>
+		<Compile Include="notes\Coinach CS\Libra\JournalCategory.cs.txt" />
+		<Compile Include="notes\Coinach CS\Libra\JournalGenre.cs.txt" />
+		<Compile Include="notes\Coinach CS\Libra\JsonReaderExtensions.cs.txt" />
+		<Compile Include="notes\Coinach CS\Libra\LibraModel.Context.cs.txt" />
 	</ItemGroup>
 	<ItemGroup>
-	  <Folder Include="Sheets\" />
+		<Content Update="Libs\Definitions\EObj.json" Link="Definitions\EObj.json" />
+		<Content Update="Libs\Definitions\Map.json">
+			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
+		</Content>
+		<Content Update="Libs\Definitions\MapMarker.json">
+			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
+		</Content>
+		<Content Update="Libs\Definitions\MapSymbol.json">
+			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
+		</Content>
+		<Content Update="Libs\Definitions\PlaceName.json">
+			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
+		</Content>
+		<Content Update="Libs\Definitions\TerritoryType.json">
+			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
+		</Content>
 	</ItemGroup>
 	<ItemGroup>
-	  <None Update="Libs\app_data.sqlite">
-	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-	  </None>
-	  <None Update="Libs\Definitions\BNpcBase.json">
-	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-	  </None>
-	  <None Update="Libs\Definitions\BNpcName.json">
-	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-	  </None>
-	  <None Update="Libs\Definitions\CompleteJournal.json">
-	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-	  </None>
-	  <None Update="Libs\Definitions\ENpcBase.json">
-	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-	  </None>
-	  <None Update="Libs\Definitions\ENpcResident.json">
-	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-	  </None>
-	  <None Update="Libs\Definitions\EObj.json">
-	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-	  </None>
-	  <None Update="Libs\Definitions\EObjName.json">
-	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-	  </None>
-	  <None Update="Libs\Definitions\Fate.json">
-	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-	  </None>
-	  <None Update="Libs\Definitions\game.ver">
-	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-	  </None>
-	  <None Update="Libs\Definitions\JournalGenre.json">
-	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-	  </None>
-	  <None Update="Libs\Definitions\Level.json">
-	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-	  </None>
-	  <None Update="Libs\Definitions\Map.json">
-	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-	  </None>
-	  <None Update="Libs\Definitions\MapMarker.json">
-	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-	  </None>
-	  <None Update="Libs\Definitions\MapSymbol.json">
-	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-	  </None>
-	  <None Update="Libs\Definitions\PlaceName.json">
-	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-	  </None>
-	  <None Update="Libs\Definitions\Quest.json">
-	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-	  </None>
-	  <None Update="Libs\Definitions\TerritoryType.json">
-	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-	  </None>
-	  <None Update="Libs\MonsterData.csv">
-	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-	  </None>
+		<Folder Include="Tools\" />
+		<Folder Include="Sheets\" />
 	</ItemGroup>
+	<ItemGroup>
+		<None Update="Libs\app_data.sqlite">
+			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
+		</None>
+		<None Update="Libs\Definitions\BNpcBase.json">
+			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
+		</None>
+		<None Update="Libs\Definitions\BNpcName.json">
+			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
+		</None>
+		<None Update="Libs\Definitions\CompleteJournal.json">
+			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
+		</None>
+		<None Update="Libs\Definitions\ENpcBase.json">
+			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
+		</None>
+		<None Update="Libs\Definitions\ENpcResident.json">
+			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
+		</None>
+		<None Update="Libs\Definitions\EObj.json">
+			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
+		</None>
+		<None Update="Libs\Definitions\EObjName.json">
+			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
+		</None>
+		<None Update="Libs\Definitions\Fate.json">
+			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
+		</None>
+		<None Update="Libs\Definitions\game.ver">
+			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
+		</None>
+		<None Update="Libs\Definitions\JournalGenre.json">
+			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
+		</None>
+		<None Update="Libs\Definitions\Level.json">
+			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
+		</None>
+		<None Update="Libs\Definitions\Map.json">
+			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
+		</None>
+		<None Update="Libs\Definitions\MapMarker.json">
+			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
+		</None>
+		<None Update="Libs\Definitions\MapSymbol.json">
+			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
+		</None>
+		<None Update="Libs\Definitions\PlaceName.json">
+			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
+		</None>
+		<None Update="Libs\Definitions\Quest.json">
+			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
+		</None>
+		<None Update="Libs\Definitions\TerritoryType.json">
+			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
+		</None>
+		<None Update="Libs\MonsterData.csv">
+			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
+		</None>
+	</ItemGroup>
+
+	<!-- ✅ ADD: Project reference to LGB-Parser -->
+	<ItemGroup>
+		<ProjectReference Include="..\LGB-Parser\LGB-Parser.csproj" />
+	</ItemGroup>
+
+	<!-- ✅ IMPROVED: Copy ALL LGB Parser files including dependencies -->
+	<Target Name="CopyLgbParserToTools" AfterTargets="Build">
+		<PropertyGroup>
+			<LgbParserOutputDir>$(MSBuildThisFileDirectory)..\LGB-Parser\bin\$(Configuration)\net8.0</LgbParserOutputDir>
+		</PropertyGroup>
+
+		<!-- Create Tools directory if it doesn't exist -->
+		<MakeDir Directories="$(OutDir)Tools" />
+
+		<!-- ✅ Copy ALL files from LGB Parser output directory -->
+		<ItemGroup>
+			<LgbParserAllFiles Include="$(LgbParserOutputDir)\**\*.*" />
+		</ItemGroup>
+
+		<Copy SourceFiles="@(LgbParserAllFiles)"
+			  DestinationFiles="@(LgbParserAllFiles->'$(OutDir)Tools\%(RecursiveDir)%(Filename)%(Extension)')"
+			  SkipUnchangedFiles="true"
+			  ContinueOnError="true" />
+
+		<Message Text="Copied all LGB Parser files from: $(LgbParserOutputDir)" Importance="high" />
+		<Warning Text="LGB Parser output directory not found: $(LgbParserOutputDir)" Condition="!Exists('$(LgbParserOutputDir)')" />
+	</Target>
+
+	<!-- ✅ ALTERNATIVE: More specific approach if you prefer -->
+	<Target Name="CopyLgbParserSpecific" AfterTargets="Build" Condition="false">
+		<PropertyGroup>
+			<LgbParserOutputDir>$(MSBuildThisFileDirectory)..\LGB-Parser\bin\$(Configuration)\net8.0</LgbParserOutputDir>
+		</PropertyGroup>
+
+		<!-- Create Tools directory if it doesn't exist -->
+		<MakeDir Directories="$(OutDir)Tools" />
+
+		<!-- Copy specific essential files and common .NET 8 dependencies -->
+		<ItemGroup>
+			<LgbParserFiles Include="$(LgbParserOutputDir)\lgb-parser.exe" Condition="Exists('$(LgbParserOutputDir)\lgb-parser.exe')" />
+			<LgbParserFiles Include="$(LgbParserOutputDir)\lgb-parser.dll" Condition="Exists('$(LgbParserOutputDir)\lgb-parser.dll')" />
+			<LgbParserFiles Include="$(LgbParserOutputDir)\lgb-parser.runtimeconfig.json" Condition="Exists('$(LgbParserOutputDir)\lgb-parser.runtimeconfig.json')" />
+			<LgbParserFiles Include="$(LgbParserOutputDir)\lgb-parser.deps.json" Condition="Exists('$(LgbParserOutputDir)\lgb-parser.deps.json')" />
+
+			<!-- Lumina dependencies -->
+			<LgbParserFiles Include="$(LgbParserOutputDir)\Lumina.dll" Condition="Exists('$(LgbParserOutputDir)\Lumina.dll')" />
+			<LgbParserFiles Include="$(LgbParserOutputDir)\Lumina.Excel.dll" Condition="Exists('$(LgbParserOutputDir)\Lumina.Excel.dll')" />
+
+			<!-- .NET 8 runtime dependencies that might be missing -->
+			<LgbParserFiles Include="$(LgbParserOutputDir)\Microsoft.Extensions.ObjectPool.dll" Condition="Exists('$(LgbParserOutputDir)\Microsoft.Extensions.ObjectPool.dll')" />
+			<LgbParserFiles Include="$(LgbParserOutputDir)\Microsoft.Extensions.DependencyInjection.dll" Condition="Exists('$(LgbParserOutputDir)\Microsoft.Extensions.DependencyInjection.dll')" />
+			<LgbParserFiles Include="$(LgbParserOutputDir)\Microsoft.Extensions.DependencyInjection.Abstractions.dll" Condition="Exists('$(LgbParserOutputDir)\Microsoft.Extensions.DependencyInjection.Abstractions.dll')" />
+			<LgbParserFiles Include="$(LgbParserOutputDir)\Microsoft.Extensions.Logging.dll" Condition="Exists('$(LgbParserOutputDir)\Microsoft.Extensions.Logging.dll')" />
+			<LgbParserFiles Include="$(LgbParserOutputDir)\Microsoft.Extensions.Logging.Abstractions.dll" Condition="Exists('$(LgbParserOutputDir)\Microsoft.Extensions.Logging.Abstractions.dll')" />
+			<LgbParserFiles Include="$(LgbParserOutputDir)\System.Memory.dll" Condition="Exists('$(LgbParserOutputDir)\System.Memory.dll')" />
+		</ItemGroup>
+
+		<Copy SourceFiles="@(LgbParserFiles)"
+			  DestinationFolder="$(OutDir)Tools"
+			  SkipUnchangedFiles="true"
+			  ContinueOnError="true" />
+
+		<Message Text="Copied specific LGB Parser files: @(LgbParserFiles)" Condition="'@(LgbParserFiles)' != ''" />
+		<Warning Text="No LGB Parser files found to copy from: $(LgbParserOutputDir)" Condition="'@(LgbParserFiles)' == ''" />
+	</Target>
 
 </Project>

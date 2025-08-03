@@ -152,6 +152,252 @@ namespace map_editor
             });
         }
 
+
+        // ✅ FIXED: Updated LGB Parser event handlers with proper type resolution
+        private async void RunLgbParser_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                // Check if LGB Parser executable exists
+                var toolsDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Tools");
+                var lgbParserExe = Path.Combine(toolsDir, "lgb-parser.exe");
+
+                if (!File.Exists(lgbParserExe))
+                {
+                    WpfMessageBox.Show($"LGB Parser not found at:\n{lgbParserExe}\n\nPlease ensure the LGB-Parser project is built and the executable is copied to the Tools folder.",
+                        "LGB Parser Not Found", MessageBoxButton.OK, MessageBoxImage.Error);
+                    return;
+                }
+
+                // Get the FFXIV game path from settings
+                string? gamePath = _settingsService?.Settings.GameInstallationPath;
+
+                if (string.IsNullOrEmpty(gamePath) || !_settingsService.IsValidGamePath())
+                {
+                    var result = WpfMessageBox.Show("FFXIV game path is not configured or invalid.\n\nWould you like to:\n\n" +
+                                                   "Yes - Open LGB Parser in standalone console window\n" +
+                                                   "No - Configure game path first\n" +
+                                                   "Cancel - Exit",
+                        "Game Path Not Set", MessageBoxButton.YesNoCancel, MessageBoxImage.Question);
+
+                    switch (result)
+                    {
+                        case MessageBoxResult.Yes:
+                            // Open LGB Parser in standalone console window
+                            OpenLgbParserInConsole(lgbParserExe, new string[0]);
+                            return;
+                        case MessageBoxResult.No:
+                            // Open settings
+                            OpenSettings_Click(sender, e);
+                            return;
+                        default:
+                            return;
+                    }
+                }
+
+                // ✅ UPDATED: Modified options dialog to include batch parsing
+                var optionsResult = WpfMessageBox.Show($"LGB Parser Options:\n\n" +
+                                                     $"Yes - Parse all LGB files from client (batch mode)\n" +
+                                                     $"No - List available zones\n" +
+                                                     $"Cancel - Show help\n\n" +
+                                                     $"Game Path: {gamePath}",
+                                                     "LGB Parser", MessageBoxButton.YesNoCancel, MessageBoxImage.Question);
+
+                switch (optionsResult)
+                {
+                    case MessageBoxResult.Yes:
+                        // ✅ NEW: Parse all LGB files using batch command
+                        await RunLgbParserBatchModeAsync(lgbParserExe, gamePath);
+                        break;
+                    case MessageBoxResult.No:
+                        // List available zones in console
+                        OpenLgbParserInConsole(lgbParserExe, new[] { "--game", gamePath, "--list-zones" });
+                        break;
+                    default:
+                        // Show help in console
+                        OpenLgbParserInConsole(lgbParserExe, new string[0]);
+                        break;
+                }
+            }
+            catch (Exception ex)
+            {
+                LogDebug($"Error running LGB Parser: {ex.Message}");
+                WpfMessageBox.Show($"Failed to run LGB Parser:\n\n{ex.Message}",
+                    "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        // ✅ ADD: Missing OpenLgbParserInConsole method
+        private void OpenLgbParserInConsole(string lgbParserExe, string[] arguments)
+        {
+            try
+            {
+                LogDebug($"Opening LGB Parser in console window: {lgbParserExe}");
+                LogDebug($"Arguments: {string.Join(" ", arguments.Select(a => $"\"{a}\""))}");
+
+                var processInfo = new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = "cmd.exe",
+                    Arguments = $"/k \"\"{lgbParserExe}\" {string.Join(" ", arguments.Select(a => $"\"{a}\""))}\"",
+                    WorkingDirectory = Path.GetDirectoryName(lgbParserExe),
+                    UseShellExecute = true, // ✅ This allows the console window to stay open
+                    CreateNoWindow = false  // ✅ Show the console window
+                };
+
+                System.Diagnostics.Process.Start(processInfo);
+
+                StatusText.Text = "LGB Parser opened in console window";
+                LogDebug("LGB Parser console window opened successfully");
+            }
+            catch (Exception ex)
+            {
+                LogDebug($"Error opening LGB Parser console: {ex.Message}");
+                WpfMessageBox.Show($"Failed to open LGB Parser console:\n\n{ex.Message}",
+                    "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        // ✅ FIXED: Updated method with better console handling (make it synchronous to avoid ENC0085 error)
+        private async Task RunLgbParserProcessAsync(string lgbParserExe, string[] arguments)
+        {
+            try
+            {
+                LogDebug($"Starting LGB Parser: {lgbParserExe}");
+                LogDebug($"Arguments: {string.Join(" ", arguments.Select(a => $"\"{a}\""))}");
+
+                // If no arguments, open in console window instead
+                if (arguments.Length == 0)
+                {
+                    OpenLgbParserInConsole(lgbParserExe, arguments);
+                    return;
+                }
+
+                var processInfo = new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = lgbParserExe,
+                    Arguments = string.Join(" ", arguments.Select(a => $"\"{a}\"")),
+                    WorkingDirectory = Path.GetDirectoryName(lgbParserExe),
+                    UseShellExecute = false,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    CreateNoWindow = true // Keep this for background processing
+                };
+
+                using var process = new System.Diagnostics.Process { StartInfo = processInfo };
+
+                // Capture output for logging
+                var outputLines = new List<string>();
+                var errorLines = new List<string>();
+
+                process.OutputDataReceived += (sender, e) =>
+                {
+                    if (!string.IsNullOrEmpty(e.Data))
+                    {
+                        outputLines.Add(e.Data);
+                        WpfApplication.Current.Dispatcher.InvokeAsync(() =>
+                            LogDebug($"[LGB Parser] {e.Data}"));
+                    }
+                };
+
+                process.ErrorDataReceived += (sender, e) =>
+                {
+                    if (!string.IsNullOrEmpty(e.Data))
+                    {
+                        errorLines.Add(e.Data);
+                        WpfApplication.Current.Dispatcher.InvokeAsync(() =>
+                            LogDebug($"[LGB Parser Error] {e.Data}"));
+                    }
+                };
+
+                process.Start();
+                process.BeginOutputReadLine();
+                process.BeginErrorReadLine();
+
+                // Wait for completion
+                await Task.Run(() => process.WaitForExit());
+
+                WpfApplication.Current.Dispatcher.Invoke(() =>
+                {
+                    if (process.ExitCode == 0)
+                    {
+                        LogDebug("LGB Parser completed successfully");
+                        StatusText.Text = $"LGB Parser completed successfully - {outputLines.Count} lines of output";
+
+                        // ✅ For commands that produce a lot of output, show results in a window
+                        if (outputLines.Count > 50)
+                        {
+                            ShowLgbParserResults(outputLines, arguments);
+                        }
+                    }
+                    else
+                    {
+                        LogDebug($"LGB Parser exited with code: {process.ExitCode}");
+                        StatusText.Text = $"LGB Parser exited with code: {process.ExitCode}";
+
+                        if (errorLines.Count > 0)
+                        {
+                            var errorMessage = string.Join("\n", errorLines.Take(10));
+                            WpfMessageBox.Show($"LGB Parser errors:\n\n{errorMessage}",
+                                "LGB Parser Error", MessageBoxButton.OK, MessageBoxImage.Warning);
+                        }
+                    }
+                });
+            }
+            catch (Exception ex)
+            {
+                WpfApplication.Current.Dispatcher.Invoke(() =>
+                {
+                    LogDebug($"Exception during LGB Parser execution: {ex.Message}");
+                    StatusText.Text = "LGB Parser execution failed";
+                    WpfMessageBox.Show($"An error occurred running LGB Parser:\n\n{ex.Message}",
+                        "LGB Parser Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                });
+            }
+        }
+
+        private void ShowLgbParserResults(List<string> outputLines, string[] arguments)
+        {
+            try
+            {
+                var resultsWindow = new Window
+                {
+                    Title = $"LGB Parser Results - {string.Join(" ", arguments)}",
+                    Width = 800,
+                    Height = 600,
+                    Owner = this,
+                    WindowStartupLocation = WindowStartupLocation.CenterOwner
+                };
+
+                var scrollViewer = new ScrollViewer
+                {
+                    VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                    HorizontalScrollBarVisibility = ScrollBarVisibility.Auto
+                };
+
+                var textBox = new System.Windows.Controls.TextBox
+                {
+                    Text = string.Join("\n", outputLines),
+                    IsReadOnly = true,
+                    FontFamily = new System.Windows.Media.FontFamily("Consolas"),
+                    FontSize = 12,
+                    TextWrapping = TextWrapping.NoWrap,
+                    AcceptsReturn = true,
+                    VerticalAlignment = VerticalAlignment.Stretch,
+                    HorizontalAlignment = System.Windows.HorizontalAlignment.Stretch // ✅ FIXED: Fully qualified namespace
+                };
+
+                scrollViewer.Content = textBox;
+                resultsWindow.Content = scrollViewer;
+
+                resultsWindow.Show();
+            }
+            catch (Exception ex)
+            {
+                LogDebug($"Error showing LGB Parser results: {ex.Message}");
+            }
+        }
+
+
         private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
         {
             if (_mapRenderer != null)
@@ -315,17 +561,18 @@ namespace map_editor
             }
         }
 
-        private void ShowProgressOverlay()
+        // ✅ UPDATED: Make ShowProgressOverlay configurable for different operations
+        private void ShowProgressOverlay(string operationName = "quest extraction", string initialMessage = "Initializing quest_parse.exe...")
         {
             ProgressOverlay.Visibility = Visibility.Visible;
-            ProgressStatusText.Text = "Initializing quest_parse.exe...";
+            ProgressStatusText.Text = initialMessage;
             QuestExtractionProgressBar.IsIndeterminate = true;
             CancelExtractionButton.IsEnabled = true;
 
             // Create cancellation token
             _extractionCancellationSource = new System.Threading.CancellationTokenSource();
 
-            LogDebug("Progress overlay shown");
+            LogDebug($"Progress overlay shown for {operationName}");
         }
 
         private void HideProgressOverlay()
@@ -352,25 +599,25 @@ namespace map_editor
         {
             try
             {
-                LogDebug("User requested cancellation of quest extraction");
+                LogDebug("User requested cancellation of operation");
 
                 if (_questExtractionProcess != null && !_questExtractionProcess.HasExited)
                 {
                     _questExtractionProcess.Kill();
-                    LogDebug("quest_parse.exe process terminated");
+                    LogDebug("Process terminated by user");
                 }
 
                 _extractionCancellationSource?.Cancel();
 
                 HideProgressOverlay();
-                StatusText.Text = "Quest extraction cancelled by user";
+                StatusText.Text = "Operation cancelled by user";
 
-                WpfMessageBox.Show("Quest extraction has been cancelled.", "Extraction Cancelled",
+                WpfMessageBox.Show("Operation has been cancelled.", "Operation Cancelled",
                     MessageBoxButton.OK, MessageBoxImage.Information);
             }
             catch (Exception ex)
             {
-                LogDebug($"Error cancelling extraction: {ex.Message}");
+                LogDebug($"Error cancelling operation: {ex.Message}");
                 HideProgressOverlay();
             }
         }
@@ -1738,7 +1985,7 @@ namespace map_editor
                 var result = WpfMessageBox.Show($"This will run quest_parse.exe with the following parameters:\n\n" +
                                                $"Tool: {Path.GetFileName(questParseExe)}\n" +
                                                $"Sqpack Path: {sqpackPath}\n\n" +
-                                               "This may take some time to complete. Continue?",
+                                               $"This may take some time to complete. Continue?",
                                                "Extract Quest Files", MessageBoxButton.YesNo, MessageBoxImage.Question);
 
                 if (result != MessageBoxResult.Yes)
@@ -1746,8 +1993,8 @@ namespace map_editor
                     return;
                 }
 
-                // ✅ Show progress overlay
-                ShowProgressOverlay();
+                // ✅ UPDATED: Show progress overlay with quest-specific messages
+                ShowProgressOverlay("quest extraction", "Initializing quest_parse.exe...");
 
                 // Run the tool asynchronously
                 await RunQuestParseToolWithProgressAsync(questParseExe, sqpackPath);
@@ -1761,6 +2008,228 @@ namespace map_editor
             }
         }
 
+        // ✅ NEW: Add method to run LGB Parser in batch mode with progress tracking
+        private async Task RunLgbParserBatchModeAsync(string lgbParserExe, string gamePath)
+        {
+            try
+            {
+                // Ask user for output directory
+                var outputDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "LGB_ParseResults");
+
+                var confirmResult = WpfMessageBox.Show($"This will parse ALL LGB files from the FFXIV client.\n\n" +
+                                                     $"Game Path: {gamePath}\n" +
+                                                     $"Output Directory: {outputDir}\n\n" +
+                                                     $"This may take several minutes and will process thousands of files.\n\n" +
+                                                     $"Continue with batch parsing?",
+                                                     "Confirm LGB Batch Parse", MessageBoxButton.YesNo, MessageBoxImage.Question);
+
+                if (confirmResult != MessageBoxResult.Yes)
+                {
+                    return;
+                }
+
+                // Create output directory
+                Directory.CreateDirectory(outputDir);
+
+                LogDebug($"Starting LGB Parser batch mode...");
+                LogDebug($"Game Path: {gamePath}");
+                LogDebug($"Output Directory: {outputDir}");
+
+                // Show progress overlay (reuse existing progress UI)
+                ShowProgressOverlay("LGB parsing", "Initializing LGB Parser batch mode...");
+
+                // Prepare arguments for batch command
+                var arguments = new[] { "--game", gamePath, "--batch", outputDir };
+
+                // Run the batch parser with progress tracking
+                await RunLgbParserProcessWithProgressAsync(lgbParserExe, arguments);
+            }
+            catch (Exception ex)
+            {
+                LogDebug($"Error in LGB Parser batch mode: {ex.Message}");
+                WpfMessageBox.Show($"Failed to run LGB Parser batch mode:\n\n{ex.Message}",
+                    "Batch Parse Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                HideProgressOverlay();
+            }
+        }
+
+        // ✅ UPDATED: Enhanced version of RunLgbParserProcessAsync with progress tracking for batch operations
+        private async Task RunLgbParserProcessWithProgressAsync(string lgbParserExe, string[] arguments)
+        {
+            try
+            {
+                LogDebug($"Starting LGB Parser with progress tracking: {lgbParserExe}");
+                LogDebug($"Arguments: {string.Join(" ", arguments.Select(a => $"\"{a}\""))}");
+
+                var processInfo = new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = lgbParserExe,
+                    Arguments = string.Join(" ", arguments.Select(a => $"\"{a}\"")),
+                    WorkingDirectory = Path.GetDirectoryName(lgbParserExe),
+                    UseShellExecute = false,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    CreateNoWindow = true
+                };
+
+                using var process = new System.Diagnostics.Process { StartInfo = processInfo };
+
+                // Progress tracking variables
+                var outputLines = new List<string>();
+                var errorLines = new List<string>();
+                var startTime = DateTime.Now;
+                int processedFiles = 0;
+                int totalFiles = 0;
+                bool hasEstimatedTotal = false;
+
+                // ✅ Enhanced output processing for batch operations
+                process.OutputDataReceived += (sender, e) =>
+                {
+                    if (!string.IsNullOrEmpty(e.Data))
+                    {
+                        outputLines.Add(e.Data);
+                        WpfApplication.Current.Dispatcher.InvokeAsync(() =>
+                        {
+                            LogDebug($"[LGB Parser] {e.Data}");
+
+                            // Track progress from output
+                            var line = e.Data.Trim();
+
+                            // Look for file processing indicators
+                            if (line.Contains("Found ") && line.Contains(" LGB files"))
+                            {
+                                // Extract total file count
+                                var match = System.Text.RegularExpressions.Regex.Match(line, @"Found (\d+) LGB files");
+                                if (match.Success && int.TryParse(match.Groups[1].Value, out int count))
+                                {
+                                    totalFiles = count;
+                                    hasEstimatedTotal = true;
+                                    UpdateProgressStatus($"Found {totalFiles} LGB files to process...");
+                                }
+                            }
+                            else if (line.Contains("✅ Processed:") || line.Contains("✓ Successfully parsed:"))
+                            {
+                                processedFiles++;
+                                var elapsed = DateTime.Now - startTime;
+
+                                if (hasEstimatedTotal && totalFiles > 0)
+                                {
+                                    var percentage = (double)processedFiles / totalFiles * 100;
+                                    var estimatedTimeRemaining = processedFiles > 0
+                                        ? TimeSpan.FromMilliseconds(elapsed.TotalMilliseconds / processedFiles * (totalFiles - processedFiles))
+                                        : TimeSpan.Zero;
+
+                                    UpdateProgressStatus($"Processing LGB files... {processedFiles}/{totalFiles} ({percentage:F1}%) - ETA: {estimatedTimeRemaining:mm\\:ss}");
+                                }
+                                else
+                                {
+                                    UpdateProgressStatus($"Processing LGB files... {processedFiles} files completed ({elapsed:mm\\:ss} elapsed)");
+                                }
+                            }
+                            else if (line.Contains("processing complete!"))
+                            {
+                                UpdateProgressStatus($"LGB parsing complete! Processed {processedFiles} files");
+                            }
+                            else if (line.Length > 0 && !line.Contains("❌") && !line.Contains("✗"))
+                            {
+                                // Show current file being processed (truncated for UI)
+                                var displayLine = line.Length > 50 ? line.Substring(0, 47) + "..." : line;
+                                UpdateProgressStatus($"Processing: {displayLine}");
+                            }
+                        });
+                    }
+                };
+
+                process.ErrorDataReceived += (sender, e) =>
+                {
+                    if (!string.IsNullOrEmpty(e.Data))
+                    {
+                        errorLines.Add(e.Data);
+                        WpfApplication.Current.Dispatcher.InvokeAsync(() =>
+                        {
+                            LogDebug($"[LGB Parser Error] {e.Data}");
+                            UpdateProgressStatus($"Warning: {e.Data.Substring(0, Math.Min(60, e.Data.Length))}...");
+                        });
+                    }
+                };
+
+                process.Start();
+                process.BeginOutputReadLine();
+                process.BeginErrorReadLine();
+
+                // Wait for completion
+                await Task.Run(() => process.WaitForExit());
+
+                WpfApplication.Current.Dispatcher.Invoke(() =>
+                {
+                    HideProgressOverlay();
+
+                    var totalTime = DateTime.Now - startTime;
+
+                    if (process.ExitCode == 0)
+                    {
+                        LogDebug("✅ LGB Parser batch mode completed successfully");
+                        StatusText.Text = $"LGB batch parsing completed - {processedFiles} files processed in {totalTime:mm\\:ss}";
+
+                        // Show detailed results
+                        var outputDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "LGB_ParseResults");
+                        WpfMessageBox.Show($"LGB Parser batch mode completed successfully!\n\n" +
+                                         $"Files processed: {processedFiles}\n" +
+                                         $"Total time: {totalTime:mm\\:ss}\n" +
+                                         $"Output directory: {outputDir}\n\n" +
+                                         $"The parsed LGB files are now available for analysis.",
+                            "LGB Batch Parse Complete", MessageBoxButton.OK, MessageBoxImage.Information);
+
+                        // Ask if user wants to open output directory
+                        var openResult = WpfMessageBox.Show("Would you like to open the output directory to view the parsed files?",
+                            "Open Results", MessageBoxButton.YesNo, MessageBoxImage.Question);
+
+                        if (openResult == MessageBoxResult.Yes)
+                        {
+                            try
+                            {
+                                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                                {
+                                    FileName = outputDir,
+                                    UseShellExecute = true,
+                                    Verb = "open"
+                                });
+                            }
+                            catch (Exception ex)
+                            {
+                                LogDebug($"Failed to open output directory: {ex.Message}");
+                            }
+                        }
+                    }
+                    else
+                    {
+                        LogDebug($"❌ LGB Parser batch mode failed with exit code: {process.ExitCode}");
+                        StatusText.Text = $"LGB batch parsing failed (Exit code: {process.ExitCode})";
+
+                        var errorSummary = errorLines.Count > 0
+                            ? string.Join("\n", errorLines.Take(5))
+                            : "Check debug log for details";
+
+                        WpfMessageBox.Show($"LGB Parser batch mode failed with exit code: {process.ExitCode}\n\n" +
+                                         $"Files processed before failure: {processedFiles}\n" +
+                                         $"Errors:\n{errorSummary}",
+                            "LGB Batch Parse Failed", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    }
+                });
+            }
+            catch (Exception ex)
+            {
+                WpfApplication.Current.Dispatcher.Invoke(() =>
+                {
+                    LogDebug($"❌ Exception during LGB Parser batch execution: {ex.Message}");
+                    HideProgressOverlay();
+                    StatusText.Text = "LGB batch parsing failed";
+                    WpfMessageBox.Show($"An error occurred during LGB batch parsing:\n\n{ex.Message}",
+                        "LGB Batch Parse Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                });
+            }
+        }
+
         private async Task RunQuestParseToolAsync(string questParseExe, string sqpackPath)
         {
             try
@@ -1771,7 +2240,7 @@ namespace map_editor
                 var processInfo = new System.Diagnostics.ProcessStartInfo
                 {
                     FileName = questParseExe,
-                    Arguments = $"\"{sqpackPath}\"", // Pass the sqpack path as argument
+                    Arguments = $"\"{sqpackPath}\"",
                     WorkingDirectory = Path.GetDirectoryName(questParseExe),
                     UseShellExecute = false,
                     RedirectStandardOutput = true,
@@ -1829,7 +2298,8 @@ namespace map_editor
             {
                 WpfApplication.Current.Dispatcher.Invoke(() =>
                 {
-                    LogDebug($"Exception during quest_parse.exe execution: {ex.Message}");
+                    LogDebug($"❌ Exception during quest_parse.exe execution: {ex.Message}");
+                    HideProgressOverlay();
                     StatusText.Text = "Quest extraction failed";
                     WpfMessageBox.Show($"An error occurred during quest extraction:\n\n{ex.Message}",
                         "Extraction Error", MessageBoxButton.OK, MessageBoxImage.Error);

@@ -7,7 +7,7 @@
         mc:Ignorable="d"
         Title="FFXIV Map Editor" Height="1000" Width="1600">
 
-    <!-- ✅ ADD: Window Resources with the converter -->
+    <!--  Window Resources with the converter -->
     <Window.Resources>
         <local:QuestHasLocationConverter x:Key="QuestHasLocationConverter"/>
     </Window.Resources>
@@ -48,10 +48,11 @@
                           ToolTip="Opens the Sapphire Server repository folder in Windows Explorer"/>
                 <MenuItem Header="Open Sapphire Server _Build Directory" Click="OpenSapphireBuild_Click"
                           ToolTip="Opens the Sapphire Server build directory in Windows Explorer"/>
-                <!-- ✅ ADD this new menu item -->
                 <Separator/>
                 <MenuItem Header="_Extract Quest Files" Click="ExtractQuestFiles_Click"
                           ToolTip="Runs quest_parse.exe to extract quest files from game data"/>
+                <MenuItem Header="_LGB Parser" Click="RunLgbParser_Click"
+                          ToolTip="Opens LGB Parser tool for parsing FFXIV LGB files"/>
             </MenuItem>
         </Menu>
 
