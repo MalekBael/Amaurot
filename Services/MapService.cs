@@ -10,6 +10,7 @@ using WpfPoint = System.Windows.Point;
 using WpfSize = System.Windows.Size;
 using System.Windows.Media;
 using System.Windows.Controls;
+using map_editor.Services; // ✅ ADD: This should already be there, but make sure it includes FateLgbService
 
 namespace map_editor
 {
@@ -18,8 +19,6 @@ namespace map_editor
         private readonly ARealmReversed? _realm;
         private readonly Action<string> _logDebug;
         private bool _verboseDebugMode = false;
-
-        // Add missing cache fields
         private readonly Dictionary<uint, List<MapMarker>> _mapMarkerCache = new Dictionary<uint, List<MapMarker>>();
         private readonly Dictionary<uint, List<FateInfo>> _mapFateCache = new Dictionary<uint, List<FateInfo>>();
         private readonly Dictionary<uint, string> _placeNameCache = new Dictionary<uint, string>();
@@ -41,7 +40,7 @@ namespace map_editor
         public MapService(ARealmReversed? realm, Action<string>? logDebug = null)
         {
             _realm = realm;
-            _logDebug = logDebug ?? (msg => { }); // Provide a no-op if no logger provided
+            _logDebug = logDebug ?? (msg => { });
             LoadMapSymbols();
             LoadPlaceNameCache();
         }
@@ -86,12 +85,12 @@ namespace map_editor
 
         public List<MapMarker> LoadMapMarkers(uint mapId)
         {
-            _logDebug($"LoadMapMarkers called for mapId: {mapId}");
+            _logDebug($"🗺️ === MAP SERVICE DEBUG START === MapId: {mapId}");
 
             // Check cache first
             if (_mapMarkerCache.ContainsKey(mapId))
             {
-                _logDebug($"Returning {_mapMarkerCache[mapId].Count} cached markers for map {mapId}");
+                _logDebug($"💾 Returning {_mapMarkerCache[mapId].Count} cached markers for map {mapId}");
                 return _mapMarkerCache[mapId];
             }
 
@@ -99,7 +98,7 @@ namespace map_editor
 
             if (_realm == null)
             {
-                _logDebug("Realm is null in LoadMapMarkers");
+                _logDebug("❌ Realm is null in LoadMapMarkers");
                 return markers;
             }
 
@@ -110,26 +109,55 @@ namespace map_editor
 
                 if (map == null)
                 {
-                    _logDebug($"Map {mapId} not found");
+                    _logDebug($"❌ Map {mapId} not found");
                     return markers;
                 }
 
-                // Load markers from MapMarker sheet
-                LoadMapMarkersFromSheet(markers, map);
+                _logDebug($"✅ Found map {mapId}: {map.PlaceName?.Name}");
 
-                // DISABLED: Load FATEs and convert to markers - keeping UI but not placing markers
-                // var fates = LoadMapFates(mapId);
-                // var fateMarkers = ConvertFatesToMarkers(fates, mapId);
-                // markers.AddRange(fateMarkers);
-                
-                _logDebug($"Total markers loaded for map {mapId}: {markers.Count} (FATE markers disabled)");
+                // Load regular map markers
+                _logDebug($"📍 Loading regular map markers from sheet...");
+                LoadMapMarkersFromSheet(markers, map);
+                _logDebug($"📍 Loaded {markers.Count} regular markers");
+
+                // ✅ ENHANCED: Load FATE markers with detailed debugging
+                _logDebug($"🎯 Loading FATE markers from LGB data...");
+                if (_realm != null)
+                {
+                    var fateLgbService = new FateLgbService(_realm, _logDebug);
+                    var fateMarkers = fateLgbService.LoadFateMarkersFromLgb(mapId);
+
+                    _logDebug($"🎯 FateLgbService returned {fateMarkers.Count} FATE markers");
+
+                    if (fateMarkers.Count > 0)
+                    {
+                        _logDebug($"📋 FATE markers details:");
+                        for (int i = 0; i < Math.Min(fateMarkers.Count, 5); i++) // Show first 5
+                        {
+                            var marker = fateMarkers[i];
+                            _logDebug($"   #{i + 1}: '{marker.PlaceName}' at ({marker.X:F1}, {marker.Y:F1}) - Type: {marker.Type}, Visible: {marker.IsVisible}, Icon: {marker.IconId}");
+                        }
+                        if (fateMarkers.Count > 5)
+                        {
+                            _logDebug($"   ... and {fateMarkers.Count - 5} more FATE markers");
+                        }
+                    }
+
+                    markers.AddRange(fateMarkers);
+                    _logDebug($"✅ Added {fateMarkers.Count} FATE markers to total marker list");
+                }
+
+                _logDebug($"📊 Total markers loaded for map {mapId}: {markers.Count} (including {markers.Count(m => m.Type == MarkerType.Fate)} FATE markers)");
 
                 // Cache the results
                 _mapMarkerCache[mapId] = markers;
+
+                _logDebug($"🗺️ === MAP SERVICE COMPLETE === Cached {markers.Count} markers for map {mapId}");
             }
             catch (Exception ex)
             {
-                _logDebug($"Error in LoadMapMarkers: {ex.Message}\n{ex.StackTrace}");
+                _logDebug($"❌ CRITICAL ERROR in LoadMapMarkers: {ex.Message}");
+                _logDebug($"Stack trace: {ex.StackTrace}");
             }
 
             return markers;
@@ -590,7 +618,6 @@ namespace map_editor
                            $"Relative ({relativeX:F2}, {relativeY:F2}) -> " +
                            $"Pixel ({pixelX:F1}, {pixelY:F1})");
 
-
             double screenX = pixelX * imageScale + imagePosition.X;
             double screenY = pixelY * imageScale + imagePosition.Y;
 
@@ -617,7 +644,6 @@ namespace map_editor
 
                     if (indexer != null)
                     {
-                        // Fixed: Add null checks for unboxing operations (Lines 620, 622, 624)
                         var sizeFactorValue = indexer.GetValue(map, new object[] { "SizeFactor" });
                         if (sizeFactorValue != null)
                         {
@@ -1028,7 +1054,6 @@ namespace map_editor
                         if (sourceRow == null) continue;
 
                         uint iconId = 0;
-                        // Fixed: Add null check for unboxing operation (Line 853)
                         if (sourceRow[0] != null && !(sourceRow[0] is SaintCoinach.Imaging.ImageFile))
                         {
                             iconId = Convert.ToUInt32(sourceRow[0]);
@@ -1044,12 +1069,10 @@ namespace map_editor
                             placeNameId = (uint)placeNameObj.Key;
                             placeNameString = placeNameObj.Name?.ToString() ?? string.Empty;
                         }
-                        // Fixed: Add null check for unboxing operation (Line 883)
                         else if (sourceRow[1] != null && !(sourceRow[1] is SaintCoinach.Imaging.ImageFile))
                         {
                             try
                             {
-                                // Fixed CS8605: Check if the value is not null before unboxing
                                 var placeNameValue = sourceRow[1];
                                 if (placeNameValue != null)
                                 {
@@ -1144,7 +1167,6 @@ namespace map_editor
                 return 60442;
             }
 
-
             if (_placeNameStringToIconMap.TryGetValue(placeName, out var iconId))
             {
                 Debug.WriteLine($"GetIconForPlaceName: Found exact match for '{placeName}' -> {iconId}");
@@ -1178,11 +1200,9 @@ namespace map_editor
                 return 60314;
             }
 
-
             Debug.WriteLine($"GetIconForPlaceName: No match found for '{placeName}', returning default icon");
             return 60001;
         }
-
 
         private bool IsAetheryte(string placeName)
         {
@@ -1289,7 +1309,6 @@ namespace map_editor
                 Debug.WriteLine("Canvas alignment appears correct");
             }
 
-
             Debug.WriteLine($"MapImageControl transform: Scale={mapScale:F2}, Position=({mapPosition.X:F1},{mapPosition.Y:F1})");
             Debug.WriteLine($"OverlayCanvas transform: Scale={overlayScale:F2}, Position=({overlayPosition.X:F1},{overlayPosition.Y:F1})");
         }
@@ -1336,7 +1355,6 @@ namespace map_editor
 
         public List<FateInfo> LoadMapFates(uint mapId)
         {
-            // Check cache first
             if (_mapFateCache.ContainsKey(mapId))
             {
                 return _mapFateCache[mapId];
@@ -1348,7 +1366,6 @@ namespace map_editor
 
             try
             {
-                // Get territory ID for this map
                 var mapSheet = _realm.GameData.GetSheet<Map>();
                 Map? map = null;
 
@@ -1383,15 +1400,12 @@ namespace map_editor
                 int validFates = 0;
                 int fatesWithoutLocation = 0;
 
-                // Instead of trying to match with Level sheet, let's load ALL FATEs
-                // and filter by territory if we have territory information
                 foreach (var fateRow in fateSheet)
                 {
                     processedFates++;
 
                     try
                     {
-                        // Ensure we can access the FATE row properly
                         if (fateRow == null)
                         {
                             if (_verboseDebugMode)
@@ -1415,7 +1429,6 @@ namespace map_editor
                             continue;
                         }
 
-                        // Access FATE name using index 24 as specified in Fate.json
                         string fateName = "";
                         try
                         {
@@ -1444,7 +1457,6 @@ namespace map_editor
 
                         if (string.IsNullOrWhiteSpace(fateName)) continue;
 
-                        // Get location from Fate index 9 (Location)
                         var locationValue = 0;
                         try
                         {
@@ -1469,14 +1481,11 @@ namespace map_editor
                             }
                         }
 
-                        // For FATEs without location, we'll still include them in the list
-                        // but with default coordinates
                         if (locationValue == 0)
                         {
                             fatesWithoutLocation++;
                         }
 
-                        // Get other FATE properties safely
                         uint classJobLevel = 0;
                         uint iconId = 60093; // Default FATE icon
 
@@ -1488,7 +1497,7 @@ namespace map_editor
                             }
                             else
                             {
-                                var levelValue = fateRow[2]; // ClassJobLevel is at index 2
+                                var levelValue = fateRow[2];
                                 if (levelValue != null)
                                 {
                                     classJobLevel = (uint)Math.Max(0, Convert.ToInt32(levelValue));
@@ -1505,7 +1514,7 @@ namespace map_editor
                             }
                             else
                             {
-                                var iconValue = fateRow[3]; // Icon is at index 3
+                                var iconValue = fateRow[3];
                                 if (iconValue != null)
                                 {
                                     iconId = (uint)Math.Max(60093, Convert.ToInt32(iconValue));
@@ -1523,16 +1532,14 @@ namespace map_editor
                             }
                             else
                             {
-                                var descValue = fateRow[25]; // Description is at index 25
+                                var descValue = fateRow[25];
                                 description = descValue?.ToString() ?? "";
                             }
                         }
                         catch { }
 
-                        // For now, create FATE entries with placeholder coordinates
-                        // This allows the FATE list to populate even without proper location data
-                        var random = new Random(fateKey); // Use FATE key as seed for consistency
-                        double fateMapX = 21 + (random.NextDouble() - 0.5) * 20; // Center around map center with some spread
+                        var random = new Random(fateKey);
+                        double fateMapX = 21 + (random.NextDouble() - 0.5) * 20;
                         double fateMapY = 21 + (random.NextDouble() - 0.5) * 20;
                         double worldZ = 0;
 
@@ -1561,7 +1568,6 @@ namespace map_editor
                         {
                             _logDebug($"Error processing FATE at index {processedFates}: {ex.Message}");
                         }
-                        // Continue processing other FATEs instead of stopping
                     }
                 }
 

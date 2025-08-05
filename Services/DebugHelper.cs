@@ -101,7 +101,6 @@ namespace map_editor
                 LogDebug("Map image has no transform!");
             }
 
-            // Fix: Use WpfPanel alias instead of Panel
             LogDebug($"Z-Index: MapImageControl={WpfPanel.GetZIndex(_mainWindow.MapImageControl)}, " +
                      $"MapCanvas={WpfPanel.GetZIndex(_mainWindow.MapCanvas)}, " +
                      $"OverlayCanvas={WpfPanel.GetZIndex(_mainWindow.OverlayCanvas ?? new Canvas())}");
@@ -122,7 +121,6 @@ namespace map_editor
                 for (int i = 0; i < _mainWindow.MapCanvas.Children.Count; i++)
                 {
                     var child = _mainWindow.MapCanvas.Children[i];
-                    // Fix: Use WpfPanel alias instead of Panel
                     LogDebug($"  Child {i}: Type={child.GetType().Name}, Z-Index={WpfPanel.GetZIndex(child)}");
                 }
             }
@@ -173,7 +171,7 @@ namespace map_editor
             LogDebug($"OverlayCanvas z-index: {WpfPanel.GetZIndex(_mainWindow.OverlayCanvas)}");
             LogDebug($"OverlayCanvas children count: {_mainWindow.OverlayCanvas.Children.Count}");
 
-            bool isAttachedToVisualTree = false;  // Fixed: corrected variable name
+            bool isAttachedToVisualTree = false;
             DependencyObject parent = _mainWindow.OverlayCanvas;
             while (parent != null)
             {
@@ -218,14 +216,13 @@ namespace map_editor
             LogDebug($"=== FATE MARKER POSITIONS DEBUG ===");
             LogDebug($"Total FATE markers: {fateMarkers.Count}");
 
-            // Use InvariantCulture to format coordinates consistently with dots as decimal separators
             var positionGroups = fateMarkers.GroupBy(m => $"{m.X.ToString("F1", System.Globalization.CultureInfo.InvariantCulture)},{m.Y.ToString("F1", System.Globalization.CultureInfo.InvariantCulture)}").ToList();
             LogDebug($"Unique positions: {positionGroups.Count}");
 
-            foreach (var group in positionGroups.Take(5)) // Show first 5 position groups
+            foreach (var group in positionGroups.Take(5))
             {
                 LogDebug($"Position ({group.Key}): {group.Count()} FATEs");
-                foreach (var fate in group.Take(3)) // Show first 3 FATEs at each position
+                foreach (var fate in group.Take(3))
                 {
                     LogDebug($"  - {fate.PlaceName} (Icon: {fate.IconId})");
                 }
@@ -293,7 +290,6 @@ namespace map_editor
         }
     }
 
-    // Fix: Change from Trace.TraceListener to System.Diagnostics.TraceListener
     public class TextBoxTraceListener : System.Diagnostics.TraceListener
     {
         private readonly DebugHelper _debugHelper;

@@ -101,7 +101,7 @@ namespace map_editor.Services
                                 continue;
 
                             var npcId = (uint)enpc.Key;
-                            
+
                             uint territoryId = 0;
                             uint mapId = 0;
                             double x = 0, y = 0, z = 0;
@@ -176,7 +176,6 @@ namespace map_editor.Services
                 {
                     _logDebug($"🧙 VERIFIED: Mother Miounne preserved - ID: {motherMiounne.NpcId}, Territory: {motherMiounne.TerritoryId}, Map: {motherMiounne.MapId}, Quests: {motherMiounne.QuestCount}");
                 }
-
             }
             catch (Exception ex)
             {
@@ -187,7 +186,7 @@ namespace map_editor.Services
         }
 
         /// <summary>
-        /// Extract quest data for NPCs from Libra Eorzea database - FIXED SQL QUERY
+        /// Extract quest data for NPCs from Libra Eorzea database
         /// </summary>
         private Dictionary<uint, List<NpcQuestInfo>> ExtractNpcQuestsFromLibra()
         {
@@ -205,7 +204,7 @@ namespace map_editor.Services
                 connection.Open();
 
                 var query = @"
-                    SELECT 
+                    SELECT
                         q.Key as quest_id,
                         COALESCE(q.Name_en, CAST(q.Key AS TEXT)) as quest_name,
                         q.Client as npc_id,
@@ -220,7 +219,7 @@ namespace map_editor.Services
                     INNER JOIN ENpcResident n ON q.Client = n.Key
                     LEFT JOIN JournalGenre jg ON q.Genre = jg.Key
                     LEFT JOIN PlaceName pn ON q.Area = pn.Key
-                    WHERE q.Client > 0 
+                    WHERE q.Client > 0
                       AND q.Key > 0
                       AND COALESCE(q.Name_en, '') != ''
                     ORDER BY q.Client, q.Key";
@@ -245,27 +244,25 @@ namespace map_editor.Services
                         var placeNameId = Convert.ToUInt32(reader["place_name_id"] ?? 0);
                         var placeName = reader["place_name"]?.ToString() ?? "Unknown Location";
 
-                        // Create quest info for this NPC
                         var questInfo = new NpcQuestInfo
                         {
                             QuestId = questId,
                             QuestName = questName,
-                            MapId = 0, // Will be populated from NPC position data if available
-                            TerritoryId = 0, // Will be populated from NPC position data if available
+                            MapId = 0,
+                            TerritoryId = 0,
                             MapX = 0,
                             MapY = 0,
                             MapZ = 0,
                             JournalGenre = journalGenreName,
                             LevelRequired = levelRequired,
-                            IsMainScenario = false, // Not available in Libra structure
-                            IsFeatureQuest = false, // Not available in Libra structure
-                            ExpReward = 0, // Not easily accessible in current CSV structure
+                            IsMainScenario = false,
+                            IsFeatureQuest = false,
+                            ExpReward = 0,
                             GilReward = gilReward,
                             PlaceNameId = placeNameId,
                             PlaceName = placeName
                         };
 
-                        // Add to NPC's quest list
                         if (!npcQuests.TryGetValue(npcId, out var questList))
                         {
                             questList = new List<NpcQuestInfo>();
@@ -275,13 +272,11 @@ namespace map_editor.Services
                         questList.Add(questInfo);
                         questCount++;
 
-                        // Debug logging for first few NPCs
                         if (debugNpcIds.Count < 5 && debugNpcIds.Add(npcId))
                         {
                             _logDebug($"📊 NPC {npcId} ({npcName}) offers quest: '{questName}' (Level {levelRequired}, {journalGenreName})");
                         }
 
-                        // ✅ Special logging for Mother Miounne
                         if (npcName.Contains("Mother Miounne"))
                         {
                             _logDebug($"🧙 Found quest for Mother Miounne (NPC {npcId}): '{questName}' (ID: {questId})");
@@ -295,7 +290,6 @@ namespace map_editor.Services
 
                 _logDebug($"📊 Processed {questCount} quests for {npcQuests.Count} NPCs from Libra database");
 
-                // Show some statistics
                 if (npcQuests.Count > 0)
                 {
                     var topQuestGivers = npcQuests.OrderByDescending(kvp => kvp.Value.Count).Take(5).ToList();
@@ -336,7 +330,7 @@ namespace map_editor.Services
 
                 // Query to get all NPCs with coordinate data from Libra
                 var query = @"
-                    SELECT 
+                    SELECT
                         n.Key as npc_id,
                         COALESCE(n.SGL_en, n.Index_en, CAST(n.Key AS TEXT)) as npc_name,
                         CAST(n.data AS TEXT) as npc_data
@@ -362,7 +356,7 @@ namespace map_editor.Services
                         var npcDataJson = reader["npc_data"]?.ToString() ?? "";
 
                         processedCount++;
-                        
+
                         if (processedCount <= 5)
                         {
                             _logDebug($"📊 Processing NPC {npcId}: '{npcName}'");
@@ -371,7 +365,6 @@ namespace map_editor.Services
                         var coordinateData = ParseNpcCoordinates(npcDataJson, npcId, connection);
                         if (coordinateData != null)
                         {
-                            // ✅ VALIDATION: Skip NPCs with invalid Map ID 0
                             if (coordinateData.MapId == 0)
                             {
                                 invalidMapIdCount++;
@@ -460,17 +453,14 @@ namespace map_editor.Services
                     if (!double.TryParse(xString, out double rawLibraX) || !double.TryParse(yString, out double rawLibraY))
                         continue;
 
-                    // Map Libra territory to Saint Coinach territory
                     uint saintCoinachTerritoryId = MapLibraToSaintCoinachTerritory(libraPlaceNameId, connection);
                     uint mapId = GetMapIdForTerritory(saintCoinachTerritoryId);
 
-                    // ✅ VALIDATION: Only return valid coordinate data
                     if (saintCoinachTerritoryId == 0 || mapId == 0)
                     {
-                        continue; // Skip invalid territories/maps
+                        continue;
                     }
 
-                    // Convert coordinates using the same logic as QuestLocationService
                     var convertedCoords = ConvertLibraToMapMarkerCoordinates(rawLibraX, rawLibraY, mapId);
 
                     return new NpcCoordinateData
@@ -550,7 +540,7 @@ namespace map_editor.Services
             catch (Exception ex)
             {
                 _logDebug($"Error converting coordinates for MapId {mapId}: {ex.Message}");
-                
+
                 // Fallback to simple game coordinate conversion
                 double gameCoordX = rawLibraX / 10.0;
                 double gameCoordY = rawLibraY / 10.0;
@@ -568,7 +558,7 @@ namespace map_editor.Services
                 if (_realm == null) return 0;
 
                 var territorySheet = _realm.GameData.GetSheet<SaintCoinach.Xiv.TerritoryType>();
-                
+
                 // Try direct PlaceName ID match first
                 var territory = territorySheet.FirstOrDefault(t => t.PlaceName?.Key == libraPlaceNameId);
                 if (territory != null)
@@ -586,7 +576,7 @@ namespace map_editor.Services
                 {
                     territory = territorySheet.FirstOrDefault(t =>
                         string.Equals(t.PlaceName?.ToString(), placeName, StringComparison.OrdinalIgnoreCase));
-                    
+
                     if (territory != null)
                     {
                         return (uint)territory.Key;
@@ -764,9 +754,10 @@ namespace map_editor.Services
         public double MapX { get; set; }
         public double MapY { get; set; }
         public double MapZ { get; set; }
-        
+
         // ✅ Enhanced quest properties from Libra
         public string JournalGenre { get; set; } = string.Empty;
+
         public uint LevelRequired { get; set; }
         public bool IsMainScenario { get; set; }
         public bool IsFeatureQuest { get; set; }

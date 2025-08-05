@@ -1,27 +1,27 @@
-﻿using map_editor.Services;
-using SaintCoinach;
+﻿using Bitmap = System.Drawing.Bitmap;
+using map_editor.Services;
 using SaintCoinach.Ex;
-using SaintCoinach.Xiv;
 using SaintCoinach.Xiv.Items;
-using System;
+using SaintCoinach.Xiv;
+using SaintCoinach;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
-using System.Drawing;
 using System.Drawing.Imaging;
+using System.Drawing;
 using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Threading.Tasks;
-using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
-using System.Windows.Media;
 using System.Windows.Media.Imaging;
-using Bitmap = System.Drawing.Bitmap;
+using System.Windows.Media;
+using System.Windows;
+using System;
+using WfColor = System.Windows.Media.Color;
 using WinForms = System.Windows.Forms;
 using WpfApplication = System.Windows.Application;
 using WpfButton = System.Windows.Controls.Button;
-using WfColor = System.Windows.Media.Color;
 using WpfImage = System.Windows.Controls.Image;
 using WpfMessageBox = System.Windows.MessageBox;
 using WpfPanel = System.Windows.Controls.Panel;
@@ -31,58 +31,51 @@ namespace map_editor
 {
     public partial class MainWindow : Window
     {
-        private DataLoaderService? _dataLoaderService;
-        private SearchFilterService? _searchFilterService;
-        private MapInteractionService? _mapInteractionService;
-        private UIUpdateService? _uiUpdateService;
-        private DebugHelper? _debugHelper;
-        private SettingsService? _settingsService;
         private ARealmReversed? _realm;
-        private MapService? _mapService;
-        private MapRenderer? _mapRenderer;
-        private SaintCoinach.Xiv.Map? _currentMap;
-        private TerritoryInfo? _currentTerritory;
-        private List<MapMarker> _currentMapMarkers = [];
-        private double _currentScale = 1.0;
-        private System.Windows.Point _lastMousePosition;
-        private bool _isDragging = false;
         private bool _hideDuplicateTerritories = false;
-
-        // ✅ Add to class fields
-        private QuestMarkerService? _questMarkerService;
+        private bool _isDragging = false;
+        private DataLoaderService? _dataLoaderService;
+        private DebugHelper? _debugHelper;
+        private double _currentScale = 1.0;
+        private List<MapMarker> _allNpcMarkers = new List<MapMarker>();
         private List<MapMarker> _allQuestMarkers = new List<MapMarker>();
-
-        // ✅ ADD: Add this missing field declaration
-        private QuestLocationService? _questLocationService;
-
-        // ✅ ADD: Add these private fields to the MainWindow class
-        private NpcService? _npcService;
+        private List<MapMarker> _currentMapMarkers = [];
         private List<NpcInfo> _allNpcs = new List<NpcInfo>();
         private List<NpcInfo> _filteredNpcs = new List<NpcInfo>();
-
-
-        public ObservableCollection<TerritoryInfo> Territories { get; set; } = [];
-        public ObservableCollection<QuestInfo> Quests { get; set; } = [];
-        public ObservableCollection<BNpcInfo> BNpcs { get; set; } = [];
-        public ObservableCollection<EventInfo> Events { get; set; } = [];
-        public ObservableCollection<FateInfo> Fates { get; set; } = [];
-
-        private readonly ObservableCollection<QuestInfo> _filteredQuests = [];
+        private MapInteractionService? _mapInteractionService;
+        private MapRenderer? _mapRenderer;
+        private MapService? _mapService;
+        private NpcService? _npcService;
+        private QuestLocationService? _questLocationService;
+        private QuestMarkerService? _questMarkerService;
+        private readonly ObservableCollection<NpcInfo> _filteredNpcsCollection = [];
+        public ObservableCollection<NpcInfo> FilteredNpcs => _filteredNpcsCollection;
         private readonly ObservableCollection<BNpcInfo> _filteredBNpcs = [];
-        private readonly ObservableCollection<TerritoryInfo> _filteredTerritories = [];
         private readonly ObservableCollection<EventInfo> _filteredEvents = [];
         private readonly ObservableCollection<FateInfo> _filteredFates = [];
-
-        private System.Windows.Threading.DispatcherTimer? _searchDebounceTimer;
-
-        public double CurrentScale => _currentScale;
-        public ObservableCollection<TerritoryInfo> FilteredTerritories => _filteredTerritories;
-        public ObservableCollection<BNpcInfo> FilteredBNpcs => _filteredBNpcs;
-        public ObservableCollection<FateInfo> FilteredFates => _filteredFates;
-        public ObservableCollection<QuestInfo> FilteredQuests => _filteredQuests;
-
+        private readonly ObservableCollection<QuestInfo> _filteredQuests = [];
+        private readonly ObservableCollection<TerritoryInfo> _filteredTerritories = [];
+        private SaintCoinach.Xiv.Map? _currentMap;
+        private SearchFilterService? _searchFilterService;
+        private SettingsService? _settingsService;
         private System.Diagnostics.Process? _questExtractionProcess;
         private System.Threading.CancellationTokenSource? _extractionCancellationSource;
+        private System.Windows.Point _lastMousePosition;
+        private System.Windows.Threading.DispatcherTimer? _searchDebounceTimer;
+        private TerritoryInfo? _currentTerritory;
+        private UIUpdateService? _uiUpdateService;
+        public double CurrentScale => _currentScale;
+        public ObservableCollection<BNpcInfo> BNpcs { get; set; } = [];
+        public ObservableCollection<BNpcInfo> FilteredBNpcs => _filteredBNpcs;
+        public ObservableCollection<EventInfo> Events { get; set; } = [];
+        public ObservableCollection<FateInfo> Fates { get; set; } = [];
+        public ObservableCollection<FateInfo> FilteredFates => _filteredFates;
+        public ObservableCollection<QuestInfo> FilteredQuests => _filteredQuests;
+        public ObservableCollection<QuestInfo> Quests { get; set; } = [];
+        public ObservableCollection<TerritoryInfo> FilteredTerritories => _filteredTerritories;
+        public ObservableCollection<TerritoryInfo> Territories { get; set; } = [];
+
+        private QuestScriptService? _questScriptService;
 
         public MainWindow()
         {
@@ -95,19 +88,44 @@ namespace map_editor
             this.Loaded += MainWindow_Loaded;
         }
 
-        // ✅ Fix the InitializeServices method - provide required parameters
+        private List<MapMarker> CreateNpcMarkers(uint mapId)
+        {
+            var npcMarkers = new List<MapMarker>();
+
+            var npcsForMap = _allNpcs.Where(npc => npc.MapId == mapId && npc.QuestCount > 0).ToList();
+
+            foreach (var npc in npcsForMap)
+            {
+                var marker = new MapMarker
+                {
+                    Id = npc.NpcId,
+                    MapId = mapId,
+                    PlaceNameId = 0,
+                    PlaceName = $"{npc.NpcName} ({npc.QuestCount} quest{(npc.QuestCount != 1 ? "s" : "")})",
+                    X = npc.MapX,
+                    Y = npc.MapY,
+                    Z = npc.MapZ,
+                    IconId = 61411,  // Use a generic NPC icon ID, or you could vary by quest type
+                    Type = MarkerType.Npc,
+                    IsVisible = true
+                };
+
+                npcMarkers.Add(marker);
+            }
+
+            LogDebug($"Created {npcMarkers.Count} NPC markers for map {mapId}");
+            return npcMarkers;
+        }
+
         private void InitializeServices()
         {
             try
             {
-                _debugHelper = new DebugHelper(this); // ✅ Pass MainWindow instance
-                _searchFilterService = new SearchFilterService(LogDebug); // ✅ Pass LogDebug method
-                _mapInteractionService = new MapInteractionService(LogDebug); // ✅ Pass LogDebug method
+                _debugHelper = new DebugHelper(this);
+                _searchFilterService = new SearchFilterService(LogDebug);
+                _mapInteractionService = new MapInteractionService(LogDebug);
                 _uiUpdateService = new UIUpdateService();
                 _mapRenderer = new MapRenderer(_realm);
-
-                // Initialize these services when _realm is available (after game data loads)
-                // Don't initialize DataLoaderService and QuestMarkerService here since _realm is null
 
                 LogDebug("Basic services initialized successfully");
             }
@@ -117,7 +135,227 @@ namespace map_editor
             }
         }
 
-        // ✅ Add method to initialize realm-dependent services after game data loads
+        private void Exit_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                LogDebug("Application exit requested by user");
+                WpfApplication.Current.Shutdown();
+            }
+            catch (Exception ex)
+            {
+                LogDebug($"Error during application exit: {ex.Message}");
+                // Force exit if normal shutdown fails
+                Environment.Exit(0);
+            }
+        }
+
+        private void OpenSapphireRepo_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                if (_settingsService != null && _settingsService.IsValidSapphireServerPath())
+                {
+                    _settingsService.OpenSapphireServerPath();
+                    LogDebug("Opened Sapphire Server repository path");
+                }
+                else
+                {
+                    WpfMessageBox.Show("Sapphire Server path is not configured or invalid.\n\nPlease configure it in Settings first.",
+                        "Sapphire Path Not Set", MessageBoxButton.OK, MessageBoxImage.Information);
+
+                    // Open settings to configure the path
+                    OpenSettings_Click(sender, e);
+                }
+            }
+            catch (Exception ex)
+            {
+                LogDebug($"Error opening Sapphire Server repository: {ex.Message}");
+                WpfMessageBox.Show($"Error opening Sapphire Server repository: {ex.Message}",
+                    "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        private async void ExtractQuestFiles_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                // Check if quest_parse.exe exists
+                var toolsDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Tools");
+                var questParseExe = Path.Combine(toolsDir, "quest_parse.exe");
+
+                if (!File.Exists(questParseExe))
+                {
+                    WpfMessageBox.Show($"Quest extraction tool not found at:\n{questParseExe}\n\nPlease ensure the quest_parse.exe is available in the Tools folder.",
+                        "Quest Parse Tool Not Found", MessageBoxButton.OK, MessageBoxImage.Error);
+                    return;
+                }
+
+                // Get the FFXIV game path from settings
+                string? gamePath = _settingsService?.Settings.GameInstallationPath;
+
+                if (string.IsNullOrEmpty(gamePath) || !_settingsService.IsValidGamePath())
+                {
+                    WpfMessageBox.Show("FFXIV game path is not configured or invalid.\n\nPlease configure it in Settings first.",
+                        "Game Path Not Set", MessageBoxButton.OK, MessageBoxImage.Information);
+
+                    // Open settings to configure the path
+                    OpenSettings_Click(sender, e);
+                    return;
+                }
+
+                var sqpackPath = Path.Combine(gamePath, "game", "sqpack");
+                if (!Directory.Exists(sqpackPath))
+                {
+                    WpfMessageBox.Show($"FFXIV sqpack directory not found at:\n{sqpackPath}\n\nPlease verify your game installation path.",
+                        "Sqpack Directory Not Found", MessageBoxButton.OK, MessageBoxImage.Error);
+                    return;
+                }
+
+                LogDebug($"Starting quest file extraction from: {sqpackPath}");
+                await RunQuestParseToolWithProgressAsync(questParseExe, sqpackPath);
+            }
+            catch (Exception ex)
+            {
+                LogDebug($"Error in quest file extraction: {ex.Message}");
+                WpfMessageBox.Show($"Error in quest file extraction: {ex.Message}",
+                    "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        private void QuestList_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            // This method handles when a quest is selected in the quest list
+            // We don't need to do anything special here as double-click handles quest details
+            if (QuestList.SelectedItem is QuestInfo selectedQuest)
+            {
+                LogDebug($"Quest selected: {selectedQuest.Name} (ID: {selectedQuest.Id})");
+            }
+        }
+
+        private void QuestDetailsButton_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                // Get the quest from the button's Tag property
+                if (sender is System.Windows.Controls.Button button && button.Tag is QuestInfo selectedQuest)
+                {
+                    LogDebug($"Opening quest details for: {selectedQuest.Name} (ID: {selectedQuest.Id})");
+                    ShowQuestDetails(selectedQuest);
+                }
+                else
+                {
+                    WpfMessageBox.Show("Please select a quest from the list first.",
+                        "No Quest Selected", MessageBoxButton.OK, MessageBoxImage.Information);
+                }
+            }
+            catch (Exception ex)
+            {
+                LogDebug($"Error opening quest details: {ex.Message}");
+                WpfMessageBox.Show($"Error opening quest details: {ex.Message}",
+                    "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        private void ShowQuestDetails(QuestInfo questInfo)
+        {
+            try
+            {
+                var questDetailsWindow = new QuestDetailsWindow(questInfo, this, _questScriptService);
+                questDetailsWindow.Show();
+                LogDebug($"Opened quest details window for: {questInfo.Name}");
+            }
+            catch (Exception ex)
+            {
+                LogDebug($"Error showing quest details: {ex.Message}");
+                WpfMessageBox.Show($"Error showing quest details: {ex.Message}", "Error",
+                    MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        private void NpcList_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            // Handle NPC selection if needed
+            if (sender is System.Windows.Controls.ListBox npcListBox && npcListBox.SelectedItem is NpcInfo selectedNpc)
+            {
+                LogDebug($"NPC selected: {selectedNpc.NpcName} (ID: {selectedNpc.NpcId})");
+            }
+        }
+
+        private void NpcList_MouseDoubleClick(object sender, MouseButtonEventArgs e)
+        {
+            try
+            {
+                if (sender is System.Windows.Controls.ListBox npcListBox && npcListBox.SelectedItem is NpcInfo selectedNpc)
+                {
+                    LogDebug($"Double-clicked NPC: {selectedNpc.NpcName} (ID: {selectedNpc.NpcId})");
+
+                    // If the NPC has quests, show the quest popup
+                    if (selectedNpc.QuestCount > 0)
+                    {
+                        var questPopup = new NpcQuestPopupWindow(selectedNpc, this);
+                        questPopup.Show();
+                        LogDebug($"Opened quest popup for NPC: {selectedNpc.NpcName} ({selectedNpc.QuestCount} quests)");
+                    }
+                    else
+                    {
+                        WpfMessageBox.Show($"NPC '{selectedNpc.NpcName}' has no associated quests.",
+                            "No Quests", MessageBoxButton.OK, MessageBoxImage.Information);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                LogDebug($"Error handling NPC double-click: {ex.Message}");
+                WpfMessageBox.Show($"Error opening NPC details: {ex.Message}",
+                    "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        private void BNpcList_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            // Handle BNpc (Battle NPC/Monster) selection if needed
+            if (sender is System.Windows.Controls.ListBox bnpcListBox && bnpcListBox.SelectedItem is BNpcInfo selectedBNpc)
+            {
+                LogDebug($"BNpc selected: {selectedBNpc.BNpcName} (ID: {selectedBNpc.BNpcNameId})");
+            }
+        }
+
+        private void FateList_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            // Handle FATE selection if needed
+            if (sender is System.Windows.Controls.ListBox fateListBox && fateListBox.SelectedItem is FateInfo selectedFate)
+            {
+                LogDebug($"FATE selected: {selectedFate.Name} (ID: {selectedFate.FateId})");
+            }
+        }
+
+        private void OpenSapphireBuild_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                if (_settingsService != null && _settingsService.IsValidSapphireBuildPath())
+                {
+                    _settingsService.OpenSapphireBuildPath();
+                    LogDebug("Opened Sapphire Server build path");
+                }
+                else
+                {
+                    WpfMessageBox.Show("Sapphire Server build path is not configured or invalid.\n\nPlease configure it in Settings first.",
+                        "Sapphire Build Path Not Set", MessageBoxButton.OK, MessageBoxImage.Information);
+
+                    // Open settings to configure the path
+                    OpenSettings_Click(sender, e);
+                }
+            }
+            catch (Exception ex)
+            {
+                LogDebug($"Error opening Sapphire Server build path: {ex.Message}");
+                WpfMessageBox.Show($"{ex.Message}",
+                    "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
         private void InitializeRealmDependentServices()
         {
             try
@@ -152,7 +390,6 @@ namespace map_editor
             });
         }
 
-
         // ✅ FIXED: Updated LGB Parser event handlers with proper type resolution
         private async void RunLgbParser_Click(object sender, RoutedEventArgs e)
         {
@@ -186,10 +423,12 @@ namespace map_editor
                             // Open LGB Parser in standalone console window
                             OpenLgbParserInConsole(lgbParserExe, new string[0]);
                             return;
+
                         case MessageBoxResult.No:
                             // Open settings
                             OpenSettings_Click(sender, e);
                             return;
+
                         default:
                             return;
                     }
@@ -209,10 +448,12 @@ namespace map_editor
                         // ✅ NEW: Parse all LGB files using batch command
                         await RunLgbParserBatchModeAsync(lgbParserExe, gamePath);
                         break;
+
                     case MessageBoxResult.No:
                         // List available zones in console
                         OpenLgbParserInConsole(lgbParserExe, new[] { "--game", gamePath, "--list-zones" });
                         break;
+
                     default:
                         // Show help in console
                         OpenLgbParserInConsole(lgbParserExe, new string[0]);
@@ -397,7 +638,6 @@ namespace map_editor
             }
         }
 
-
         private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
         {
             if (_mapRenderer != null)
@@ -426,13 +666,13 @@ namespace map_editor
                 await LoadFFXIVDataAsync(_settingsService.Settings.GameInstallationPath);
             }
 
-            // ✅ FIX: Ensure quest marker checkbox events are connected
-            if (ShowQuestMarkersCheckBox != null)
+            // CHANGED: Connect NPC marker checkbox events instead of quest markers
+            if (ShowNpcMarkersCheckBox != null)
             {
-                ShowQuestMarkersCheckBox.Checked += ShowQuestMarkersCheckBox_Checked;
-                ShowQuestMarkersCheckBox.Unchecked += ShowQuestMarkersCheckBox_Unchecked;
-                ShowQuestMarkersCheckBox.IsChecked = true; // Default to showing quest markers
-                LogDebug("Quest marker checkbox events connected and set to checked");
+                ShowNpcMarkersCheckBox.Checked += ShowNpcMarkersCheckBox_Checked;
+                ShowNpcMarkersCheckBox.Unchecked += ShowNpcMarkersCheckBox_Unchecked;
+                ShowNpcMarkersCheckBox.IsChecked = true; // Default to showing NPC markers
+                LogDebug("NPC marker checkbox events connected and set to checked");
             }
         }
 
@@ -512,7 +752,7 @@ namespace map_editor
                 bool shouldShow = marker.Type switch
                 {
                     MarkerType.Aetheryte => ShowAetheryteMarkersCheckBox?.IsChecked == true,
-                    MarkerType.Quest => ShowQuestMarkersCheckBox?.IsChecked == true, // ✅ This will now work
+                    MarkerType.Npc => ShowNpcMarkersCheckBox?.IsChecked == true,
                     MarkerType.Shop => ShowShopMarkersCheckBox?.IsChecked == true,
                     MarkerType.Landmark => ShowLandmarkMarkersCheckBox?.IsChecked == true,
                     MarkerType.Fate => ShowFateMarkersCheckBox?.IsChecked == true,
@@ -561,18 +801,52 @@ namespace map_editor
             }
         }
 
-        // ✅ UPDATED: Make ShowProgressOverlay configurable for different operations
-        private void ShowProgressOverlay(string operationName = "quest extraction", string initialMessage = "Initializing quest_parse.exe...")
+        private void ShowProgressOverlay(string operationName = "quest extraction", string initialMessage = "Initializing...")
         {
             ProgressOverlay.Visibility = Visibility.Visible;
             ProgressStatusText.Text = initialMessage;
             QuestExtractionProgressBar.IsIndeterminate = true;
             CancelExtractionButton.IsEnabled = true;
 
-            // Create cancellation token
+            var titleText = FindProgressTitleTextBlock(ProgressOverlay);
+            if (titleText != null)
+            {
+                titleText.Text = operationName switch
+                {
+                    "LGB parsing" => "Parsing LGB Files",
+                    "quest extraction" => "Extracting Quest Files",
+                    _ => "Processing Files"
+                };
+                LogDebug($"Updated progress title to: {titleText.Text}");
+            }
+            else
+            {
+                LogDebug("Could not find progress title TextBlock - title will remain as default");
+            }
+
             _extractionCancellationSource = new System.Threading.CancellationTokenSource();
 
             LogDebug($"Progress overlay shown for {operationName}");
+        }
+
+        private TextBlock? FindProgressTitleTextBlock(DependencyObject parent)
+        {
+            for (int i = 0; i < VisualTreeHelper.GetChildrenCount(parent); i++)
+            {
+                var child = VisualTreeHelper.GetChild(parent, i);
+
+                if (child is TextBlock textBlock &&
+                    textBlock.FontSize == 18 &&
+                    textBlock.FontWeight == FontWeights.Bold)
+                {
+                    return textBlock;
+                }
+
+                var result = FindProgressTitleTextBlock(child);
+                if (result != null)
+                    return result;
+            }
+            return null;
         }
 
         private void HideProgressOverlay()
@@ -740,10 +1014,8 @@ namespace map_editor
                         secondsElapsed++;
                     }
 
-
                     LogDebug("Process has exited, waiting for final cleanup...");
                     await Task.Delay(2000);
-
                 }, _extractionCancellationSource?.Token ?? System.Threading.CancellationToken.None);
 
                 if (_extractionCancellationSource?.Token.IsCancellationRequested == true)
@@ -751,7 +1023,6 @@ namespace map_editor
                     LogDebug("Extraction was cancelled");
                     return;
                 }
-
 
                 if (!_questExtractionProcess.HasExited)
                 {
@@ -866,6 +1137,13 @@ namespace map_editor
                 // ✅ Initialize realm-dependent services after _realm is created
                 InitializeRealmDependentServices();
 
+                // ✅ Initialize quest script service
+                if (_settingsService != null)
+                {
+                    _questScriptService = new QuestScriptService(_settingsService, LogDebug);
+                    LogDebug("Quest script service initialized");
+                }
+
                 _mapService = new MapService(_realm, LogDebug);
                 LogDebug("Initialized map service");
 
@@ -974,7 +1252,6 @@ namespace map_editor
             }
         }
 
-
         private async Task LoadNpcsAsync()
         {
             try
@@ -993,7 +1270,15 @@ namespace map_editor
 
                     Dispatcher.Invoke(() =>
                     {
-                        NpcCountText.Text = $"({_allNpcs.Count})";
+                        if (NpcCountText != null)
+                        {
+                            NpcCountText.Text = $"({_allNpcs.Count})";
+                        }
+
+                        if (NpcList != null)
+                        {
+                            NpcList.ItemsSource = _filteredNpcsCollection;
+                        }
                     });
 
                     LogDebug($"🧙 Loaded {_allNpcs.Count} NPCs from Saint Coinach");
@@ -1008,6 +1293,7 @@ namespace map_editor
         private async Task LoadDataAsync<T>(Func<Task<List<T>>> loadFunction,
             ObservableCollection<T> sourceCollection,
             ObservableCollection<T> filteredCollection,
+
             Action<ObservableCollection<T>, TextBlock?> updateCountAction,
             TextBlock? countTextBlock)
         {
@@ -1372,57 +1658,55 @@ namespace map_editor
 
                         StatusText.Text = $"Map loaded for {territory.PlaceName}. Loading markers...";
 
-                        // ✅ Load original map markers
+                        // Load original map markers
                         List<MapMarker> originalMarkers = await Task.Run(() =>
                             _mapService?.LoadMapMarkers(territory.MapId) ?? new List<MapMarker>()
                         );
 
-                        // ✅ NEW: Add quest markers for this map
-                        var questMarkersForThisMap = _allQuestMarkers.Where(q => q.MapId == territory.MapId).ToList();
+                        // CHANGED: Create NPC markers instead of quest markers
+                        var npcMarkersForThisMap = CreateNpcMarkers(territory.MapId);
 
-                        // ✅ DEBUG: Log detailed information about quest markers
-                        LogDebug($"🔍 QUEST MARKER DEBUG for Map {territory.MapId}:");
-                        LogDebug($"  Total quest markers available: {_allQuestMarkers.Count}");
-                        LogDebug($"  Quest markers for this map: {questMarkersForThisMap.Count}");
+                        LogDebug($"🧙 NPC MARKER DEBUG for Map {territory.MapId}:");
+                        LogDebug($"  NPCs with quests for this map: {npcMarkersForThisMap.Count}");
 
-                        if (questMarkersForThisMap.Count > 0)
+                        if (npcMarkersForThisMap.Count > 0)
                         {
-                            LogDebug($"  First 3 quest markers for this map:");
-                            foreach (var qm in questMarkersForThisMap.Take(3))
+                            LogDebug($"  First 3 NPC markers for this map:");
+                            foreach (var nm in npcMarkersForThisMap.Take(3))
                             {
-                                LogDebug($"    - ID:{qm.Id}, Name:'{qm.PlaceName}', Coords:({qm.X:F1},{qm.Y:F1}), Type:{qm.Type}, Visible:{qm.IsVisible}");
+                                LogDebug($"    - ID:{nm.Id}, Name:'{nm.PlaceName}', Coords:({nm.X:F1},{nm.Y:F1}), Type:{nm.Type}");
                             }
                         }
 
-                        // ✅ Combine all markers
+                        // Combine all markers
                         _currentMapMarkers.Clear();
                         _currentMapMarkers.AddRange(originalMarkers);
-                        _currentMapMarkers.AddRange(questMarkersForThisMap);
+                        _currentMapMarkers.AddRange(npcMarkersForThisMap);
 
-                        LogDebug($"Total markers for {territory.PlaceName}: {_currentMapMarkers.Count} (original: {originalMarkers.Count}, quest: {questMarkersForThisMap.Count})");
+                        LogDebug($"Total markers for {territory.PlaceName}: {_currentMapMarkers.Count} (original: {originalMarkers.Count}, npc: {npcMarkersForThisMap.Count})");
 
-                        // ✅ DEBUG: Check marker visibility filtering
-                        var questMarkersVisible = _currentMapMarkers.Where(m => m.Type == MarkerType.Quest).Count();
-                        var questCheckboxChecked = ShowQuestMarkersCheckBox?.IsChecked == true;
+                        // DEBUG: Check marker visibility filtering
+                        var npcMarkersVisible = _currentMapMarkers.Where(m => m.Type == MarkerType.Npc).Count();
+                        var npcCheckboxChecked = ShowNpcMarkersCheckBox?.IsChecked == true;
 
                         LogDebug($"🔍 MARKER VISIBILITY DEBUG:");
-                        LogDebug($"  Quest markers in _currentMapMarkers: {questMarkersVisible}");
-                        LogDebug($"  ShowQuestMarkersCheckBox exists: {ShowQuestMarkersCheckBox != null}");
-                        LogDebug($"  ShowQuestMarkersCheckBox checked: {questCheckboxChecked}");
+                        LogDebug($"  NPC markers in _currentMapMarkers: {npcMarkersVisible}");
+                        LogDebug($"  ShowNpcMarkersCheckBox exists: {ShowNpcMarkersCheckBox != null}");
+                        LogDebug($"  ShowNpcMarkersCheckBox checked: {npcCheckboxChecked}");
 
                         var imagePosition = new System.Windows.Point(0, 0);
                         var imageSize = new System.Windows.Size(
                             bitmapSource.PixelWidth,
                             bitmapSource.PixelHeight);
 
-                        // ✅ Apply marker filtering before displaying
+                        // Apply marker filtering before displaying
                         var visibleMarkers = new List<MapMarker>();
                         foreach (var marker in _currentMapMarkers)
                         {
                             bool shouldShow = marker.Type switch
                             {
                                 MarkerType.Aetheryte => ShowAetheryteMarkersCheckBox?.IsChecked == true,
-                                MarkerType.Quest => ShowQuestMarkersCheckBox?.IsChecked == true,
+                                MarkerType.Npc => ShowNpcMarkersCheckBox?.IsChecked == true,  // CHANGED
                                 MarkerType.Shop => ShowShopMarkersCheckBox?.IsChecked == true,
                                 MarkerType.Landmark => ShowLandmarkMarkersCheckBox?.IsChecked == true,
                                 MarkerType.Fate => ShowFateMarkersCheckBox?.IsChecked == true,
@@ -1439,7 +1723,7 @@ namespace map_editor
                         LogDebug($"🔍 FINAL MARKER COUNT:");
                         LogDebug($"  Total markers: {_currentMapMarkers.Count}");
                         LogDebug($"  Visible markers after filtering: {visibleMarkers.Count}");
-                        LogDebug($"  Quest markers visible: {visibleMarkers.Count(m => m.Type == MarkerType.Quest)}");
+                        LogDebug($"  NPC markers visible: {visibleMarkers.Count(m => m.Type == MarkerType.Npc)}");
 
                         _mapRenderer?.DisplayMapMarkers(visibleMarkers, _currentMap, _currentScale, imagePosition, imageSize);
                         SyncOverlayWithMap();
@@ -1448,7 +1732,7 @@ namespace map_editor
                         _mapRenderer?.AddDebugGridAndBorders();
                         DiagnoseOverlayCanvas();
 
-                        StatusText.Text = $"Map loaded for quest '{territory.PlaceName}' - {_currentMapMarkers.Count} markers found ({questMarkersForThisMap.Count} quest markers, {visibleMarkers.Count} visible).";
+                        StatusText.Text = $"Map loaded for '{territory.PlaceName}' - {_currentMapMarkers.Count} markers found ({npcMarkersForThisMap.Count} NPC markers, {visibleMarkers.Count} visible).";
                         return true;
                     }
                     finally
@@ -1579,24 +1863,47 @@ namespace map_editor
             }
         }
 
-        // ✅ Add method to toggle quest marker visibility
-        public void ToggleQuestMarkers(bool visible)
+        public void HandleNpcMarkerClick(uint npcId)
         {
             try
             {
-                var questMarkers = _currentMapMarkers.Where(m => m.Type == MarkerType.Quest).ToList();
+                var npcInfo = _allNpcs.FirstOrDefault(npc => npc.NpcId == npcId);
 
-                foreach (var marker in questMarkers)
+                if (npcInfo != null && npcInfo.QuestCount > 0)
+                {
+                    var questPopup = new NpcQuestPopupWindow(npcInfo, this);
+                    questPopup.Show();
+
+                    LogDebug($"Opened quest popup for NPC: {npcInfo.NpcName} ({npcInfo.QuestCount} quests)");
+                }
+                else
+                {
+                    LogDebug($"No quest data found for NPC ID: {npcId}");
+                }
+            }
+            catch (Exception ex)
+            {
+                LogDebug($"Error handling NPC marker click: {ex.Message}");
+            }
+        }
+
+        public void ToggleNpcMarkers(bool visible)
+        {
+            try
+            {
+                var npcMarkers = _currentMapMarkers.Where(m => m.Type == MarkerType.Npc).ToList();
+
+                foreach (var marker in npcMarkers)
                 {
                     marker.IsVisible = visible;
                 }
 
                 RefreshMarkers();
-                LogDebug($"Quest markers {(visible ? "shown" : "hidden")}: {questMarkers.Count} markers affected");
+                LogDebug($"NPC markers {(visible ? "shown" : "hidden")}: {npcMarkers.Count} markers affected");
             }
             catch (Exception ex)
             {
-                LogDebug($"Error toggling quest markers: {ex.Message}");
+                LogDebug($"Error toggling NPC markers: {ex.Message}");
             }
         }
 
@@ -1740,325 +2047,104 @@ namespace map_editor
             }
         }
 
-        // Add this new method for the cogwheel button click
-        private void QuestDetailsButton_Click(object sender, RoutedEventArgs e)
-        {
-            if (sender is WpfButton button && button.Tag is QuestInfo selectedQuest)
-            {
-                try
-                {
-                    LogDebug($"Opening quest details for: {selectedQuest.Name} (ID: {selectedQuest.Id})");
-
-                    var questDetailsWindow = new QuestDetailsWindow(selectedQuest, this);
-
-                    // ✅ FIX: Use ShowDialog() instead of Show() to prevent app minimization
-                    questDetailsWindow.ShowDialog();  // Modal dialog prevents minimization issues
-
-                    LogDebug($"Quest details window closed for: {selectedQuest.Name}");
-                }
-                catch (Exception ex)
-                {
-                    LogDebug($"Error opening quest details window: {ex.Message}");
-                    WpfMessageBox.Show($"Error opening quest details: {ex.Message}",
-                        "Error", MessageBoxButton.OK, MessageBoxImage.Error);
-                }
-            }
-        }
-
-        // Helpers
         private TerritoryInfo? FindTerritoryByMapId(uint mapId)
         {
-            try
-            {
-                // Search in the filtered territories first (what user can see)
-                var territory = _filteredTerritories.FirstOrDefault(t => t.MapId == mapId);
-                if (territory != null)
-                {
-                    return territory;
-                }
-
-                // If not found in filtered, search in all territories
-                territory = Territories.FirstOrDefault(t => t.MapId == mapId);
-                if (territory != null)
-                {
-                    LogDebug($"Found territory {territory.PlaceName} (ID: {territory.Id}) for MapId {mapId} in full list");
-                    return territory;
-                }
-
-                LogDebug($"No territory found for MapId: {mapId}");
-                return null;
-            }
-            catch (Exception ex)
-            {
-                LogDebug($"Error finding territory by MapId {mapId}: {ex.Message}");
-                return null;
-            }
+            return Territories.FirstOrDefault(t => t.MapId == mapId);
         }
 
         private TerritoryInfo? FindTerritoryByPlaceName(string placeName)
         {
-            try
-            {
-                if (string.IsNullOrEmpty(placeName))
-                    return null;
-
-                // Search in the filtered territories first (what user can see)
-                var territory = _filteredTerritories.FirstOrDefault(t =>
-                    string.Equals(t.PlaceName, placeName, StringComparison.OrdinalIgnoreCase));
-                if (territory != null)
-                {
-                    return territory;
-                }
-
-                // If not found in filtered, search in all territories
-                territory = Territories.FirstOrDefault(t =>
-                    string.Equals(t.PlaceName, placeName, StringComparison.OrdinalIgnoreCase));
-                if (territory != null)
-                {
-                    LogDebug($"Found territory {territory.PlaceName} (ID: {territory.Id}) for PlaceName '{placeName}' in full list");
-                    return territory;
-                }
-
-                LogDebug($"No territory found for PlaceName: '{placeName}'");
-                return null;
-            }
-            catch (Exception ex)
-            {
-                LogDebug($"Error finding territory by PlaceName '{placeName}': {ex.Message}");
-                return null;
-            }
+            return Territories.FirstOrDefault(t =>
+                string.Equals(t.PlaceName, placeName, StringComparison.OrdinalIgnoreCase));
         }
 
-        // Add these missing event handlers
-        private void Exit_Click(object sender, RoutedEventArgs e)
-        {
-            WpfApplication.Current.Shutdown();
-        }
-
-        private void OpenSapphireRepo_Click(object sender, RoutedEventArgs e)
+        private void FilterNpcs()
         {
             try
             {
-                if (_settingsService != null && !string.IsNullOrEmpty(_settingsService.Settings.SapphireServerPath))
+                string searchText = NpcSearchBox?.Text ?? "";
+                uint currentTerritoryMapId = _currentTerritory?.MapId ?? 0;
+
+                // Clear the ObservableCollection instead of the List
+                _filteredNpcsCollection.Clear();
+
+                var npcsToShow = _allNpcs.Where(npc =>
                 {
-                    System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                    // Territory filter: only show NPCs from current territory if one is selected
+                    bool territoryMatch = currentTerritoryMapId == 0 || npc.MapId == currentTerritoryMapId;
+
+                    // Search filter
+                    bool searchMatch = string.IsNullOrEmpty(searchText) ||
+                                      npc.NpcName.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
+                                      npc.NpcId.ToString().Contains(searchText);
+
+                    return territoryMatch && searchMatch;
+                }).ToList();
+
+                // Add to the ObservableCollection instead of replacing the List
+                foreach (var npc in npcsToShow)
+                {
+                    _filteredNpcsCollection.Add(npc);
+                }
+
+                Dispatcher.Invoke(() =>
+                {
+                    if (NpcCountText != null)
                     {
-                        FileName = _settingsService.Settings.SapphireServerPath,
-                        UseShellExecute = true,
-                        Verb = "open"
-                    });
-                    LogDebug($"Opened Sapphire Server repository: {_settingsService.Settings.SapphireServerPath}");
-                }
-                else
-                {
-                    WpfMessageBox.Show("Sapphire Server path not configured. Please set it in Settings.",
-                        "Path Not Set", MessageBoxButton.OK, MessageBoxImage.Information);
-                }
+                        NpcCountText.Text = $"({_filteredNpcsCollection.Count})";
+                    }
+                });
+
+                LogDebug($"Filtered NPCs: {_filteredNpcsCollection.Count} of {_allNpcs.Count} total (Territory: {_currentTerritory?.PlaceName ?? "All"}, Search: '{searchText}')");
             }
             catch (Exception ex)
             {
-                LogDebug($"Error opening Sapphire Server repository: {ex.Message}");
-                WpfMessageBox.Show($"Failed to open Sapphire Server repository: {ex.Message}",
-                    "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                LogDebug($"Error filtering NPCs: {ex.Message}");
             }
         }
 
-        private void OpenSapphireBuild_Click(object sender, RoutedEventArgs e)
+        // Remove the duplicate _questScriptService declaration at line 1813
+        // Keep only the one at the top with other fields (around line 30)
+
+        // Add these missing methods to MainWindow.xaml.cs:
+
+        private void ShowNpcMarkersCheckBox_Checked(object sender, RoutedEventArgs e)
         {
-            try
-            {
-                if (_settingsService != null && !string.IsNullOrEmpty(_settingsService.Settings.SapphireBuildPath))
-                {
-                    System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
-                    {
-                        FileName = _settingsService.Settings.SapphireBuildPath,
-                        UseShellExecute = true,
-                        Verb = "open"
-                    });
-                    LogDebug($"Opened Sapphire Server build directory: {_settingsService.Settings.SapphireBuildPath}");
-                }
-                else
-                {
-                    WpfMessageBox.Show("Sapphire Server build path not configured. Please set it in Settings.",
-                        "Path Not Set", MessageBoxButton.OK, MessageBoxImage.Information);
-                }
-            }
-            catch (Exception ex)
-            {
-                LogDebug($"Error opening Sapphire Server build directory: {ex.Message}");
-                WpfMessageBox.Show($"Failed to open Sapphire Server build directory: {ex.Message}",
-                    "Error", MessageBoxButton.OK, MessageBoxImage.Error);
-            }
+            MarkerVisibility_Changed(sender, e);
         }
 
-        private void QuestList_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        private void ShowNpcMarkersCheckBox_Unchecked(object sender, RoutedEventArgs e)
         {
-            // This can be empty or you can add quest selection logic here
-            // The main quest functionality is in QuestList_MouseDoubleClick
+            MarkerVisibility_Changed(sender, e);
         }
 
-        private void BNpcList_SelectionChanged(object sender, SelectionChangedEventArgs e)
-        {
-            // This can be empty or you can add BNpc selection logic here
-        }
-
-        private void FateList_SelectionChanged(object sender, SelectionChangedEventArgs e)
-        {
-            // This can be empty or you can add fate selection logic here
-        }
-
-        private async void ExtractQuestFiles_Click(object sender, RoutedEventArgs e)
-        {
-            try
-            {
-                // Check if Sapphire build path is configured
-                if (_settingsService == null || string.IsNullOrEmpty(_settingsService.Settings.SapphireBuildPath))
-                {
-                    WpfMessageBox.Show("Sapphire Server build path is not configured.\n\nPlease set it in Settings first.",
-                        "Build Path Not Set", MessageBoxButton.OK, MessageBoxImage.Warning);
-                    return;
-                }
-
-                // Check if FFXIV game path is configured
-                if (string.IsNullOrEmpty(_settingsService.Settings.GameInstallationPath))
-                {
-                    WpfMessageBox.Show("FFXIV game installation path is not configured.\n\nPlease set it in Settings first.",
-                        "Game Path Not Set", MessageBoxButton.OK, MessageBoxImage.Warning);
-                    return;
-                }
-
-                if (!_settingsService.IsValidSapphireBuildPath())
-                {
-                    WpfMessageBox.Show("The configured Sapphire Server build path appears to be invalid.\n\nPlease check your settings.",
-                        "Invalid Build Path", MessageBoxButton.OK, MessageBoxImage.Warning); // ✅ Fixed: Warning instead of WARNING
-                    return;
-                }
-
-                if (!_settingsService.IsValidGamePath())
-                {
-                    WpfMessageBox.Show("The configured FFXIV game path appears to be invalid.\n\nPlease check your settings.",
-                        "Invalid Game Path", MessageBoxButton.OK, MessageBoxImage.Warning); // ✅ Fixed: Warning instead of WARNING
-                    return;
-                }
-
-                // Look for quest_parse.exe in the tools directory
-                string toolsDir = Path.Combine(_settingsService.Settings.SapphireBuildPath, "tools");
-                string questParseExe = Path.Combine(toolsDir, "quest_parse.exe");
-
-                if (!Directory.Exists(toolsDir))
-                {
-                    WpfMessageBox.Show($"Tools directory not found at:\n{toolsDir}\n\nPlease ensure you have a complete Sapphire Server build.",
-                        "Tools Directory Not Found", MessageBoxButton.OK, MessageBoxImage.Error);
-                    return;
-                }
-
-                if (!File.Exists(questParseExe))
-                {
-                    // Show available tools for debugging
-                    var availableFiles = Directory.GetFiles(toolsDir, "*.exe");
-                    string availableList = availableFiles.Length > 0
-                        ? string.Join("\n", availableFiles.Select(Path.GetFileName))
-                        : "No .exe files found";
-
-                    WpfMessageBox.Show($"quest_parse.exe not found in tools directory.\n\n" +
-                                     $"Expected location: {questParseExe}\n\n" +
-                                     $"Available executables:\n{availableList}\n\n" +
-                                     $"Please ensure quest_parse.exe is built and available.",
-                        "quest_parse.exe Not Found", MessageBoxButton.OK, MessageBoxImage.Error);
-                    return;
-                }
-
-                // Construct the sqpack path by appending \game\sqpack to the game installation path
-                string sqpackPath = Path.Combine(_settingsService.Settings.GameInstallationPath, "game", "sqpack");
-
-                if (!Directory.Exists(sqpackPath))
-                {
-                    WpfMessageBox.Show($"Game sqpack directory not found at:\n{sqpackPath}\n\nPlease ensure your FFXIV installation is complete.",
-                        "Sqpack Directory Not Found", MessageBoxButton.OK, MessageBoxImage.Error);
-                    return;
-                }
-
-                LogDebug($"Found quest_parse.exe: {questParseExe}");
-                LogDebug($"Using sqpack path: {sqpackPath}");
-
-                // Show confirmation dialog
-                var result = WpfMessageBox.Show($"This will run quest_parse.exe with the following parameters:\n\n" +
-                                               $"Tool: {Path.GetFileName(questParseExe)}\n" +
-                                               $"Sqpack Path: {sqpackPath}\n\n" +
-                                               $"This may take some time to complete. Continue?",
-                                               "Extract Quest Files", MessageBoxButton.YesNo, MessageBoxImage.Question);
-
-                if (result != MessageBoxResult.Yes)
-                {
-                    return;
-                }
-
-                // ✅ UPDATED: Show progress overlay with quest-specific messages
-                ShowProgressOverlay("quest extraction", "Initializing quest_parse.exe...");
-
-                // Run the tool asynchronously
-                await RunQuestParseToolWithProgressAsync(questParseExe, sqpackPath);
-            }
-            catch (Exception ex)
-            {
-                LogDebug($"Error running quest_parse.exe: {ex.Message}");
-                WpfMessageBox.Show($"Failed to run quest_parse.exe:\n\n{ex.Message}",
-                    "Error", MessageBoxButton.OK, MessageBoxImage.Error);
-                HideProgressOverlay();
-            }
-        }
-
-        // ✅ NEW: Add method to run LGB Parser in batch mode with progress tracking
         private async Task RunLgbParserBatchModeAsync(string lgbParserExe, string gamePath)
         {
             try
             {
-                // Ask user for output directory
-                var outputDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "LGB_ParseResults");
+                ShowProgressOverlay("LGB parsing", "Starting batch LGB parsing...");
 
-                var confirmResult = WpfMessageBox.Show($"This will parse ALL LGB files from the FFXIV client.\n\n" +
-                                                     $"Game Path: {gamePath}\n" +
-                                                     $"Output Directory: {outputDir}\n\n" +
-                                                     $"This may take several minutes and will process thousands of files.\n\n" +
-                                                     $"Continue with batch parsing?",
-                                                     "Confirm LGB Batch Parse", MessageBoxButton.YesNo, MessageBoxImage.Question);
-
-                if (confirmResult != MessageBoxResult.Yes)
-                {
-                    return;
-                }
-
-                // Create output directory
-                Directory.CreateDirectory(outputDir);
-
-                LogDebug($"Starting LGB Parser batch mode...");
-                LogDebug($"Game Path: {gamePath}");
-                LogDebug($"Output Directory: {outputDir}");
-
-                // Show progress overlay (reuse existing progress UI)
-                ShowProgressOverlay("LGB parsing", "Initializing LGB Parser batch mode...");
-
-                // Prepare arguments for batch command
-                var arguments = new[] { "--game", gamePath, "--batch", outputDir };
-
-                // Run the batch parser with progress tracking
+                // ✅ CHANGED: Add "json" format argument to default to JSON output when run from map editor
+                var arguments = new[] { "--game", gamePath, "--batch", "lgb_output", "json" };
                 await RunLgbParserProcessWithProgressAsync(lgbParserExe, arguments);
+
+                HideProgressOverlay();
+                StatusText.Text = "LGB batch parsing completed";
             }
             catch (Exception ex)
             {
-                LogDebug($"Error in LGB Parser batch mode: {ex.Message}");
-                WpfMessageBox.Show($"Failed to run LGB Parser batch mode:\n\n{ex.Message}",
-                    "Batch Parse Error", MessageBoxButton.OK, MessageBoxImage.Error);
                 HideProgressOverlay();
+                LogDebug($"Error in batch LGB parsing: {ex.Message}");
+                WpfMessageBox.Show($"Error in batch LGB parsing: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
-        // ✅ UPDATED: Enhanced version of RunLgbParserProcessAsync with progress tracking for batch operations
         private async Task RunLgbParserProcessWithProgressAsync(string lgbParserExe, string[] arguments)
         {
             try
             {
-                LogDebug($"Starting LGB Parser with progress tracking: {lgbParserExe}");
+                UpdateProgressStatus("Starting LGB parser...");
+                LogDebug($"Starting LGB parser: {lgbParserExe}");
                 LogDebug($"Arguments: {string.Join(" ", arguments.Select(a => $"\"{a}\""))}");
 
                 var processInfo = new System.Diagnostics.ProcessStartInfo
@@ -2074,15 +2160,9 @@ namespace map_editor
 
                 using var process = new System.Diagnostics.Process { StartInfo = processInfo };
 
-                // Progress tracking variables
                 var outputLines = new List<string>();
                 var errorLines = new List<string>();
-                var startTime = DateTime.Now;
-                int processedFiles = 0;
-                int totalFiles = 0;
-                bool hasEstimatedTotal = false;
 
-                // ✅ Enhanced output processing for batch operations
                 process.OutputDataReceived += (sender, e) =>
                 {
                     if (!string.IsNullOrEmpty(e.Data))
@@ -2091,51 +2171,7 @@ namespace map_editor
                         WpfApplication.Current.Dispatcher.InvokeAsync(() =>
                         {
                             LogDebug($"[LGB Parser] {e.Data}");
-
-                            // Track progress from output
-                            var line = e.Data.Trim();
-
-                            // Look for file processing indicators
-                            if (line.Contains("Found ") && line.Contains(" LGB files"))
-                            {
-                                // Extract total file count
-                                var match = System.Text.RegularExpressions.Regex.Match(line, @"Found (\d+) LGB files");
-                                if (match.Success && int.TryParse(match.Groups[1].Value, out int count))
-                                {
-                                    totalFiles = count;
-                                    hasEstimatedTotal = true;
-                                    UpdateProgressStatus($"Found {totalFiles} LGB files to process...");
-                                }
-                            }
-                            else if (line.Contains("✅ Processed:") || line.Contains("✓ Successfully parsed:"))
-                            {
-                                processedFiles++;
-                                var elapsed = DateTime.Now - startTime;
-
-                                if (hasEstimatedTotal && totalFiles > 0)
-                                {
-                                    var percentage = (double)processedFiles / totalFiles * 100;
-                                    var estimatedTimeRemaining = processedFiles > 0
-                                        ? TimeSpan.FromMilliseconds(elapsed.TotalMilliseconds / processedFiles * (totalFiles - processedFiles))
-                                        : TimeSpan.Zero;
-
-                                    UpdateProgressStatus($"Processing LGB files... {processedFiles}/{totalFiles} ({percentage:F1}%) - ETA: {estimatedTimeRemaining:mm\\:ss}");
-                                }
-                                else
-                                {
-                                    UpdateProgressStatus($"Processing LGB files... {processedFiles} files completed ({elapsed:mm\\:ss} elapsed)");
-                                }
-                            }
-                            else if (line.Contains("processing complete!"))
-                            {
-                                UpdateProgressStatus($"LGB parsing complete! Processed {processedFiles} files");
-                            }
-                            else if (line.Length > 0 && !line.Contains("❌") && !line.Contains("✗"))
-                            {
-                                // Show current file being processed (truncated for UI)
-                                var displayLine = line.Length > 50 ? line.Substring(0, 47) + "..." : line;
-                                UpdateProgressStatus($"Processing: {displayLine}");
-                            }
+                            UpdateProgressStatus($"Processing: {e.Data}");
                         });
                     }
                 };
@@ -2146,10 +2182,7 @@ namespace map_editor
                     {
                         errorLines.Add(e.Data);
                         WpfApplication.Current.Dispatcher.InvokeAsync(() =>
-                        {
-                            LogDebug($"[LGB Parser Error] {e.Data}");
-                            UpdateProgressStatus($"Warning: {e.Data.Substring(0, Math.Min(60, e.Data.Length))}...");
-                        });
+                            LogDebug($"[LGB Parser Error] {e.Data}"));
                     }
                 };
 
@@ -2157,328 +2190,39 @@ namespace map_editor
                 process.BeginOutputReadLine();
                 process.BeginErrorReadLine();
 
-                // Wait for completion
                 await Task.Run(() => process.WaitForExit());
 
                 WpfApplication.Current.Dispatcher.Invoke(() =>
                 {
-                    HideProgressOverlay();
-
-                    var totalTime = DateTime.Now - startTime;
-
                     if (process.ExitCode == 0)
                     {
-                        LogDebug("✅ LGB Parser batch mode completed successfully");
-                        StatusText.Text = $"LGB batch parsing completed - {processedFiles} files processed in {totalTime:mm\\:ss}";
+                        LogDebug("LGB Parser completed successfully");
+                        StatusText.Text = $"LGB Parser completed - {outputLines.Count} lines processed";
+                    }
+                    else
+                    {
+                        LogDebug($"LGB Parser exited with code: {process.ExitCode}");
+                        StatusText.Text = $"LGB Parser failed with exit code: {process.ExitCode}";
 
-                        // Show detailed results
-                        var outputDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "LGB_ParseResults");
-                        WpfMessageBox.Show($"LGB Parser batch mode completed successfully!\n\n" +
-                                         $"Files processed: {processedFiles}\n" +
-                                         $"Total time: {totalTime:mm\\:ss}\n" +
-                                         $"Output directory: {outputDir}\n\n" +
-                                         $"The parsed LGB files are now available for analysis.",
-                            "LGB Batch Parse Complete", MessageBoxButton.OK, MessageBoxImage.Information);
-
-                        // Ask if user wants to open output directory
-                        var openResult = WpfMessageBox.Show("Would you like to open the output directory to view the parsed files?",
-                            "Open Results", MessageBoxButton.YesNo, MessageBoxImage.Question);
-
-                        if (openResult == MessageBoxResult.Yes)
+                        if (errorLines.Count > 0)
                         {
-                            try
-                            {
-                                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
-                                {
-                                    FileName = outputDir,
-                                    UseShellExecute = true,
-                                    Verb = "open"
-                                });
-                            }
-                            catch (Exception ex)
-                            {
-                                LogDebug($"Failed to open output directory: {ex.Message}");
-                            }
+                            var errorMessage = string.Join("\n", errorLines.Take(10));
+                            WpfMessageBox.Show($"LGB Parser errors:\n\n{errorMessage}",
+                                "LGB Parser Error", MessageBoxButton.OK, MessageBoxImage.Warning);
                         }
                     }
-                    else
-                    {
-                        LogDebug($"❌ LGB Parser batch mode failed with exit code: {process.ExitCode}");
-                        StatusText.Text = $"LGB batch parsing failed (Exit code: {process.ExitCode})";
-
-                        var errorSummary = errorLines.Count > 0
-                            ? string.Join("\n", errorLines.Take(5))
-                            : "Check debug log for details";
-
-                        WpfMessageBox.Show($"LGB Parser batch mode failed with exit code: {process.ExitCode}\n\n" +
-                                         $"Files processed before failure: {processedFiles}\n" +
-                                         $"Errors:\n{errorSummary}",
-                            "LGB Batch Parse Failed", MessageBoxButton.OK, MessageBoxImage.Warning);
-                    }
                 });
             }
             catch (Exception ex)
             {
                 WpfApplication.Current.Dispatcher.Invoke(() =>
                 {
-                    LogDebug($"❌ Exception during LGB Parser batch execution: {ex.Message}");
-                    HideProgressOverlay();
-                    StatusText.Text = "LGB batch parsing failed";
-                    WpfMessageBox.Show($"An error occurred during LGB batch parsing:\n\n{ex.Message}",
-                        "LGB Batch Parse Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                    LogDebug($"Exception during LGB Parser execution: {ex.Message}");
+                    StatusText.Text = "LGB Parser execution failed";
+                    WpfMessageBox.Show($"An error occurred running LGB Parser:\n\n{ex.Message}",
+                        "LGB Parser Error", MessageBoxButton.OK, MessageBoxImage.Error);
                 });
             }
-        }
-
-        private async Task RunQuestParseToolAsync(string questParseExe, string sqpackPath)
-        {
-            try
-            {
-                LogDebug($"Starting quest_parse.exe: {questParseExe}");
-                LogDebug($"Arguments: \"{sqpackPath}\"");
-
-                var processInfo = new System.Diagnostics.ProcessStartInfo
-                {
-                    FileName = questParseExe,
-                    Arguments = $"\"{sqpackPath}\"",
-                    WorkingDirectory = Path.GetDirectoryName(questParseExe),
-                    UseShellExecute = false,
-                    RedirectStandardOutput = true,
-                    RedirectStandardError = true,
-                    CreateNoWindow = true
-                };
-
-                using var process = new System.Diagnostics.Process { StartInfo = processInfo };
-
-                // Capture output for logging
-                process.OutputDataReceived += (sender, e) =>
-                {
-                    if (!string.IsNullOrEmpty(e.Data))
-                    {
-                        WpfApplication.Current.Dispatcher.InvokeAsync(() =>
-                            LogDebug($"[quest_parse] {e.Data}"));
-                    }
-                };
-
-                process.ErrorDataReceived += (sender, e) =>
-                {
-                    if (!string.IsNullOrEmpty(e.Data))
-                    {
-                        WpfApplication.Current.Dispatcher.InvokeAsync(() =>
-                            LogDebug($"[quest_parse Error] {e.Data}"));
-                    }
-                };
-
-                process.Start();
-                process.BeginOutputReadLine();
-                process.BeginErrorReadLine();
-
-                // Wait for completion
-                await Task.Run(() => process.WaitForExit());
-
-                WpfApplication.Current.Dispatcher.Invoke(() =>
-                {
-                    if (process.ExitCode == 0)
-                    {
-                        LogDebug("quest_parse.exe completed successfully");
-                        StatusText.Text = "Quest file extraction completed successfully";
-                        WpfMessageBox.Show("Quest file extraction completed successfully!\n\nquest_parse.exe finished processing the game data.",
-                            "Extraction Complete", MessageBoxButton.OK, MessageBoxImage.Information);
-                    }
-                    else
-                    {
-                        LogDebug($"quest_parse.exe failed with exit code: {process.ExitCode}");
-                        StatusText.Text = $"Quest extraction failed (Exit code: {process.ExitCode})";
-                        WpfMessageBox.Show($"quest_parse.exe failed with exit code: {process.ExitCode}\n\nCheck the debug log for details.",
-                            "Extraction Failed", MessageBoxButton.OK, MessageBoxImage.Warning);
-                    }
-                });
-            }
-            catch (Exception ex)
-            {
-                WpfApplication.Current.Dispatcher.Invoke(() =>
-                {
-                    LogDebug($"❌ Exception during quest_parse.exe execution: {ex.Message}");
-                    HideProgressOverlay();
-                    StatusText.Text = "Quest extraction failed";
-                    WpfMessageBox.Show($"An error occurred during quest extraction:\n\n{ex.Message}",
-                        "Extraction Error", MessageBoxButton.OK, MessageBoxImage.Error);
-                });
-            }
-        }
-
-        private async Task RunQuestExtractionToolAsync(string toolPath)
-        {
-            try
-            {
-                LogDebug($"Starting quest extraction tool: {toolPath}");
-
-                var processInfo = new System.Diagnostics.ProcessStartInfo
-                {
-                    FileName = toolPath,
-                    WorkingDirectory = Path.GetDirectoryName(toolPath),
-                    UseShellExecute = false,
-                    RedirectStandardOutput = true,
-                    RedirectStandardError = true,
-                    CreateNoWindow = true
-                };
-
-                using var process = new System.Diagnostics.Process { StartInfo = processInfo };
-
-                // Capture output for logging
-                process.OutputDataReceived += (sender, e) =>
-                {
-                    if (!string.IsNullOrEmpty(e.Data))
-                    {
-                        WpfApplication.Current.Dispatcher.InvokeAsync(() =>
-                            LogDebug($"[Quest Tool] {e.Data}"));
-                    }
-                };
-
-                process.ErrorDataReceived += (sender, e) =>
-                {
-                    if (!string.IsNullOrEmpty(e.Data))
-                    {
-                        WpfApplication.Current.Dispatcher.InvokeAsync(() =>
-                            LogDebug($"[Quest Tool Error] {e.Data}"));
-                    }
-                };
-
-                process.Start();
-                process.BeginOutputReadLine();
-                process.BeginErrorReadLine();
-
-                // Wait for completion
-                await Task.Run(() => process.WaitForExit());
-
-                WpfApplication.Current.Dispatcher.Invoke(() =>
-                {
-                    if (process.ExitCode == 0)
-                    {
-                        LogDebug("Quest extraction completed successfully");
-                        StatusText.Text = "Quest file extraction completed successfully";
-                        WpfMessageBox.Show("Quest file extraction completed successfully!",
-                            "Extraction Complete", MessageBoxButton.OK, MessageBoxImage.Information);
-                    }
-                    else
-                    {
-                        LogDebug($"Quest extraction failed with exit code: {process.ExitCode}");
-                        StatusText.Text = $"Quest extraction failed (Exit code: {process.ExitCode})";
-                        WpfMessageBox.Show($"Quest extraction failed with exit code: {process.ExitCode}\n\nCheck the debug log for details.",
-                            "Extraction Failed", MessageBoxButton.OK, MessageBoxImage.Warning);
-                    }
-                });
-            }
-            catch (Exception ex)
-            {
-                WpfApplication.Current.Dispatcher.Invoke(() =>
-                {
-                    LogDebug($"Exception during quest extraction: {ex.Message}");
-                    StatusText.Text = "Quest extraction failed";
-                    WpfMessageBox.Show($"An error occurred during quest extraction:\n\n{ex.Message}",
-                        "Extraction Error", MessageBoxButton.OK, MessageBoxImage.Error);
-                });
-            }
-        }
-
-
-        // ✅ ADD: NPC filtering and UI methods
-        private void FilterNpcs()
-        {
-            try
-            {
-                var searchText = "";
-                Dispatcher.Invoke(() =>
-                {
-                    if (NpcSearchBox != null)  // ✅ RENAMED: EventSearchBox -> NpcSearchBox
-                        searchText = NpcSearchBox.Text?.Trim() ?? "";
-                });
-
-                List<NpcInfo> baseList;
-
-                // ✅ FIX: Always start with all NPCs when filtering, not the previously filtered list
-                if (string.IsNullOrEmpty(searchText))
-                {
-                    // ✅ FIXED: When search is empty, show all NPCs for current territory OR all NPCs if no territory selected
-                    if (_currentTerritory != null)
-                    {
-                        baseList = _allNpcs.Where(n => n.MapId == _currentTerritory.MapId).ToList();
-                    }
-                    else
-                    {
-                        baseList = new List<NpcInfo>(_allNpcs);
-                    }
-                }
-                else
-                {
-                    // ✅ FIXED: When searching, start from all NPCs and apply search filter
-                    baseList = _allNpcs.Where(n =>
-                        n.NpcName.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
-                        n.NpcId.ToString().Contains(searchText) ||
-                        n.TerritoryName.Contains(searchText, StringComparison.OrdinalIgnoreCase)
-                    ).ToList();
-
-                    // ✅ FIXED: Apply territory filter AFTER search filter if territory is selected
-                    if (_currentTerritory != null)
-                    {
-                        baseList = baseList.Where(n => n.MapId == _currentTerritory.MapId).ToList();
-                    }
-                }
-
-                _filteredNpcs = baseList;
-
-                Dispatcher.Invoke(() =>
-                {
-                    if (NpcList != null)  // ✅ RENAMED: EventList -> NpcList
-                    {
-                        NpcList.ItemsSource = null; // ✅ Clear first to force refresh
-                        NpcList.ItemsSource = _filteredNpcs;
-                        NpcCountText.Text = $"({_filteredNpcs.Count})";  // ✅ RENAMED: EventCountText -> NpcCountText
-                    }
-                });
-
-                LogDebug($"🧙 NPC filtering complete: {_filteredNpcs.Count} NPCs shown (search: '{searchText}', territory: {_currentTerritory?.PlaceName ?? "None"})");
-            }
-            catch (Exception ex)
-            {
-                LogDebug($"❌ Error filtering NPCs: {ex.Message}");
-            }
-        }
-
-        // ✅ ADD: Handle double-click on NPC to show quest details
-        private void NpcList_MouseDoubleClick(object sender, System.Windows.Input.MouseButtonEventArgs e)  // ✅ RENAMED: EventList_MouseDoubleClick -> NpcList_MouseDoubleClick
-        {
-            if (NpcList.SelectedItem is NpcInfo selectedNpc)  // ✅ RENAMED: EventList -> NpcList
-            {
-                try
-                {
-                    var npcDetailsWindow = new NpcDetailsWindow(selectedNpc, this);
-
-                    // ✅ FIX: Use ShowDialog() instead of Show() to prevent app minimization
-                    npcDetailsWindow.ShowDialog();  // Modal dialog prevents minimization issues
-                }
-                catch (Exception ex)
-                {
-                    LogDebug($"❌ Error opening NPC details window: {ex.Message}");
-                    WpfMessageBox.Show($"Error opening NPC details: {ex.Message}",
-                        "Error", MessageBoxButton.OK, MessageBoxImage.Error);
-                }
-            }
-        }
-
-        private void ShowQuestMarkersCheckBox_Checked(object sender, RoutedEventArgs e)
-        {
-            ToggleQuestMarkers(true);
-        }
-
-        private void ShowQuestMarkersCheckBox_Unchecked(object sender, RoutedEventArgs e)
-        {
-            ToggleQuestMarkers(false);
-        }
-
-        private void NpcList_SelectionChanged(object sender, SelectionChangedEventArgs e)
-        {
-            // This can be empty or you can add BNpc selection logic here
         }
     }
 

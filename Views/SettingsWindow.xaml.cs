@@ -15,8 +15,9 @@ namespace map_editor
 
         // ✅ Updated with C# 12 collection initialization syntax
         private static readonly string[] GamePathIndicators = ["game", "boot"];
-        private static readonly string[] SapphireRepoIndicators = ["src", "scripts", "CMakeLists.txt", "README.md"];
-        private static readonly string[] SapphireBuildIndicators = ["tools", "bin", "lib"];
+
+        private static readonly string[] SapphireRepoIndicators = ["src", "deps", "data", "README.md"];
+        private static readonly string[] SapphireBuildIndicators = ["tools", "config", "compiledscripts"];
 
         public SettingsWindow(SettingsService settingsService, Action<string>? logDebug = null)
         {

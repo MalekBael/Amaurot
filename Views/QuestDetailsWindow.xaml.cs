@@ -4,16 +4,20 @@ using System.Windows.Media;
 using System.Collections.Generic;
 using System.Linq;
 using System.Windows.Input;
+using map_editor.Services;
 
 namespace map_editor
 {
     public partial class QuestDetailsWindow : Window
     {
         private QuestInfo _questInfo;
+        private QuestScriptService? _questScriptService;
 
-        public QuestDetailsWindow(QuestInfo questInfo, Window? owner = null)
+        public QuestDetailsWindow(QuestInfo questInfo, Window? owner = null, QuestScriptService? questScriptService = null)
         {
             InitializeComponent();
+
+            _questScriptService = questScriptService;
 
             // ✅ FIX: Proper window ownership to prevent app minimization
             if (owner != null)
@@ -55,7 +59,7 @@ namespace map_editor
         {
             // Set the title
             QuestTitleText.Text = questInfo.Name;
-            
+
             // Enhanced subtitle with location if available
             string subtitle = $"Quest ID: {questInfo.Id}";
             if (!string.IsNullOrEmpty(questInfo.PlaceName))
@@ -69,7 +73,7 @@ namespace map_editor
             {
                 MSQBadge.Visibility = Visibility.Visible;
             }
-            
+
             if (questInfo.IsFeatureQuest)
             {
                 FeatureBadge.Visibility = Visibility.Visible;
@@ -90,24 +94,25 @@ namespace map_editor
             QuestDetailsGrid.Children.Clear();
 
             int row = 0;
-            
+
             // Basic Information Section
             AddSectionHeader("Basic Information", row++);
-            AddDetailRow("Quest ID:", questInfo.Id.ToString(), row++); // ✅ Fixed missing )
-            
+            AddDetailRow("Quest ID:", questInfo.Id.ToString(), row++);
+
             if (!string.IsNullOrEmpty(questInfo.QuestIdString))
             {
-                AddDetailRow("Quest Identifier:", questInfo.QuestIdString, row++);
+                // ✅ NEW: Add quest identifier with script buttons
+                AddQuestIdentifierRowWithScriptButtons("Quest Identifier:", questInfo.QuestIdString, row++);
             }
-            
+
             AddDetailRow("Name:", questInfo.Name, row++);
             AddDetailRow("Quest Type:", GetQuestTypeDescription(questInfo), row++);
 
             // ✅ Start NPCs Section
             if (questInfo.StartNpcs.Any())
             {
-                AddSectionHeader("Start NPCs", row++); // ✅ Fixed missing )
-                
+                AddSectionHeader("Start NPCs", row++);
+
                 foreach (var startNpc in questInfo.StartNpcs)
                 {
                     string npcDetails = $"{startNpc.NpcName}";
@@ -119,27 +124,27 @@ namespace map_editor
                     {
                         npcDetails += $" ({startNpc.MapX:F1}, {startNpc.MapY:F1})";
                     }
-                    
-                    AddDetailRowWithButton("Start NPC:", npcDetails, row++, 
+
+                    AddDetailRowWithButton("Start NPC:", npcDetails, row++,
                         () => ShowQuestGiverOnMap_Click(startNpc), "Show on Map");
                 }
             }
-            
+
             // Location Information Section
             if (!string.IsNullOrEmpty(questInfo.PlaceName) || questInfo.MapId > 0)
             {
-                AddSectionHeader("Location Information", row++); // ✅ Fixed missing )
-                
+                AddSectionHeader("Location Information", row++);
+
                 if (!string.IsNullOrEmpty(questInfo.PlaceName))
                 {
                     AddDetailRow("Location:", questInfo.PlaceName, row++);
                 }
-                
+
                 if (questInfo.MapId > 0)
                 {
                     AddDetailRow("Map ID:", questInfo.MapId.ToString(), row++);
                 }
-                
+
                 if (questInfo.PlaceNameId > 0)
                 {
                     AddDetailRow("Place Name ID:", questInfo.PlaceNameId.ToString(), row++);
@@ -149,61 +154,225 @@ namespace map_editor
             // Requirements Section
             if (questInfo.ClassJobLevelRequired > 0 || questInfo.ClassJobCategoryId > 0 || questInfo.PreviousQuestId > 0)
             {
-                AddSectionHeader("Requirements", row++); // ✅ Fixed missing )
-                
+                AddSectionHeader("Requirements", row++);
+
                 if (questInfo.ClassJobLevelRequired > 0)
                 {
                     AddDetailRow("Required Level:", questInfo.ClassJobLevelRequired.ToString(), row++);
                 }
-                
+
                 if (questInfo.ClassJobCategoryId > 0)
                 {
                     AddDetailRow("Class/Job Category ID:", questInfo.ClassJobCategoryId.ToString(), row++);
                 }
-                
+
                 if (!string.IsNullOrEmpty(questInfo.ClassJobCategoryName))
                 {
                     AddDetailRow("Class/Job Category:", questInfo.ClassJobCategoryName, row++);
                 }
-                
+
                 if (questInfo.PreviousQuestId > 0)
                 {
                     AddDetailRow("Previous Quest ID:", questInfo.PreviousQuestId.ToString(), row++);
                 }
             }
-            
+
             // Rewards Section
             if (questInfo.ExpReward > 0 || questInfo.GilReward > 0)
             {
-                AddSectionHeader("Rewards", row++); // ✅ Fixed missing )
-                
+                AddSectionHeader("Rewards", row++);
+
                 if (questInfo.ExpReward > 0)
                 {
                     AddDetailRow("EXP Reward:", questInfo.ExpReward.ToString(), row++);
                 }
-                
+
                 if (questInfo.GilReward > 0)
                 {
                     AddDetailRow("Gil Reward:", questInfo.GilReward.ToString(), row++);
                 }
             }
-            
+
             // Additional Information Section
             AddSectionHeader("Additional Information", row++);
-            
+
             if (!string.IsNullOrEmpty(questInfo.JournalGenre))
             {
                 AddDetailRow("Journal Genre:", questInfo.JournalGenre, row++);
             }
-            
+
             if (questInfo.IconId > 0)
             {
                 AddDetailRow("Icon ID:", questInfo.IconId.ToString(), row++);
             }
-            
+
             if (questInfo.IsRepeatable)
             {
                 AddDetailRow("Repeatable:", "Yes", row++);
+            }
+        }
+
+        /// <summary>
+        /// ✅ NEW: Adds a quest identifier row with script editing buttons
+        /// </summary>
+        private void AddQuestIdentifierRowWithScriptButtons(string label, string questIdString, int row)
+        {
+            QuestDetailsGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+
+            var labelBlock = new TextBlock
+            {
+                Text = label,
+                FontWeight = FontWeights.SemiBold,
+                Margin = new Thickness(0, 3, 10, 3),
+                VerticalAlignment = VerticalAlignment.Top
+            };
+            Grid.SetRow(labelBlock, row);
+            Grid.SetColumn(labelBlock, 0);
+            QuestDetailsGrid.Children.Add(labelBlock);
+
+            var valuePanel = new StackPanel
+            {
+                Orientation = System.Windows.Controls.Orientation.Horizontal,
+                Margin = new Thickness(0, 3, 0, 3)
+            };
+
+            // Quest identifier text
+            var valueBlock = new TextBlock
+            {
+                Text = questIdString,
+                TextWrapping = TextWrapping.Wrap,
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(0, 0, 10, 0),
+                FontFamily = new System.Windows.Media.FontFamily("Consolas, Courier New, monospace"), // ✅ FIXED: Fully qualified
+                FontWeight = FontWeights.SemiBold
+            };
+            valuePanel.Children.Add(valueBlock);
+
+            // Get script information
+            if (_questScriptService != null)
+            {
+                var scriptInfo = _questScriptService.GetQuestScriptInfo(questIdString);
+
+                if (scriptInfo.Exists)
+                {
+                    // Script exists - show both buttons
+                    if (scriptInfo.CanOpenInVSCode)
+                    {
+                        var vscodeButton = new System.Windows.Controls.Button
+                        {
+                            Content = "Open in VSCode",
+                            Padding = new Thickness(8, 4, 8, 4),
+                            Background = new SolidColorBrush(System.Windows.Media.Color.FromRgb(0, 120, 215)), // ✅ FIXED: Fully qualified
+                            Foreground = new SolidColorBrush(Colors.White),
+                            BorderBrush = new SolidColorBrush(System.Windows.Media.Color.FromRgb(0, 90, 158)), // ✅ FIXED: Fully qualified
+                            FontSize = 11,
+                            VerticalAlignment = VerticalAlignment.Center,
+                            Cursor = System.Windows.Input.Cursors.Hand,
+                            Margin = new Thickness(0, 0, 5, 0),
+                            ToolTip = $"Open {questIdString}.cpp in Visual Studio Code"
+                        };
+                        vscodeButton.Click += (s, e) => OpenScriptInVSCode(scriptInfo);
+                        valuePanel.Children.Add(vscodeButton);
+                    }
+
+                    if (scriptInfo.CanOpenInVisualStudio)
+                    {
+                        var vsButton = new System.Windows.Controls.Button
+                        {
+                            Content = "Open in VS",
+                            Padding = new Thickness(8, 4, 8, 4),
+                            Background = new SolidColorBrush(System.Windows.Media.Color.FromRgb(104, 33, 122)), // ✅ FIXED: Fully qualified
+                            Foreground = new SolidColorBrush(Colors.White),
+                            BorderBrush = new SolidColorBrush(System.Windows.Media.Color.FromRgb(84, 23, 102)), // ✅ FIXED: Fully qualified
+                            FontSize = 11,
+                            VerticalAlignment = VerticalAlignment.Center,
+                            Cursor = System.Windows.Input.Cursors.Hand,
+                            Margin = new Thickness(0, 0, 5, 0),
+                            ToolTip = $"Open {questIdString}.cpp in Visual Studio"
+                        };
+                        vsButton.Click += (s, e) => OpenScriptInVisualStudio(scriptInfo);
+                        valuePanel.Children.Add(vsButton);
+                    }
+
+                    // Add script info
+                    var infoText = new TextBlock
+                    {
+                        Text = "✓ Script found",
+                        FontSize = 10,
+                        Foreground = new SolidColorBrush(Colors.Green),
+                        VerticalAlignment = VerticalAlignment.Center,
+                        Margin = new Thickness(5, 0, 0, 0)
+                    };
+                    valuePanel.Children.Add(infoText);
+                }
+                else
+                {
+                    // Script doesn't exist
+                    var infoText = new TextBlock
+                    {
+                        Text = "✗ Script not found",
+                        FontSize = 10,
+                        Foreground = new SolidColorBrush(Colors.Gray),
+                        VerticalAlignment = VerticalAlignment.Center,
+                        Margin = new Thickness(5, 0, 0, 0),
+                        ToolTip = $"Could not find {questIdString}.cpp in Sapphire repository"
+                    };
+                    valuePanel.Children.Add(infoText);
+                }
+            }
+            else
+            {
+                // Quest script service not available
+                var infoText = new TextBlock
+                {
+                    Text = "⚠ Sapphire path not configured",
+                    FontSize = 10,
+                    Foreground = new SolidColorBrush(Colors.Orange),
+                    VerticalAlignment = VerticalAlignment.Center,
+                    Margin = new Thickness(5, 0, 0, 0),
+                    ToolTip = "Configure Sapphire Server path in Settings to enable script editing"
+                };
+                valuePanel.Children.Add(infoText);
+            }
+
+            Grid.SetRow(valuePanel, row);
+            Grid.SetColumn(valuePanel, 1);
+            QuestDetailsGrid.Children.Add(valuePanel);
+        }
+
+        /// <summary>
+        /// ✅ NEW: Opens quest script in Visual Studio Code
+        /// </summary>
+        private void OpenScriptInVSCode(QuestScriptInfo scriptInfo)
+        {
+            if (_questScriptService == null || string.IsNullOrEmpty(scriptInfo.ScriptPath))
+                return;
+
+            bool success = _questScriptService.OpenInVSCode(scriptInfo.ScriptPath);
+
+            if (!success)
+            {
+                System.Windows.MessageBox.Show($"Failed to open {scriptInfo.QuestIdString}.cpp in Visual Studio Code.\n\n" + // ✅ FIXED: Fully qualified
+                               "Please ensure Visual Studio Code is installed and accessible via the 'code' command.",
+                               "Error Opening Script", MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
+        }
+
+        /// <summary>
+        /// ✅ NEW: Opens quest script in Visual Studio
+        /// </summary>
+        private void OpenScriptInVisualStudio(QuestScriptInfo scriptInfo)
+        {
+            if (_questScriptService == null || string.IsNullOrEmpty(scriptInfo.ScriptPath))
+                return;
+
+            bool success = _questScriptService.OpenInVisualStudio(scriptInfo.ScriptPath);
+
+            if (!success)
+            {
+                System.Windows.MessageBox.Show($"Failed to open {scriptInfo.QuestIdString}.cpp in Visual Studio.\n\n" + // ✅ FIXED: Fully qualified
+                               "Please ensure Visual Studio is installed and accessible.",
+                               "Error Opening Script", MessageBoxButton.OK, MessageBoxImage.Warning);
             }
         }
 
@@ -272,7 +441,7 @@ namespace map_editor
 
                 // Get the main window
                 var mainWindow = System.Windows.Application.Current.MainWindow as MainWindow;
-                if (mainWindow == null) 
+                if (mainWindow == null)
                 {
                     var message = "Could not access main window for map navigation";
                     System.Diagnostics.Debug.WriteLine($"ERROR: {message}");
@@ -299,7 +468,7 @@ namespace map_editor
                                  $"• Map ID: {questGiver.MapId} (INVALID - should be > 0)\n" +
                                  $"• Coordinates: ({questGiver.MapX:F1}, {questGiver.MapY:F1})\n\n" +
                                  $"This indicates the LGB parser didn't find location data for this quest.";
-                    
+
                     System.Diagnostics.Debug.WriteLine($"ERROR: {message}");
                     System.Windows.MessageBox.Show(message, "Debug: No Valid Map Data", MessageBoxButton.OK, MessageBoxImage.Warning);
                     return;
@@ -314,7 +483,7 @@ namespace map_editor
                                  $"• Map ID: {questGiver.MapId} (Valid)\n" +
                                  $"• Coordinates: ({questGiver.MapX:F1}, {questGiver.MapY:F1}) (INVALID - both are 0)\n\n" +
                                  $"This indicates coordinate conversion failed.";
-                    
+
                     System.Diagnostics.Debug.WriteLine($"WARNING: {message}");
                     System.Windows.MessageBox.Show(message, "Debug: Invalid Coordinates", MessageBoxButton.OK, MessageBoxImage.Warning);
                 }
@@ -334,7 +503,7 @@ namespace map_editor
                                  $"• Available Territories: {mainWindow.Territories?.Count ?? 0}\n" +
                                  $"• Sample Map IDs: {string.Join(", ", availableMapIds)}\n\n" +
                                  $"This indicates a mismatch between the quest data and territory data.";
-                    
+
                     System.Diagnostics.Debug.WriteLine($"ERROR: {message}");
                     System.Windows.MessageBox.Show(message, "Debug: Territory Not Found", MessageBoxButton.OK, MessageBoxImage.Error);
                     return;
@@ -356,7 +525,7 @@ namespace map_editor
                                    $"• Map ID: {questGiver.MapId}\n" +
                                    $"• Coordinates: ({questGiver.MapX:F1}, {questGiver.MapY:F1})\n" +
                                    $"• Marker ID: {1000000 + questGiver.NpcId}";
-                
+
                 System.Diagnostics.Debug.WriteLine($"SUCCESS: {successMessage}");
                 System.Windows.MessageBox.Show(successMessage, "Debug: Map Navigation Successful", MessageBoxButton.OK, MessageBoxImage.Information);
             }
@@ -367,10 +536,10 @@ namespace map_editor
                                   $"• Message: {ex.Message}\n" +
                                   $"• Quest: {_questInfo?.Name ?? "Unknown"}\n" +
                                   $"• Quest Giver: {questGiver?.NpcName ?? "Unknown"}";
-                
+
                 System.Diagnostics.Debug.WriteLine($"ERROR: {errorMessage}");
                 System.Diagnostics.Debug.WriteLine($"Stack trace: {ex.StackTrace}");
-                
+
                 System.Windows.MessageBox.Show(errorMessage, "Debug: Error in Show on Map", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
@@ -392,7 +561,7 @@ namespace map_editor
                     Z = questGiver.MapZ,
                     IconId = 61411, // ✅ Using the specified quest icon ID
                     IconPath = "ui/icon/061000/061411.tex", // ✅ Using the specified path
-                    Type = MarkerType.Quest, 
+                    Type = MarkerType.Quest,
                     IsVisible = true
                 };
 

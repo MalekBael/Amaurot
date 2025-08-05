@@ -10,12 +10,10 @@ namespace map_editor
         {
             if (value is QuestInfo quest)
             {
-                // Check if quest has location data
-                bool hasLocationData = quest.MapId > 0 || !string.IsNullOrEmpty(quest.PlaceName);
-
-                // Only show pin if quest has location data AND debug mode is enabled
-                return hasLocationData && DebugModeManager.IsDebugModeEnabled;
+                // Consider a quest to have location if it has a valid MapId or PlaceName
+                return quest.MapId > 0 || !string.IsNullOrEmpty(quest.PlaceName);
             }
+
             return false;
         }
 

@@ -1,20 +1,16 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
+﻿using SaintCoinach;
+using SaintCoinach.Xiv;
+using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Shapes;
-using System.Threading.Tasks;
 using System.Windows.Threading;
-using System.IO;
-using SaintCoinach;
-using SaintCoinach.Xiv;
 using Application = System.Windows.Application;
+using WpfBrushes = System.Windows.Media.Brushes;
 using WpfPoint = System.Windows.Point;
 using WpfSize = System.Windows.Size;
-using WpfBrushes = System.Windows.Media.Brushes;
 
 namespace map_editor
 {
@@ -54,6 +50,7 @@ namespace map_editor
         }
 
         public void EnableVerboseLogging(bool enable) => _verboseLogging = enable;
+
         public void EnableDebugVisuals(bool enable) => _showDebugVisuals = enable;
 
         private void OnMarkerUpdateTimerTick(object? sender, EventArgs e)
@@ -474,10 +471,18 @@ namespace map_editor
                     {
                         e.Handled = true;
 
-                        ShowMarkerDetailsPopup(marker, new WpfPoint(
-                            canvasX,
-                            canvasY - markerSize
-                        ));
+                        // FIXED: Use the existing HandleNpcMarkerClick method instead of accessing _allNpcs directly
+                        if (marker.Type == MarkerType.Npc && _mainWindow is MainWindow mainWindow)
+                        {
+                            mainWindow.HandleNpcMarkerClick(marker.Id);
+                        }
+                        else
+                        {
+                            ShowMarkerDetailsPopup(marker, new WpfPoint(
+                                canvasX,
+                                canvasY - markerSize
+                            ));
+                        }
                     };
                 }
 
@@ -696,7 +701,6 @@ namespace map_editor
             var textWidth = host.DesiredSize.Width;
             var textHeight = host.DesiredSize.Height;
 
-
             Canvas.SetLeft(host, canvasX - (textWidth / 2));
             Canvas.SetTop(host, canvasY - (textHeight / 2));
 
@@ -871,8 +875,6 @@ namespace map_editor
                 if (coordinates == null || _overlayCanvas == null) return;
 
                 var transformedPoint = clickPoint;
-
-
 
                 var textBlock = new TextBlock
                 {
@@ -1186,7 +1188,6 @@ namespace map_editor
                     {
                         shape.StrokeThickness = (double)fe.Resources["OriginalStrokeThickness"];
                     }
-
                     else if (_hoveredElement is System.Windows.Controls.Image image)
                     {
                         if (fe.Resources.Contains("OriginalWidth") && fe.Resources.Contains("OriginalHeight"))
@@ -1244,5 +1245,8 @@ namespace map_editor
         {
             _mainWindow = mainWindow;
         }
+
+        // REMOVED: The ShowNpcQuestPopup method that was causing the access issue
+        // The HandleNpcMarkerClick method in MainWindow now handles this functionality
     }
 }

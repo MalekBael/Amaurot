@@ -9,82 +9,82 @@
 
     <!--  Window Resources with the converter -->
     <Window.Resources>
-        <local:QuestHasLocationConverter x:Key="QuestHasLocationConverter"/>
+        <local:QuestHasLocationConverter x:Key="QuestHasLocationConverter" />
     </Window.Resources>
 
     <Grid>
         <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="0*"/>
-            <ColumnDefinition Width="0*"/>
-            <ColumnDefinition/>
+            <ColumnDefinition Width="0*" />
+            <ColumnDefinition Width="0*" />
+            <ColumnDefinition />
         </Grid.ColumnDefinitions>
         <Grid.RowDefinitions>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="*"/>
-            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
             <!-- Marker Visibility Controls -->
-            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto" />
             <!-- Debug Information -->
-            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto" />
             <!-- Status Bar -->
         </Grid.RowDefinitions>
 
         <!-- Menu Bar -->
         <Menu Grid.Row="0" Grid.ColumnSpan="3">
             <MenuItem Header="_File">
-                <MenuItem Header="_Load FFXIV Data..." Click="LoadGameData_Click"/>
-                <Separator/>
-                <MenuItem Header="E_xit" Click="Exit_Click"/>
+                <MenuItem Header="_Load FFXIV Data..." Click="LoadGameData_Click" />
+                <Separator />
+                <MenuItem Header="E_xit" Click="Exit_Click" />
             </MenuItem>
             <MenuItem Header="_Settings">
-                <MenuItem Header="_Preferences..." Click="OpenSettings_Click"/>
-                <Separator/>
-                <MenuItem Header="_Auto-load Data" IsCheckable="True" 
-                          x:Name="AutoLoadMenuItem" Checked="AutoLoadMenuItem_Changed" 
-                          Unchecked="AutoLoadMenuItem_Changed"/>
+                <MenuItem Header="_Preferences..." Click="OpenSettings_Click" />
+                <Separator />
+                <MenuItem Header="_Auto-load Data" IsCheckable="True"
+                          x:Name="AutoLoadMenuItem" Checked="AutoLoadMenuItem_Changed"
+                          Unchecked="AutoLoadMenuItem_Changed" />
             </MenuItem>
             <MenuItem Header="_Tools">
                 <MenuItem Header="Open _Sapphire Server Repository" Click="OpenSapphireRepo_Click"
-                          ToolTip="Opens the Sapphire Server repository folder in Windows Explorer"/>
+                          ToolTip="Opens the Sapphire Server repository folder in Windows Explorer" />
                 <MenuItem Header="Open Sapphire Server _Build Directory" Click="OpenSapphireBuild_Click"
-                          ToolTip="Opens the Sapphire Server build directory in Windows Explorer"/>
-                <Separator/>
+                          ToolTip="Opens the Sapphire Server build directory in Windows Explorer" />
+                <Separator />
                 <MenuItem Header="_Extract Quest Files" Click="ExtractQuestFiles_Click"
-                          ToolTip="Runs quest_parse.exe to extract quest files from game data"/>
+                          ToolTip="Runs quest_parse.exe to extract quest files from game data" />
                 <MenuItem Header="_LGB Parser" Click="RunLgbParser_Click"
-                          ToolTip="Opens LGB Parser tool for parsing FFXIV LGB files"/>
+                          ToolTip="Opens LGB Parser tool for parsing FFXIV LGB files" />
             </MenuItem>
         </Menu>
 
         <!-- Main Content -->
         <Grid Grid.Row="1" Grid.ColumnSpan="3">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="280"/>
-                <ColumnDefinition Width="5"/>
-                <ColumnDefinition Width="*"/>
-                <ColumnDefinition Width="5"/>
-                <ColumnDefinition Width="280"/>
-                <ColumnDefinition Width="5"/>
-                <ColumnDefinition Width="280"/>
+                <ColumnDefinition Width="280" />
+                <ColumnDefinition Width="5" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="5" />
+                <ColumnDefinition Width="280" />
+                <ColumnDefinition Width="5" />
+                <ColumnDefinition Width="280" />
             </Grid.ColumnDefinitions>
 
             <!-- Territory List -->
             <DockPanel Grid.Column="0">
                 <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="5">
-                    <TextBlock Text="Territories" FontWeight="Bold" VerticalAlignment="Center"/>
-                    <TextBlock Name="TerritoryCountText" Text="(0)" Margin="5,0,0,0" Foreground="Gray" VerticalAlignment="Center"/>
+                    <TextBlock Text="Territories" FontWeight="Bold" VerticalAlignment="Center" />
+                    <TextBlock Name="TerritoryCountText" Text="(0)" Margin="5,0,0,0" Foreground="Gray" VerticalAlignment="Center" />
                 </StackPanel>
-                <TextBox DockPanel.Dock="Top" Name="TerritorySearchBox" Margin="5,0,5,5" 
+                <TextBox DockPanel.Dock="Top" Name="TerritorySearchBox" Margin="5,0,5,5"
                          Text="" TextChanged="TerritorySearchBox_TextChanged"
                          Background="White" BorderThickness="1" BorderBrush="Gray"
-                         ToolTip="Search territories by name or ID"/>
-                <CheckBox DockPanel.Dock="Top" x:Name="HideDuplicateTerritoriesCheckBox" 
-                          Content="Hide duplicate IDs" Margin="5,0,5,5" 
-                          IsChecked="False" Checked="HideDuplicateTerritoriesCheckBox_Changed" 
+                         ToolTip="Search territories by name or ID" />
+                <CheckBox DockPanel.Dock="Top" x:Name="HideDuplicateTerritoriesCheckBox"
+                          Content="Hide duplicate IDs" Margin="5,0,5,5"
+                          IsChecked="False" Checked="HideDuplicateTerritoriesCheckBox_Changed"
                           Unchecked="HideDuplicateTerritoriesCheckBox_Changed"
-                          ToolTip="Hide territories with duplicate territory IDs, keeping only the first occurrence"/>
-                <ListBox x:Name="TerritoryList" 
-                         ItemsSource="{Binding FilteredTerritories}" 
+                          ToolTip="Hide territories with duplicate territory IDs, keeping only the first occurrence" />
+                <ListBox x:Name="TerritoryList"
+                         ItemsSource="{Binding FilteredTerritories}"
                          SelectionChanged="TerritoryList_SelectionChanged">
                     <ListBox.ItemTemplate>
                         <DataTemplate>
@@ -94,13 +94,13 @@
                 </ListBox>
             </DockPanel>
 
-            <GridSplitter Grid.Column="1" HorizontalAlignment="Stretch"/>
+            <GridSplitter Grid.Column="1" HorizontalAlignment="Stretch" />
 
             <!-- Map Display Area -->
             <Grid Grid.Column="2">
                 <Grid.RowDefinitions>
-                    <RowDefinition Height="*"/>
-                    <RowDefinition Height="200"/>
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="200" />
                 </Grid.RowDefinitions>
 
                 <!-- Map Canvas with Overlay - Using Grid to stack them perfectly -->
@@ -108,14 +108,14 @@
                     <Grid ClipToBounds="True">
                         <!-- Map Canvas - Bottom Layer -->
                         <Canvas x:Name="MapCanvas" Background="White"
-                                MouseWheel="MapCanvas_MouseWheel" 
+                                MouseWheel="MapCanvas_MouseWheel"
                                 MouseLeftButtonDown="MapCanvas_MouseLeftButtonDown"
                                 MouseLeftButtonUp="MapCanvas_MouseLeftButtonUp"
                                 MouseRightButtonDown="MapCanvas_MouseRightButtonDown"
                                 MouseMove="MapCanvas_MouseMove">
 
                             <!-- Image must be the first element to be drawn behind everything else -->
-                            <Image x:Name="MapImageControl" 
+                            <Image x:Name="MapImageControl"
                                    Canvas.Left="0" Canvas.Top="0"
                                    RenderTransformOrigin="0,0">
                                 <Image.RenderTransform>
@@ -127,15 +127,15 @@
                             </Image>
 
                             <!-- Placeholder text for when no map is selected -->
-                            <TextBlock Text="Select a territory to view its map" 
+                            <TextBlock Text="Select a territory to view its map"
                                        Canvas.Left="10" Canvas.Top="10"
                                        Foreground="Gray"
-                                       x:Name="MapPlaceholderText"/>
+                                       x:Name="MapPlaceholderText" />
                         </Canvas>
 
                         <!-- Overlay Canvas - Top Layer for Markers -->
-                        <Canvas x:Name="OverlayCanvas" 
-                                Background="Transparent" 
+                        <Canvas x:Name="OverlayCanvas"
+                                Background="Transparent"
                                 IsHitTestVisible="False"
                                 RenderTransformOrigin="0,0">
                             <Canvas.RenderTransform>
@@ -153,67 +153,67 @@
                     <ScrollViewer>
                         <Grid>
                             <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="Auto"/>
-                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
                             </Grid.ColumnDefinitions>
 
                             <!-- Map Information Column -->
                             <StackPanel Grid.Column="0" Margin="0,0,5,0">
-                                <TextBlock Text="Map Information" FontWeight="Bold" Margin="5,5,5,2"/>
-                                <TextBlock x:Name="MapInfoText" Margin="5,2,5,10" TextWrapping="Wrap"/>
+                                <TextBlock Text="Map Information" FontWeight="Bold" Margin="5,5,5,2" />
+                                <TextBlock x:Name="MapInfoText" Margin="5,2,5,10" TextWrapping="Wrap" />
                             </StackPanel>
 
                             <!-- Vertical Separator -->
-                            <Separator Grid.Column="1" Style="{StaticResource {x:Static ToolBar.SeparatorStyleKey}}" 
-                                       Margin="5,0,5,0" Width="1"/>
+                            <Separator Grid.Column="1" Style="{StaticResource {x:Static ToolBar.SeparatorStyleKey}}"
+                                       Margin="5,0,5,0" Width="1" />
 
                             <!-- Marker Information Column -->
                             <StackPanel Grid.Column="2" Margin="5,0,0,0">
-                                <TextBlock Text="Marker Information" FontWeight="Bold" Margin="5,5,5,2"/>
-                                <Border BorderBrush="Gray" BorderThickness="1" Margin="5" Padding="10" 
+                                <TextBlock Text="Marker Information" FontWeight="Bold" Margin="5,5,5,2" />
+                                <Border BorderBrush="Gray" BorderThickness="1" Margin="5" Padding="10"
                                         Background="White" x:Name="MarkerInfoBorder" Visibility="Collapsed">
                                     <StackPanel>
-                                        <TextBlock x:Name="MarkerNameText" FontWeight="Bold" FontSize="14" Margin="0,0,0,5"/>
-                                        <TextBlock x:Name="MarkerSubtitleText" FontStyle="Italic" Margin="0,0,0,5" Visibility="Collapsed"/>
+                                        <TextBlock x:Name="MarkerNameText" FontWeight="Bold" FontSize="14" Margin="0,0,0,5" />
+                                        <TextBlock x:Name="MarkerSubtitleText" FontStyle="Italic" Margin="0,0,0,5" Visibility="Collapsed" />
                                         <Grid x:Name="MarkerDetailsGrid">
                                             <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="Auto"/>
-                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="*" />
                                             </Grid.ColumnDefinitions>
                                             <!-- Rows will be added dynamically -->
                                         </Grid>
                                     </StackPanel>
                                 </Border>
-                                <TextBlock x:Name="NoMarkerSelectedText" Text="Click on a marker to view details" 
-                                           Margin="5" FontStyle="Italic" Foreground="Gray"/>
+                                <TextBlock x:Name="NoMarkerSelectedText" Text="Click on a marker to view details"
+                                           Margin="5" FontStyle="Italic" Foreground="Gray" />
                             </StackPanel>
                         </Grid>
                     </ScrollViewer>
                 </GroupBox>
             </Grid>
 
-            <GridSplitter Grid.Column="3" HorizontalAlignment="Stretch"/>
+            <GridSplitter Grid.Column="3" HorizontalAlignment="Stretch" />
 
             <!-- Right Panels Grid - Split horizontally -->
             <Grid Grid.Column="4">
                 <Grid.RowDefinitions>
-                    <RowDefinition Height="*"/>
-                    <RowDefinition Height="5"/>
-                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="5" />
+                    <RowDefinition Height="*" />
                 </Grid.RowDefinitions>
 
                 <!-- Quest List Panel (Top) -->
                 <DockPanel Grid.Row="0">
                     <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="5">
-                        <TextBlock Text="Quests" FontWeight="Bold" VerticalAlignment="Center"/>
-                        <TextBlock x:Name="QuestCountText" Text="(0)" Margin="5,0,0,0" Foreground="Gray" VerticalAlignment="Center"/>
+                        <TextBlock Text="Quests" FontWeight="Bold" VerticalAlignment="Center" />
+                        <TextBlock x:Name="QuestCountText" Text="(0)" Margin="5,0,0,0" Foreground="Gray" VerticalAlignment="Center" />
                     </StackPanel>
-                    <TextBox DockPanel.Dock="Top" x:Name="QuestSearchBox" Margin="5,0,5,5" 
+                    <TextBox DockPanel.Dock="Top" x:Name="QuestSearchBox" Margin="5,0,5,5"
                              Text="" TextChanged="QuestSearchBox_TextChanged"
                              Background="White" BorderThickness="1" BorderBrush="Gray"
-                             ToolTip="Search quests by name or ID"/>
-                    <ListBox Name="QuestList" 
+                             ToolTip="Search quests by name or ID" />
+                    <ListBox Name="QuestList"
                              ItemsSource="{Binding FilteredQuests}"
                              SelectionChanged="QuestList_SelectionChanged"
                              MouseDoubleClick="QuestList_MouseDoubleClick"
@@ -222,24 +222,24 @@
                             <DataTemplate>
                                 <Grid>
                                     <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="Auto"/>
-                                        <ColumnDefinition Width="*"/>
-                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
                                     </Grid.ColumnDefinitions>
 
                                     <!-- Location Indicator -->
-                                    <TextBlock Grid.Column="0" 
-                                               Text="📍" 
-                                               FontSize="12" 
+                                    <TextBlock Grid.Column="0"
+                                               Text="📍"
+                                               FontSize="12"
                                                Margin="0,0,5,0"
                                                VerticalAlignment="Center"
                                                ToolTip="Quest has location data">
                                         <TextBlock.Style>
                                             <Style TargetType="TextBlock">
-                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                                <Setter Property="Visibility" Value="Collapsed" />
                                                 <Style.Triggers>
                                                     <DataTrigger Binding="{Binding Path=., Converter={StaticResource QuestHasLocationConverter}}" Value="True">
-                                                        <Setter Property="Visibility" Value="Visible"/>
+                                                        <Setter Property="Visibility" Value="Visible" />
                                                     </DataTrigger>
                                                 </Style.Triggers>
                                             </Style>
@@ -247,28 +247,28 @@
                                     </TextBlock>
 
                                     <!-- Quest Name -->
-                                    <TextBlock Grid.Column="1" Text="{Binding}" ToolTip="{Binding Name}" 
-                                               VerticalAlignment="Center" Margin="0,2"/>
+                                    <TextBlock Grid.Column="1" Text="{Binding}" ToolTip="{Binding Name}"
+                                               VerticalAlignment="Center" Margin="0,2" />
 
                                     <!-- Cogwheel Icon for Quest Details -->
-                                    <Button Grid.Column="2" 
-                                            Width="20" Height="20" 
+                                    <Button Grid.Column="2"
+                                            Width="20" Height="20"
                                             Margin="5,0,0,0"
-                                            Background="Transparent" 
+                                            Background="Transparent"
                                             BorderThickness="0"
                                             VerticalAlignment="Center"
                                             ToolTip="View quest details"
                                             Click="QuestDetailsButton_Click"
                                             Tag="{Binding}">
                                         <Button.Content>
-                                            <TextBlock Text="⚙" FontSize="12" Foreground="Gray"/>
+                                            <TextBlock Text="⚙" FontSize="12" Foreground="Gray" />
                                         </Button.Content>
                                         <Button.Style>
                                             <Style TargetType="Button">
-                                                <Setter Property="Cursor" Value="Hand"/>
+                                                <Setter Property="Cursor" Value="Hand" />
                                                 <Style.Triggers>
                                                     <Trigger Property="IsMouseOver" Value="True">
-                                                        <Setter Property="Background" Value="LightGray"/>
+                                                        <Setter Property="Background" Value="LightGray" />
                                                     </Trigger>
                                                 </Style.Triggers>
                                             </Style>
@@ -281,28 +281,29 @@
                 </DockPanel>
 
                 <!-- Horizontal Splitter -->
-                <GridSplitter Grid.Row="1" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"/>
+                <GridSplitter Grid.Row="1" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" />
 
                 <!-- NPC Panel (Bottom) - RENAMED from Events Panel -->
                 <DockPanel Grid.Row="2">
                     <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="5">
-                        <TextBlock Text="NPCs" FontWeight="Bold" VerticalAlignment="Center"/>
-                        <TextBlock x:Name="NpcCountText" Text="(0)" Margin="5,0,0,0" Foreground="Gray" VerticalAlignment="Center"/>
+                        <TextBlock Text="NPCs" FontWeight="Bold" VerticalAlignment="Center" />
+                        <TextBlock x:Name="NpcCountText" Text="(0)" Margin="5,0,0,0" Foreground="Gray" VerticalAlignment="Center" />
                     </StackPanel>
-                    <TextBox DockPanel.Dock="Top" x:Name="NpcSearchBox" Margin="5,0,5,5" 
+                    <TextBox DockPanel.Dock="Top" x:Name="NpcSearchBox" Margin="5,0,5,5"
                              Text="" TextChanged="NpcSearchBox_TextChanged"
                              Background="White" BorderThickness="1" BorderBrush="Gray"
-                             ToolTip="Search NPCs by name or ID"/>
-                    <ListBox Name="NpcList" 
+                             ToolTip="Search NPCs by name or ID" />
+                    <ListBox Name="NpcList"
+                             ItemsSource="{Binding FilteredNpcs}"
                              SelectionChanged="NpcList_SelectionChanged"
                              MouseDoubleClick="NpcList_MouseDoubleClick"
                              Margin="5,0,5,5">
                         <ListBox.ItemTemplate>
                             <DataTemplate>
                                 <StackPanel Margin="2">
-                                    <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold"/>
-                                    <TextBlock Text="{Binding QuestCount, StringFormat={}{0} quest(s)}" 
-                                               FontSize="10" Foreground="Gray"/>
+                                    <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold" />
+                                    <TextBlock Text="{Binding QuestCount, StringFormat={}{0} quest(s)}"
+                                               FontSize="10" Foreground="Gray" />
                                 </StackPanel>
                             </DataTemplate>
                         </ListBox.ItemTemplate>
@@ -310,58 +311,58 @@
                 </DockPanel>
             </Grid>
 
-            <GridSplitter Grid.Column="5" HorizontalAlignment="Stretch"/>
+            <GridSplitter Grid.Column="5" HorizontalAlignment="Stretch" />
 
             <!-- Far Right Panels Grid - Split horizontally -->
             <Grid Grid.Column="6">
                 <Grid.RowDefinitions>
-                    <RowDefinition Height="*"/>
-                    <RowDefinition Height="5"/>
-                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="5" />
+                    <RowDefinition Height="*" />
                 </Grid.RowDefinitions>
 
                 <!-- BNpc List Panel (Top) -->
                 <DockPanel Grid.Row="0">
                     <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="5">
-                        <TextBlock Text="BNpcs" FontWeight="Bold" VerticalAlignment="Center"/>
-                        <TextBlock x:Name="BNpcCountText" Text="(0)" Margin="5,0,0,0" Foreground="Gray" VerticalAlignment="Center"/>
+                        <TextBlock Text="BNpcs" FontWeight="Bold" VerticalAlignment="Center" />
+                        <TextBlock x:Name="BNpcCountText" Text="(0)" Margin="5,0,0,0" Foreground="Gray" VerticalAlignment="Center" />
                     </StackPanel>
-                    <TextBox DockPanel.Dock="Top" x:Name="BNpcSearchBox" Margin="5,0,5,5" 
+                    <TextBox DockPanel.Dock="Top" x:Name="BNpcSearchBox" Margin="5,0,5,5"
                              Text="" TextChanged="BNpcSearchBox_TextChanged"
                              Background="White" BorderThickness="1" BorderBrush="Gray"
-                             ToolTip="Search NPCs by name or Base ID"/>
-                    <ListBox Name="BNpcList" 
+                             ToolTip="Search NPCs by name or Base ID" />
+                    <ListBox Name="BNpcList"
                              ItemsSource="{Binding FilteredBNpcs}"
                              SelectionChanged="BNpcList_SelectionChanged"
                              Margin="5,0,5,5">
                         <ListBox.ItemTemplate>
                             <DataTemplate>
-                                <TextBlock Text="{Binding}" ToolTip="{Binding BNpcName}"/>
+                                <TextBlock Text="{Binding}" ToolTip="{Binding BNpcName}" />
                             </DataTemplate>
                         </ListBox.ItemTemplate>
                     </ListBox>
                 </DockPanel>
 
                 <!-- Horizontal Splitter -->
-                <GridSplitter Grid.Row="1" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"/>
+                <GridSplitter Grid.Row="1" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" />
 
                 <!-- Fates Panel (Bottom) -->
                 <DockPanel Grid.Row="2">
                     <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="5">
-                        <TextBlock Text="Fates" FontWeight="Bold" VerticalAlignment="Center"/>
-                        <TextBlock x:Name="FateCountText" Text="(0)" Margin="5,0,0,0" Foreground="Gray" VerticalAlignment="Center"/>
+                        <TextBlock Text="Fates" FontWeight="Bold" VerticalAlignment="Center" />
+                        <TextBlock x:Name="FateCountText" Text="(0)" Margin="5,0,0,0" Foreground="Gray" VerticalAlignment="Center" />
                     </StackPanel>
-                    <TextBox DockPanel.Dock="Top" x:Name="FateSearchBox" Margin="5,0,5,5" 
+                    <TextBox DockPanel.Dock="Top" x:Name="FateSearchBox" Margin="5,0,5,5"
                              Text="" TextChanged="FateSearchBox_TextChanged"
                              Background="White" BorderThickness="1" BorderBrush="Gray"
-                             ToolTip="Search fates by name or ID"/>
-                    <ListBox Name="FateList" 
+                             ToolTip="Search fates by name or ID" />
+                    <ListBox Name="FateList"
                              ItemsSource="{Binding FilteredFates}"
                              SelectionChanged="FateList_SelectionChanged"
                              Margin="5,0,5,5">
                         <ListBox.ItemTemplate>
                             <DataTemplate>
-                                <TextBlock Text="{Binding}" ToolTip="{Binding Name}"/>
+                                <TextBlock Text="{Binding}" ToolTip="{Binding Name}" />
                             </DataTemplate>
                         </ListBox.ItemTemplate>
                     </ListBox>
@@ -372,20 +373,20 @@
         <!-- Marker Visibility Controls -->
         <GroupBox Grid.Row="2" Grid.ColumnSpan="3" Header="Marker Visibility" Margin="5,0,5,5" Background="LightBlue" BorderBrush="Blue" BorderThickness="1">
             <StackPanel Orientation="Horizontal" Margin="5">
-                <CheckBox x:Name="ShowAetheryteMarkersCheckBox" Content="Aetherytes" IsChecked="True" 
-                          Margin="5,0" Checked="MarkerVisibility_Changed" Unchecked="MarkerVisibility_Changed"/>
-                <CheckBox x:Name="ShowQuestMarkersCheckBox" Content="Quests" IsChecked="True" 
-                          Margin="5,0" Checked="MarkerVisibility_Changed" Unchecked="MarkerVisibility_Changed"/>
-                <CheckBox x:Name="ShowShopMarkersCheckBox" Content="Shops" IsChecked="True" 
-                          Margin="5,0" Checked="MarkerVisibility_Changed" Unchecked="MarkerVisibility_Changed"/>
-                <CheckBox x:Name="ShowLandmarkMarkersCheckBox" Content="Landmarks" IsChecked="True" 
-                          Margin="5,0" Checked="MarkerVisibility_Changed" Unchecked="MarkerVisibility_Changed"/>
-                <CheckBox x:Name="ShowFateMarkersCheckBox" Content="FATEs" IsChecked="True" 
-                          Margin="5,0" Checked="MarkerVisibility_Changed" Unchecked="MarkerVisibility_Changed"/>
-                <CheckBox x:Name="ShowEntranceMarkersCheckBox" Content="Entrances" IsChecked="True" 
-                          Margin="5,0" Checked="MarkerVisibility_Changed" Unchecked="MarkerVisibility_Changed"/>
-                <CheckBox x:Name="ShowGenericMarkersCheckBox" Content="Other" IsChecked="True" 
-                          Margin="5,0" Checked="MarkerVisibility_Changed" Unchecked="MarkerVisibility_Changed"/>
+                <CheckBox x:Name="ShowAetheryteMarkersCheckBox" Content="Aetherytes" IsChecked="True"
+                          Margin="5,0" Checked="MarkerVisibility_Changed" Unchecked="MarkerVisibility_Changed" />
+                <CheckBox x:Name="ShowNpcMarkersCheckBox" Content="NPCs" IsChecked="True"
+                          Margin="5,0" Checked="MarkerVisibility_Changed" Unchecked="MarkerVisibility_Changed" />
+                <CheckBox x:Name="ShowShopMarkersCheckBox" Content="Shops" IsChecked="True"
+                          Margin="5,0" Checked="MarkerVisibility_Changed" Unchecked="MarkerVisibility_Changed" />
+                <CheckBox x:Name="ShowLandmarkMarkersCheckBox" Content="Landmarks" IsChecked="True"
+                          Margin="5,0" Checked="MarkerVisibility_Changed" Unchecked="MarkerVisibility_Changed" />
+                <CheckBox x:Name="ShowFateMarkersCheckBox" Content="FATEs" IsChecked="True"
+                          Margin="5,0" Checked="MarkerVisibility_Changed" Unchecked="MarkerVisibility_Changed" />
+                <CheckBox x:Name="ShowEntranceMarkersCheckBox" Content="Entrances" IsChecked="True"
+                          Margin="5,0" Checked="MarkerVisibility_Changed" Unchecked="MarkerVisibility_Changed" />
+                <CheckBox x:Name="ShowGenericMarkersCheckBox" Content="Other" IsChecked="True"
+                          Margin="5,0" Checked="MarkerVisibility_Changed" Unchecked="MarkerVisibility_Changed" />
             </StackPanel>
         </GroupBox>
 
@@ -394,52 +395,52 @@
             <Expander.Header>
                 <DockPanel Width="{Binding ActualWidth, RelativeSource={RelativeSource AncestorType=Expander}}">
                     <TextBlock Text="Debug Information" VerticalAlignment="Center" />
-                    <CheckBox x:Name="DebugModeCheckBox" Content="Debug Mode" IsChecked="False" 
+                    <CheckBox x:Name="DebugModeCheckBox" Content="Debug Mode" IsChecked="False"
                               Click="ToggleDebugMode_Click" Margin="10,0,0,0" VerticalAlignment="Center" />
                 </DockPanel>
             </Expander.Header>
             <Grid>
                 <Grid.RowDefinitions>
-                    <RowDefinition Height="*"/>
-                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="Auto" />
                 </Grid.RowDefinitions>
 
                 <ScrollViewer Grid.Row="0" Name="DebugScrollViewer" MaxHeight="250" VerticalScrollBarVisibility="Auto">
-                    <TextBox x:Name="DebugTextBox" IsReadOnly="True" TextWrapping="Wrap" 
+                    <TextBox x:Name="DebugTextBox" IsReadOnly="True" TextWrapping="Wrap"
                              FontFamily="Consolas" FontSize="12" Background="#FFFCFCFC"
-                             VerticalAlignment="Stretch"/>
+                             VerticalAlignment="Stretch" />
                 </ScrollViewer>
 
                 <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,5,0,0">
-                    <Button x:Name="ClearLogButton" Content="Clear Log" Width="80" Margin="0,0,5,0" Click="ClearLogButton_Click"/>
-                    <Button x:Name="SaveLogButton" Content="Save Log" Width="80" Margin="0,0,5,0" Click="SaveLogButton_Click"/>
-                    <CheckBox x:Name="AutoScrollCheckBox" Content="Auto-scroll" IsChecked="True" VerticalAlignment="Center"/>
+                    <Button x:Name="ClearLogButton" Content="Clear Log" Width="80" Margin="0,0,5,0" Click="ClearLogButton_Click" />
+                    <Button x:Name="SaveLogButton" Content="Save Log" Width="80" Margin="0,0,5,0" Click="SaveLogButton_Click" />
+                    <CheckBox x:Name="AutoScrollCheckBox" Content="Auto-scroll" IsChecked="True" VerticalAlignment="Center" />
                 </StackPanel>
             </Grid>
         </Expander>
 
         <!-- Status Bar -->
         <StatusBar Grid.Row="4" Grid.ColumnSpan="3">
-            <TextBlock Name="StatusText" Text="Ready - Load FFXIV data to begin"/>
+            <TextBlock Name="StatusText" Text="Ready - Load FFXIV data to begin" />
         </StatusBar>
 
-        <Grid Grid.RowSpan="5" Grid.ColumnSpan="3" x:Name="ProgressOverlay" 
+        <Grid Grid.RowSpan="5" Grid.ColumnSpan="3" x:Name="ProgressOverlay"
               Background="#80000000" Visibility="Collapsed" Panel.ZIndex="1000">
-            <Border Background="White" CornerRadius="10" Padding="30" 
+            <Border Background="White" CornerRadius="10" Padding="30"
                     HorizontalAlignment="Center" VerticalAlignment="Center"
                     MinWidth="400" MaxWidth="500">
                 <StackPanel>
-                    <TextBlock Text="Extracting Quest Files" FontSize="18" FontWeight="Bold" 
-                               HorizontalAlignment="Center" Margin="0,0,0,15"/>
+                    <TextBlock Text="Extracting Quest Files" FontSize="18" FontWeight="Bold"
+                               HorizontalAlignment="Center" Margin="0,0,0,15" />
 
-                    <TextBlock x:Name="ProgressStatusText" Text="Initializing quest_parse.exe..." 
-                               HorizontalAlignment="Center" Margin="0,0,0,15" TextWrapping="Wrap"/>
+                    <TextBlock x:Name="ProgressStatusText" Text="Initializing quest_parse.exe..."
+                               HorizontalAlignment="Center" Margin="0,0,0,15" TextWrapping="Wrap" />
 
-                    <ProgressBar x:Name="QuestExtractionProgressBar" Height="20" 
-                                 IsIndeterminate="True" Margin="0,0,0,15"/>
+                    <ProgressBar x:Name="QuestExtractionProgressBar" Height="20"
+                                 IsIndeterminate="True" Margin="0,0,0,15" />
 
                     <Button x:Name="CancelExtractionButton" Content="Cancel" Width="80" Height="30"
-                            HorizontalAlignment="Center" Click="CancelExtraction_Click"/>
+                            HorizontalAlignment="Center" Click="CancelExtraction_Click" />
                 </StackPanel>
             </Border>
         </Grid>

@@ -14,13 +14,13 @@ namespace map_editor.Services
     {
         private readonly ARealmReversed? _realm;
         private readonly Action<string> _logDebug;
-        private readonly QuestLocationService? _questLocationService; // ✅ Renamed
+        private readonly QuestLocationService? _questLocationService;
 
         public DataLoaderService(ARealmReversed? realm, Action<string> logDebug)
         {
             _realm = realm;
             _logDebug = logDebug;
-            _questLocationService = new QuestLocationService(_realm, _logDebug); // ✅ Renamed
+            _questLocationService = new QuestLocationService(_realm, _logDebug);
         }
 
         public async Task<List<QuestInfo>> LoadQuestsAsync()
@@ -43,7 +43,7 @@ namespace map_editor.Services
                         _logDebug($"Found {totalCount} quests in sheet");
 
                         foreach (var quest in questSheet
-                        .OrderBy(q => q.Key)) // ✅ Sort by key (ID) for consistent processing
+                        .OrderBy(q => q.Key))
                         {
                             try
                             {
@@ -97,7 +97,6 @@ namespace map_editor.Services
                                 }
                                 catch
                                 {
-                                    // JournalGenre access failed, continue with defaults
                                 }
 
                                 var questInfo = new QuestInfo
@@ -122,13 +121,11 @@ namespace map_editor.Services
                                     IsRepeatable = false
                                 };
 
-                                // Extract additional quest data with better error handling
                                 ExtractQuestDetailsSafely(quest, questInfo);
 
                                 tempQuests.Add(questInfo);
                                 processedCount++;
 
-                                // Log some examples for verification
                                 if (processedCount <= 10)
                                 {
                                     _logDebug($"  Added quest: '{questName}' (ID: {questId}) Location: '{questInfo.PlaceName}' MapId: {questInfo.MapId}");
@@ -142,7 +139,7 @@ namespace map_editor.Services
                             catch (Exception ex)
                             {
                                 errorCount++;
-                                if (errorCount <= 10) // Only log first 10 errors to avoid spam
+                                if (errorCount <= 10)
                                 {
                                     _logDebug($"Error processing quest {quest?.Key}: {ex.Message}");
                                 }
@@ -162,21 +159,18 @@ namespace map_editor.Services
             });
         }
 
-        // CORRECTED: Helper method to extract NPC data from Quest references
         private QuestNpcInfo? ExtractNpcFromRow(SaintCoinach.Ex.Relational.IRelationalRow npcRow, string role, uint questId)
         {
             try
             {
                 if (_realm == null) return null;
 
-                // Get NPC ID and name
                 uint npcId = (uint)npcRow.Key;
 
-                // FIXED: Use indexer instead of AsString
                 string npcName;
                 try
                 {
-                    var nameValue = npcRow[2]; // Name is typically at index 2 in ENpcResident
+                    var nameValue = npcRow[2];
                     npcName = nameValue?.ToString() ?? $"NPC_{npcId}";
                 }
                 catch
@@ -184,7 +178,6 @@ namespace map_editor.Services
                     npcName = $"NPC_{npcId}";
                 }
 
-                // Find this NPC in Level data to get coordinates
                 var levelSheet = _realm.GameData.GetSheet<SaintCoinach.Xiv.Level>();
                 foreach (var level in levelSheet)
                 {
@@ -194,14 +187,12 @@ namespace map_editor.Services
                         var objectValue = level[6]; // Object field at index 6
                         if (objectValue != null && Convert.ToUInt32(objectValue) == npcId)
                         {
-                            // FIXED: Get coordinates using indexer instead of AsFloat
                             float worldX = Convert.ToSingle(level[0]); // X at index 0
                             float worldY = Convert.ToSingle(level[1]); // Y at index 1
                             float worldZ = Convert.ToSingle(level[2]); // Z at index 2
 
-                            // FIXED: Get territory and map info using indexer
-                            var territoryValue = level[9]; // Territory at index 9
-                            var mapValue = level[8]; // Map at index 8
+                            var territoryValue = level[9];
+                            var mapValue = level[8];
 
                             if (territoryValue is SaintCoinach.Xiv.TerritoryType territory &&
                                 mapValue is SaintCoinach.Xiv.Map map)
@@ -233,12 +224,10 @@ namespace map_editor.Services
                     }
                     catch
                     {
-                        // Continue searching if this level entry has issues
                         continue;
                     }
                 }
 
-                // If not found in Level, return basic info without coordinates
                 return new QuestNpcInfo
                 {
                     NpcId = npcId,
@@ -254,7 +243,6 @@ namespace map_editor.Services
             }
         }
 
-        // Fixed and simplified ExtractQuestDetailsSafely method
         private void ExtractQuestDetailsSafely(Quest quest, QuestInfo questInfo)
         {
             bool isDebugQuest = questInfo.Id <= 10;
@@ -264,7 +252,6 @@ namespace map_editor.Services
                 _logDebug($"=== Extracting details for Quest {questInfo.Id}: '{questInfo.Name}' ===");
             }
 
-            // Extract Quest ID string from index 1
             try
             {
                 var questIdStringValue = quest[1];
@@ -286,7 +273,6 @@ namespace map_editor.Services
                 }
             }
 
-            // ✅ ENHANCED: Extract Quest Giver using your research method
             try
             {
                 if (isDebugQuest)
@@ -294,7 +280,7 @@ namespace map_editor.Services
                     _logDebug($"  Extracting Quest Giver from index 37 using research method...");
                 }
 
-                var questGiverValue = quest[37]; // IssuerStart at index 37
+                var questGiverValue = quest[37];
                 if (questGiverValue != null)
                 {
                     if (isDebugQuest)
@@ -302,7 +288,6 @@ namespace map_editor.Services
                         _logDebug($"  Quest Giver NPC ID from index 37: {questGiverValue}");
                     }
 
-                    // Try to parse as NPC ID
                     if (uint.TryParse(questGiverValue.ToString(), out uint npcId) && npcId > 0)
                     {
                         var questGiver = ExtractQuestGiverByResearch(npcId, questInfo.Id);
@@ -322,7 +307,6 @@ namespace map_editor.Services
                     }
                     else
                     {
-                        // Fallback for non-numeric values
                         var fallbackQuestGiver = new QuestNpcInfo
                         {
                             NpcId = (uint)Math.Abs(questGiverValue.ToString()?.GetHashCode() ?? (int)questInfo.Id),
@@ -414,7 +398,6 @@ namespace map_editor.Services
                             _logDebug($"  PlaceName: '{placeName}' (ID: {placeNameKey})");
                         }
 
-                        // Try to find the corresponding MapId by looking up territories with this PlaceName
                         if (placeNameKey > 0)
                         {
                             questInfo.MapId = FindMapIdForPlaceName(questInfo.PlaceNameId);
@@ -521,20 +504,18 @@ namespace map_editor.Services
                         _logDebug($"    Error getting map properties: {ex.Message}");
                     }
 
-                    // ✅ REVERSE the MapRenderer coordinate conversion to get the raw marker coordinates
+                    // REVERSE the MapRenderer coordinate conversion to get the raw marker coordinates
                     // MapRenderer does: gameX = (41.0 / c) * (normalizedX) + 1.0
                     // Where: normalizedX = (marker.X + offsetX) / 2048.0
                     // And: c = sizeFactor / 100.0
 
                     double c = sizeFactor / 100.0;
 
-
                     // From MapRenderer: gameCoord = (41.0 / c) * ((rawCoord + offset) / 2048.0) + 1.0
                     // Solving for rawCoord: rawCoord = ((gameCoord - 1.0) * c * 2048.0 / 41.0) - offset
 
                     double rawMarkerX = worldX * sizeFactor / 100.0;
                     double rawMarkerY = worldZ * sizeFactor / 100.0; // Note: Y in map = Z in world
-
 
                     double normalizedX = (rawMarkerX + offsetX) / 2048.0;
                     double normalizedY = (rawMarkerY + offsetY) / 2048.0;
@@ -562,7 +543,6 @@ namespace map_editor.Services
 
             return (0, 0, 0);
         }
-
 
         private uint FindMapIdForPlaceName(uint placeNameId)
         {
@@ -775,10 +755,10 @@ namespace map_editor.Services
                                     Description = fateRow.AsString("Description") ?? "",
                                     Level = (uint)Math.Max(0, fateRow.AsInt32("ClassJobLevel")),
                                     ClassJobLevel = (uint)Math.Max(0, fateRow.AsInt32("ClassJobLevel")),
-                                    TerritoryId = 0, 
+                                    TerritoryId = 0,
                                     TerritoryName = "",
                                     IconId = (uint)Math.Max(0, fateRow.AsInt32("Icon")),
-                                    X = 0, 
+                                    X = 0,
                                     Y = 0,
                                     Z = 0
                                 };
@@ -999,7 +979,7 @@ namespace map_editor.Services
                             TerritoryName = questLocationData.ObjectName.Replace("NPC_", "").Replace($"_{questLocationData.TerritoryId}", ""), // Clean up territory name
                             MapId = questLocationData.MapId,
                             MapX = questLocationData.MapX,
-                            MapY = questLocationData.MapY,  
+                            MapY = questLocationData.MapY,
                             MapZ = questLocationData.MapZ,
                             WorldX = questLocationData.WorldX,
                             WorldY = questLocationData.WorldY,
