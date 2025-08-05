@@ -1,11 +1,14 @@
-﻿<Window x:Class="map_editor.MainWindow"
+﻿<Window x:Class="Amaurot.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-        xmlns:local="clr-namespace:map_editor"
+        xmlns:local="clr-namespace:Amaurot"
         mc:Ignorable="d"
-        Title="FFXIV Map Editor" Height="1000" Width="1600">
+        Title="Amaurot Map Viewer"
+        Height="1000"
+        Width="1600"
+        Icon="amaurot.ico">
 
     <!--  Window Resources with the converter -->
     <Window.Resources>

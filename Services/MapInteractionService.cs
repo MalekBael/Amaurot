@@ -10,7 +10,7 @@ using WpfImage = System.Windows.Controls.Image;
 using WpfMouseEventArgs = System.Windows.Input.MouseEventArgs;
 using WpfCursors = System.Windows.Input.Cursors;
 
-namespace map_editor
+namespace Amaurot
 {
     public class MapInteractionService
     {
@@ -108,7 +108,7 @@ namespace map_editor
             }
         }
 
-        public void CalculateAndApplyInitialScale(BitmapSource bitmapSource, Canvas mapCanvas, 
+        public void CalculateAndApplyInitialScale(BitmapSource bitmapSource, Canvas mapCanvas,
             WpfImage mapImageControl, ref double currentScale) // Fix: Use WpfImage alias
         {
             double canvasWidth = mapCanvas.ActualWidth;

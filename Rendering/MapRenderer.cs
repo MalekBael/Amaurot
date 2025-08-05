@@ -12,7 +12,7 @@ using WpfBrushes = System.Windows.Media.Brushes;
 using WpfPoint = System.Windows.Point;
 using WpfSize = System.Windows.Size;
 
-namespace map_editor
+namespace Amaurot
 {
     public class MapRenderer
     {
@@ -608,7 +608,7 @@ namespace map_editor
                 {
                     // Access quest location data through the data loader service
                     // This is a simplified approach - you might need to adjust based on your architecture
-                    var dataLoaderType = typeof(MainWindow).Assembly.GetType("map_editor.Services.QuestLocationService");
+                    var dataLoaderType = typeof(MainWindow).Assembly.GetType("Amaurot.Services.QuestLocationService");
                     if (dataLoaderType != null)
                     {
                         // For now, return a placeholder that shows we're looking for quest giver info

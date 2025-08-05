@@ -1,6 +1,6 @@
 ﻿using System.Windows;
 
-namespace map_editor
+namespace Amaurot
 {
     /// <summary>
     /// Interaction logic for App.xaml

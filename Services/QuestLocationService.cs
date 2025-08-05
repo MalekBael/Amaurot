@@ -8,7 +8,7 @@ using System.Data;
 using System.Data.SQLite;
 using System.IO;
 
-namespace map_editor.Services
+namespace Amaurot.Services
 {
     /// <summary>
     /// Service for extracting quest locations using Libra Eorzea SQL database
@@ -202,7 +202,7 @@ namespace map_editor.Services
 
                     // Updated query using correct column names from the CSV structure
                     var query = @"
-                        SELECT 
+                        SELECT
                             q.Key as quest_id,
                             COALESCE(q.Name_en, CAST(q.Key AS TEXT)) as quest_name,
                             q.Client as npc_id,
@@ -210,7 +210,7 @@ namespace map_editor.Services
                             CAST(n.data AS TEXT) as npc_data
                         FROM Quest q
                         INNER JOIN ENpcResident n ON q.Client = n.Key
-                        WHERE q.Client > 0 
+                        WHERE q.Client > 0
                           AND n.data IS NOT NULL
                           AND CAST(n.data AS TEXT) LIKE '%coordinate%'
                         ORDER BY q.Key
@@ -258,7 +258,7 @@ namespace map_editor.Services
                             {
                                 QuestId = questId,
                                 QuestName = questName, // ✅ STORE QUEST NAME
-                                NpcName = npcName,     // ✅ STORE NPC NAME  
+                                NpcName = npcName,     // ✅ STORE NPC NAME
                                 TerritoryId = coordinateData.TerritoryId,
                                 MapId = coordinateData.MapId,
                                 MapX = coordinateData.MapX,
@@ -453,7 +453,6 @@ namespace map_editor.Services
             }
         }
 
-
         /// <summary>
         /// ✅ COMPLETELY REWRITTEN: Convert Libra coordinates to match exactly what MapRenderer expects
         /// MapRenderer expects raw coordinates that when processed as (coord + offset) / 2048 give correct positions
@@ -508,7 +507,7 @@ namespace map_editor.Services
                     // normalizedY = (marker.Y + offsetY) / 2048.0
                     // gameX = (41.0 / c) * (normalizedX) + 1.0  where c = sizeFactor / 100.0
                     // gameY = (41.0 / c) * (normalizedY) + 1.0
-                    
+
                     // We need to reverse this to find what marker.X should be
                     // From: gameCoord = (41.0 / c) * ((marker.X + offset) / 2048.0) + 1.0
                     // Solve for marker.X:
@@ -528,7 +527,7 @@ namespace map_editor.Services
                         _logDebug($"      Game Coords: ({gameCoordX:F1}, {gameCoordY:F1}) [1-42 range]");
                         _logDebug($"      Map {mapId}: SizeFactor={sizeFactor}, OffsetX={offsetX}, OffsetY={offsetY}, c={c:F3}");
                         _logDebug($"      Final Marker Coords: ({markerX:F1}, {markerY:F1})");
-                        
+
                         // ✅ VERIFICATION: Show what MapRenderer will calculate
                         double verifyNormX = (markerX + offsetX) / 2048.0;
                         double verifyNormY = (markerY + offsetY) / 2048.0;
@@ -553,7 +552,7 @@ namespace map_editor.Services
             catch (Exception ex)
             {
                 _logDebug($"Error converting coordinates for MapId {mapId}: {ex.Message}");
-                
+
                 // Fallback to simple game coordinate conversion
                 double gameCoordX = rawLibraX / 10.0;
                 double gameCoordY = rawLibraY / 10.0;
@@ -723,7 +722,7 @@ namespace map_editor.Services
                     return 0;
 
                 var territorySheet = _realm.GameData.GetSheet<SaintCoinach.Xiv.TerritoryType>();
-                
+
                 // Try exact match first
                 var territory = territorySheet.FirstOrDefault(t =>
                     string.Equals(t.PlaceName?.ToString(), placeName, StringComparison.OrdinalIgnoreCase));
@@ -768,7 +767,7 @@ namespace map_editor.Services
                     var territoryName = t.PlaceName?.ToString();
                     if (string.IsNullOrEmpty(territoryName))
                         return false;
-                        
+
                     return territoryName.Contains(cleanedLibraName, StringComparison.OrdinalIgnoreCase) ||
                            cleanedLibraName.Contains(territoryName, StringComparison.OrdinalIgnoreCase);
                 });
@@ -806,7 +805,7 @@ namespace map_editor.Services
 
                 // First try exact PlaceName.Key match
                 var territory = territorySheet.FirstOrDefault(t => t.PlaceName?.Key == libraPlaceNameId);
-                
+
                 if (territory != null)
                 {
                     if (_verboseDebugMode)
@@ -815,12 +814,12 @@ namespace map_editor.Services
                     }
                     return (uint)territory.Key;
                 }
-                
+
                 // ✅ FIXED: Check PlaceNameRegion and PlaceNameZone properties
                 // Try matching against PlaceNameRegion
-                territory = territorySheet.FirstOrDefault(t => 
+                territory = territorySheet.FirstOrDefault(t =>
                 {
-                    try 
+                    try
                     {
                         // Access PlaceNameRegion using indexer since it's at index 3
                         var placeNameRegion = t[3];
@@ -831,7 +830,7 @@ namespace map_editor.Services
                             if (placeNameRegionObj?.Key == libraPlaceNameId)
                                 return true;
                         }
-                        
+
                         // Also check PlaceNameZone at index 4
                         var placeNameZone = t[4];
                         if (placeNameZone != null)
@@ -841,13 +840,13 @@ namespace map_editor.Services
                                 return true;
                         }
                     }
-                    catch 
+                    catch
                     {
                         // Ignore any access errors
                     }
                     return false;
                 });
-                
+
                 if (territory != null)
                 {
                     if (_verboseDebugMode)
@@ -891,12 +890,12 @@ namespace map_editor.Services
                 placeCommand.Parameters.AddWithValue("rowid", placeNameId);
 
                 placeName = placeCommand.ExecuteScalar()?.ToString();
-                
+
                 if (_verboseDebugMode && string.IsNullOrEmpty(placeName))
                 {
                     _logDebug($"⚠️ No PlaceName found for ID {placeNameId} in Libra database");
                 }
-                
+
                 return placeName;
             }
             catch (Exception ex)
@@ -944,7 +943,7 @@ namespace map_editor.Services
             }
         }
 
-        public void UpdateQuestLocations(IEnumerable<map_editor.QuestInfo> quests)
+        public void UpdateQuestLocations(IEnumerable<Amaurot.QuestInfo> quests)
         {
             int updatedCount = 0;
 
@@ -960,7 +959,7 @@ namespace map_editor.Services
                         quest.Y = locationData.MapY;
                         quest.Z = locationData.MapZ;
 
-                        var questGiver = new map_editor.QuestNpcInfo
+                        var questGiver = new Amaurot.QuestNpcInfo
                         {
                             NpcId = locationData.ObjectId,
                             NpcName = GetNpcNameFromId(locationData.ObjectId),

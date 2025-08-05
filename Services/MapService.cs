@@ -10,9 +10,9 @@ using WpfPoint = System.Windows.Point;
 using WpfSize = System.Windows.Size;
 using System.Windows.Media;
 using System.Windows.Controls;
-using map_editor.Services; // ✅ ADD: This should already be there, but make sure it includes FateLgbService
+using Amaurot.Services; // ✅ ADD: This should already be there, but make sure it includes FateLgbService
 
-namespace map_editor
+namespace Amaurot
 {
     public class MapService
     {

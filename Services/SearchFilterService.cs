@@ -7,7 +7,7 @@ using System.Windows;
 using System.Windows.Threading;
 using WpfApplication = System.Windows.Application;
 
-namespace map_editor
+namespace Amaurot
 {
     public class SearchFilterService
     {

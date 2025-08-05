@@ -4,9 +4,9 @@ using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
-using map_editor.Services;
+using Amaurot.Services;
 
-namespace map_editor
+namespace Amaurot
 {
     public partial class NpcDetailsWindow : Window
     {

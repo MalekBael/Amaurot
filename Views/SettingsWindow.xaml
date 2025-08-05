@@ -1,154 +1,154 @@
-<Window x:Class="map_editor.SettingsWindow"
+<Window x:Class="Amaurot.SettingsWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Settings" Height="862" Width="600"
         WindowStartupLocation="CenterOwner"
         ResizeMode="CanResize">
-    <Grid Margin="15">
-        <Grid.RowDefinitions>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="*"/>
-            <RowDefinition Height="Auto"/>
-        </Grid.RowDefinitions>
+	<Grid Margin="15">
+		<Grid.RowDefinitions>
+			<RowDefinition Height="Auto" />
+			<RowDefinition Height="*" />
+			<RowDefinition Height="Auto" />
+		</Grid.RowDefinitions>
 
-        <!-- Header -->
-        <TextBlock Grid.Row="0" Text="Application Settings" FontSize="16" FontWeight="Bold" 
-                   Margin="0,0,0,15"/>
+		<!-- Header -->
+		<TextBlock Grid.Row="0" Text="Application Settings" FontSize="16" FontWeight="Bold"
+                   Margin="0,0,0,15" />
 
-        <!-- Settings Content -->
-        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
-            <StackPanel>
-                <!-- Game Installation Path Section -->
-                <GroupBox Header="Game Installation" Margin="0,0,0,15">
-                    <StackPanel Margin="10">
-                        <TextBlock Text="FFXIV Game Installation Path:" FontWeight="SemiBold" Margin="0,0,0,5"/>
-                        <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="Auto"/>
-                                <ColumnDefinition Width="Auto"/>
-                            </Grid.ColumnDefinitions>
+		<!-- Settings Content -->
+		<ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+			<StackPanel>
+				<!-- Game Installation Path Section -->
+				<GroupBox Header="Game Installation" Margin="0,0,0,15">
+					<StackPanel Margin="10">
+						<TextBlock Text="FFXIV Game Installation Path:" FontWeight="SemiBold" Margin="0,0,0,5" />
+						<Grid>
+							<Grid.ColumnDefinitions>
+								<ColumnDefinition Width="*" />
+								<ColumnDefinition Width="Auto" />
+								<ColumnDefinition Width="Auto" />
+							</Grid.ColumnDefinitions>
 
-                            <TextBox x:Name="GamePathTextBox" Grid.Column="0" 
+							<TextBox x:Name="GamePathTextBox" Grid.Column="0"
                                      Margin="0,0,10,0" VerticalAlignment="Center"
-                                     ToolTip="Path to your FFXIV installation directory"/>
+                                     ToolTip="Path to your FFXIV installation directory" />
 
-                            <Button x:Name="BrowseButton" Grid.Column="1" Content="Browse..." 
-                                    Width="80" Margin="0,0,10,0" Click="BrowseButton_Click"/>
+							<Button x:Name="BrowseButton" Grid.Column="1" Content="Browse..."
+                                    Width="80" Margin="0,0,10,0" Click="BrowseButton_Click" />
 
-                            <Button x:Name="TestButton" Grid.Column="2" Content="Test" 
-                                    Width="60" Click="TestButton_Click"/>
-                        </Grid>
+							<Button x:Name="TestButton" Grid.Column="2" Content="Test"
+                                    Width="60" Click="TestButton_Click" />
+						</Grid>
 
-                        <TextBlock x:Name="PathStatusText" Margin="0,5,0,0" 
-                                   FontStyle="Italic" Foreground="Gray"/>
+						<TextBlock x:Name="PathStatusText" Margin="0,5,0,0"
+                                   FontStyle="Italic" Foreground="Gray" />
 
-                        <CheckBox x:Name="AutoLoadCheckBox" Content="Automatically load game data on startup" 
+						<CheckBox x:Name="AutoLoadCheckBox" Content="Automatically load game data on startup"
                                   Margin="0,10,0,0"
-                                  ToolTip="If enabled, the application will automatically load game data when started"/>
-                    </StackPanel>
-                </GroupBox>
+                                  ToolTip="If enabled, the application will automatically load game data when started" />
+					</StackPanel>
+				</GroupBox>
 
-                <!-- Sapphire Server Repository Section -->
-                <GroupBox Header="Sapphire Server Repository" Margin="0,0,0,15">
-                    <StackPanel Margin="10">
-                        <TextBlock Text="Sapphire Server Repository Path:" FontWeight="SemiBold" Margin="0,0,0,5"/>
-                        <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="Auto"/>
-                                <ColumnDefinition Width="Auto"/>
-                                <ColumnDefinition Width="Auto"/>
-                            </Grid.ColumnDefinitions>
+				<!-- Sapphire Server Repository Section -->
+				<GroupBox Header="Sapphire Server Repository" Margin="0,0,0,15">
+					<StackPanel Margin="10">
+						<TextBlock Text="Sapphire Server Repository Path:" FontWeight="SemiBold" Margin="0,0,0,5" />
+						<Grid>
+							<Grid.ColumnDefinitions>
+								<ColumnDefinition Width="*" />
+								<ColumnDefinition Width="Auto" />
+								<ColumnDefinition Width="Auto" />
+								<ColumnDefinition Width="Auto" />
+							</Grid.ColumnDefinitions>
 
-                            <TextBox x:Name="SapphirePathTextBox" Grid.Column="0" 
+							<TextBox x:Name="SapphirePathTextBox" Grid.Column="0"
                                      Margin="0,0,10,0" VerticalAlignment="Center"
-                                     ToolTip="Path to your Sapphire Server repository directory"/>
+                                     ToolTip="Path to your Sapphire Server repository directory" />
 
-                            <Button x:Name="BrowseSapphireButton" Grid.Column="1" Content="Browse..." 
-                                    Width="80" Margin="0,0,10,0" Click="BrowseSapphireButton_Click"/>
+							<Button x:Name="BrowseSapphireButton" Grid.Column="1" Content="Browse..."
+                                    Width="80" Margin="0,0,10,0" Click="BrowseSapphireButton_Click" />
 
-                            <Button x:Name="TestSapphireButton" Grid.Column="2" Content="Test" 
-                                    Width="60" Margin="0,0,10,0" Click="TestSapphireButton_Click"/>
+							<Button x:Name="TestSapphireButton" Grid.Column="2" Content="Test"
+                                    Width="60" Margin="0,0,10,0" Click="TestSapphireButton_Click" />
 
-                            <Button x:Name="OpenSapphireButton" Grid.Column="3" Content="Open" 
-                                    Width="60" Click="OpenSapphireButton_Click"/>
-                        </Grid>
+							<Button x:Name="OpenSapphireButton" Grid.Column="3" Content="Open"
+                                    Width="60" Click="OpenSapphireButton_Click" />
+						</Grid>
 
-                        <TextBlock x:Name="SapphirePathStatusText" Margin="0,5,0,0" 
-                                   FontStyle="Italic" Foreground="Gray"/>
+						<TextBlock x:Name="SapphirePathStatusText" Margin="0,5,0,0"
+                                   FontStyle="Italic" Foreground="Gray" />
 
-                        <TextBlock Text="Source code repository for Sapphire Server" 
-                                   Margin="0,5,0,0" FontSize="11" Foreground="Gray" FontStyle="Italic"/>
-                    </StackPanel>
-                </GroupBox>
+						<TextBlock Text="Source code repository for Sapphire Server"
+                                   Margin="0,5,0,0" FontSize="11" Foreground="Gray" FontStyle="Italic" />
+					</StackPanel>
+				</GroupBox>
 
-                <!-- Sapphire Server Build Directory Section -->
-                <GroupBox Header="Sapphire Server Build Directory" Margin="0,0,0,15">
-                    <StackPanel Margin="10">
-                        <TextBlock Text="Sapphire Server Build Path:" FontWeight="SemiBold" Margin="0,0,0,5"/>
-                        <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="Auto"/>
-                                <ColumnDefinition Width="Auto"/>
-                                <ColumnDefinition Width="Auto"/>
-                            </Grid.ColumnDefinitions>
+				<!-- Sapphire Server Build Directory Section -->
+				<GroupBox Header="Sapphire Server Build Directory" Margin="0,0,0,15">
+					<StackPanel Margin="10">
+						<TextBlock Text="Sapphire Server Build Path:" FontWeight="SemiBold" Margin="0,0,0,5" />
+						<Grid>
+							<Grid.ColumnDefinitions>
+								<ColumnDefinition Width="*" />
+								<ColumnDefinition Width="Auto" />
+								<ColumnDefinition Width="Auto" />
+								<ColumnDefinition Width="Auto" />
+							</Grid.ColumnDefinitions>
 
-                            <TextBox x:Name="SapphireBuildPathTextBox" Grid.Column="0" 
+							<TextBox x:Name="SapphireBuildPathTextBox" Grid.Column="0"
                                      Margin="0,0,10,0" VerticalAlignment="Center"
-                                     ToolTip="Path to your compiled Sapphire Server build directory"/>
+                                     ToolTip="Path to your compiled Sapphire Server build directory" />
 
-                            <Button x:Name="BrowseSapphireBuildButton" Grid.Column="1" Content="Browse..." 
-                                    Width="80" Margin="0,0,10,0" Click="BrowseSapphireBuildButton_Click"/>
+							<Button x:Name="BrowseSapphireBuildButton" Grid.Column="1" Content="Browse..."
+                                    Width="80" Margin="0,0,10,0" Click="BrowseSapphireBuildButton_Click" />
 
-                            <Button x:Name="TestSapphireBuildButton" Grid.Column="2" Content="Test" 
-                                    Width="60" Margin="0,0,10,0" Click="TestSapphireBuildButton_Click"/>
+							<Button x:Name="TestSapphireBuildButton" Grid.Column="2" Content="Test"
+                                    Width="60" Margin="0,0,10,0" Click="TestSapphireBuildButton_Click" />
 
-                            <Button x:Name="OpenSapphireBuildButton" Grid.Column="3" Content="Open" 
-                                    Width="60" Click="OpenSapphireBuildButton_Click"/>
-                        </Grid>
+							<Button x:Name="OpenSapphireBuildButton" Grid.Column="3" Content="Open"
+                                    Width="60" Click="OpenSapphireBuildButton_Click" />
+						</Grid>
 
-                        <TextBlock x:Name="SapphireBuildPathStatusText" Margin="0,5,0,0" 
-                                   FontStyle="Italic" Foreground="Gray"/>
+						<TextBlock x:Name="SapphireBuildPathStatusText" Margin="0,5,0,0"
+                                   FontStyle="Italic" Foreground="Gray" />
 
-                        <TextBlock Text="Compiled binaries and tools needed by the map editor" 
-                                   Margin="0,5,0,0" FontSize="11" Foreground="Gray" FontStyle="Italic"/>
-                    </StackPanel>
-                </GroupBox>
+						<TextBlock Text="Compiled binaries and tools needed by the map editor"
+                                   Margin="0,5,0,0" FontSize="11" Foreground="Gray" FontStyle="Italic" />
+					</StackPanel>
+				</GroupBox>
 
-                <!-- Application Settings Section -->
-                <GroupBox Header="Application Settings" Margin="0,0,0,15">
-                    <StackPanel Margin="10">
-                        <CheckBox x:Name="DebugModeCheckBox" Content="Enable debug mode" 
+				<!-- Application Settings Section -->
+				<GroupBox Header="Application Settings" Margin="0,0,0,15">
+					<StackPanel Margin="10">
+						<CheckBox x:Name="DebugModeCheckBox" Content="Enable debug mode"
                                   Margin="0,5,0,5"
-                                  ToolTip="Enables detailed debug logging"/>
+                                  ToolTip="Enables detailed debug logging" />
 
-                        <CheckBox x:Name="HideDuplicateTerritoriesCheckBox" Content="Hide duplicate territories by default" 
+						<CheckBox x:Name="HideDuplicateTerritoriesCheckBox" Content="Hide duplicate territories by default"
                                   Margin="0,5,0,5"
-                                  ToolTip="Automatically hide duplicate territory entries when the application starts"/>
-                    </StackPanel>
-                </GroupBox>
+                                  ToolTip="Automatically hide duplicate territory entries when the application starts" />
+					</StackPanel>
+				</GroupBox>
 
-                <!-- Information Section -->
-                <GroupBox Header="Information" Margin="0,0,0,15">
-                    <StackPanel Margin="10">
-                        <TextBlock x:Name="SettingsLocationText" TextWrapping="Wrap" 
-                                   Foreground="Gray" FontSize="11"/>
-                    </StackPanel>
-                </GroupBox>
-            </StackPanel>
-        </ScrollViewer>
+				<!-- Information Section -->
+				<GroupBox Header="Information" Margin="0,0,0,15">
+					<StackPanel Margin="10">
+						<TextBlock x:Name="SettingsLocationText" TextWrapping="Wrap"
+                                   Foreground="Gray" FontSize="11" />
+					</StackPanel>
+				</GroupBox>
+			</StackPanel>
+		</ScrollViewer>
 
-        <!-- Buttons -->
-        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" 
+		<!-- Buttons -->
+		<StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right"
                     Margin="0,15,0,0">
-            <Button Content="Reset to Defaults" Width="120" Height="30" 
-                    Margin="0,0,10,0" Click="ResetButton_Click"/>
-            <Button Content="OK" Width="80" Height="30" 
-                    Margin="0,0,10,0" Click="OkButton_Click" IsDefault="True"/>
-            <Button Content="Cancel" Width="80" Height="30" 
-                    Click="CancelButton_Click" IsCancel="True"/>
-        </StackPanel>
-    </Grid>
+			<Button Content="Reset to Defaults" Width="120" Height="30"
+                    Margin="0,0,10,0" Click="ResetButton_Click" />
+			<Button Content="OK" Width="80" Height="30"
+                    Margin="0,0,10,0" Click="OkButton_Click" IsDefault="True" />
+			<Button Content="Cancel" Width="80" Height="30"
+                    Click="CancelButton_Click" IsCancel="True" />
+		</StackPanel>
+	</Grid>
 </Window>

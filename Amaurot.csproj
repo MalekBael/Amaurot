@@ -3,7 +3,7 @@
 	<PropertyGroup>
 		<OutputType>WinExe</OutputType>
 		<TargetFramework>net8.0-windows</TargetFramework>
-		<RootNamespace>map_editor</RootNamespace>
+		<RootNamespace>Amaurot</RootNamespace>
 		<Nullable>enable</Nullable>
 		<ImplicitUsings>enable</ImplicitUsings>
 		<UseWPF>true</UseWPF>
@@ -61,6 +61,7 @@
 	</ItemGroup>
 
 	<ItemGroup>
+	  <None Remove="amaurot.ico" />
 	  <None Remove="notes\Coinach CS\Libra\Achievement.txt" />
 	  <None Remove="notes\Coinach CS\Libra\AchievementCategory.cs.txt" />
 	  <None Remove="notes\Coinach CS\Libra\AchievementKind.cs.txt" />
@@ -108,6 +109,9 @@
 	</ItemGroup>
 	<ItemGroup>
 	  <Folder Include="Sheets\" />
+	</ItemGroup>
+	<ItemGroup>
+	  <Resource Include="amaurot.ico" />
 	</ItemGroup>
 	<ItemGroup>
 	  <None Update="Libs\app_data.sqlite">

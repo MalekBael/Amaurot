@@ -4,7 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 
-namespace map_editor.Services
+namespace Amaurot.Services
 {
     public class QuestMarkerService
     {
@@ -36,14 +36,12 @@ namespace map_editor.Services
             {
                 _logDebug("🎯 QUEST MARKER EXTRACTION: Using Libra Eorzea database approach...");
 
-
                 var questLocationData = await _questLocationService.ExtractQuestLocationsAsync();
-
 
                 foreach (var kvp in questLocationData)
                 {
                     var locationData = kvp.Value;
-                    
+
                     var questMarker = new MapMarker
                     {
                         Id = 2000000 + locationData.QuestId,

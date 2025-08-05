@@ -3,10 +3,10 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
-using map_editor.Services;
+using Amaurot.Services;
 using WpfMessageBox = System.Windows.MessageBox;
 
-namespace map_editor
+namespace Amaurot
 {
     public partial class NpcQuestPopupWindow : Window
     {

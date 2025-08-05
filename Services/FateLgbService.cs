@@ -4,7 +4,7 @@ using System.Text.Json;
 using System.Reflection;
 using System.IO;
 
-namespace map_editor.Services
+namespace Amaurot.Services
 {
     public class FateLgbService
     {
@@ -267,7 +267,7 @@ namespace map_editor.Services
                 var assembly = Assembly.GetExecutingAssembly();
 
                 // Construct the resource name following the embedded folder structure
-                var resourceName = $"map_editor.Resources.LgbData.bg.ffxiv.fst_f1.fld.{territoryName}.level.planevent.lgb.json";
+                var resourceName = $"Amaurot.Resources.LgbData.bg.ffxiv.fst_f1.fld.{territoryName}.level.planevent.lgb.json";
 
                 _logDebug($"🔍 Looking for embedded resource: {resourceName}");
 

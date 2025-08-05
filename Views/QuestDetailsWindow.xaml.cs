@@ -4,9 +4,9 @@ using System.Windows.Media;
 using System.Collections.Generic;
 using System.Linq;
 using System.Windows.Input;
-using map_editor.Services;
+using Amaurot.Services;
 
-namespace map_editor
+namespace Amaurot
 {
     public partial class QuestDetailsWindow : Window
     {

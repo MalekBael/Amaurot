@@ -1,5 +1,5 @@
 ﻿using Bitmap = System.Drawing.Bitmap;
-using map_editor.Services;
+using Amaurot.Services;
 using SaintCoinach.Ex;
 using SaintCoinach.Xiv.Items;
 using SaintCoinach.Xiv;
@@ -27,7 +27,7 @@ using WpfMessageBox = System.Windows.MessageBox;
 using WpfPanel = System.Windows.Controls.Panel;
 using WpfSaveFileDialog = Microsoft.Win32.SaveFileDialog;
 
-namespace map_editor
+namespace Amaurot
 {
     public partial class MainWindow : Window
     {

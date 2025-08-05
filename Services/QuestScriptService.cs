@@ -2,9 +2,9 @@
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
-using map_editor.Services;
+using Amaurot.Services;
 
-namespace map_editor.Services
+namespace Amaurot.Services
 {
     public class QuestScriptService
     {

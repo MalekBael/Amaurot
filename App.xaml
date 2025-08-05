@@ -1,9 +1,9 @@
-﻿<Application x:Class="map_editor.App"
+﻿<Application x:Class="Amaurot.App"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:local="clr-namespace:map_editor"
+             xmlns:local="clr-namespace:Amaurot"
              StartupUri="MainWindow.xaml">
     <Application.Resources>
-        <local:QuestHasLocationConverter x:Key="QuestHasLocationConverter"/>
+        <local:QuestHasLocationConverter x:Key="QuestHasLocationConverter" />
     </Application.Resources>
 </Application>

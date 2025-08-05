@@ -1,7 +1,7 @@
 ﻿using System.Collections.ObjectModel;
 using System.Windows.Controls;
 
-namespace map_editor
+namespace Amaurot
 {
     public class UIUpdateService
     {

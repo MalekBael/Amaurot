@@ -4,7 +4,7 @@ using System.Text.Json;
 using System.Diagnostics;
 using System.Linq;
 
-namespace map_editor.Services  // ✅ Fix namespace to match folder structure
+namespace Amaurot.Services
 {
     public class AppSettings
     {
@@ -13,7 +13,7 @@ namespace map_editor.Services  // ✅ Fix namespace to match folder structure
         public bool DebugMode { get; set; } = false;
         public bool HideDuplicateTerritories { get; set; } = false;
         public string SapphireServerPath { get; set; } = string.Empty;
-        public string SapphireBuildPath { get; set; } = string.Empty; 
+        public string SapphireBuildPath { get; set; } = string.Empty;
     }
 
     public class SettingsService
@@ -25,14 +25,13 @@ namespace map_editor.Services  // ✅ Fix namespace to match folder structure
 
         private static readonly string SettingsDirectory = Path.GetDirectoryName(SettingsFilePath)!;
 
-        // ✅ Cache JsonSerializerOptions to avoid creating new instances
         private static readonly JsonSerializerOptions SerializerOptions = new()
         {
             WriteIndented = true
         };
 
-        // ✅ Create static readonly arrays for better performance
         private static readonly string[] GamePathIndicators = ["game", "boot"];
+
         private static readonly string[] SapphireRepoIndicators = ["src", "scripts", "CMakeLists.txt", "README.md"];
         private static readonly string[] SapphireBuildIndicators = ["compiledscripts", "config", "tools"];
 
@@ -138,7 +137,7 @@ namespace map_editor.Services  // ✅ Fix namespace to match folder structure
             if (string.IsNullOrEmpty(path) || !Directory.Exists(path))
                 return false;
 
-            return indicators.Count(indicator => 
+            return indicators.Count(indicator =>
                 Directory.Exists(Path.Combine(path, indicator)) || File.Exists(Path.Combine(path, indicator))) >= requiredCount;
         }
 

@@ -1,6 +1,6 @@
 ﻿using System.ComponentModel;
 
-namespace map_editor
+namespace Amaurot
 {
     /// <summary>
     /// Static manager for debug mode state that can be accessed globally

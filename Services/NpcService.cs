@@ -7,7 +7,7 @@ using System.Threading.Tasks;
 using System.Data.SQLite;
 using System.IO;
 
-namespace map_editor.Services
+namespace Amaurot.Services
 {
     public class NpcService
     {

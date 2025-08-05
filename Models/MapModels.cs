@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using System.Windows.Media;
 
-namespace map_editor
+namespace Amaurot
 {
     public class MapMarker
     {
@@ -73,9 +73,9 @@ namespace map_editor
     {
         public uint Id { get; set; }
         public string Name { get; set; } = string.Empty;
-        
+
         public string QuestIdString { get; set; } = string.Empty;
-        
+
         public string JournalGenre { get; set; } = string.Empty;
         public uint ClassJobCategoryId { get; set; }
         public uint ClassJobLevelRequired { get; set; }
@@ -85,14 +85,13 @@ namespace map_editor
         public uint PreviousQuestId { get; set; }
         public uint ExpReward { get; set; }
         public uint GilReward { get; set; }
-        
+
         public string PlaceName { get; set; } = string.Empty;
         public uint PlaceNameId { get; set; }
         public uint MapId { get; set; }
         public uint IconId { get; set; }
         public string Description { get; set; } = string.Empty;
         public bool IsRepeatable { get; set; }
-        
 
         public double X { get; set; } = 0;
         public double Y { get; set; } = 0;
@@ -123,7 +122,7 @@ namespace map_editor
         public float WorldX { get; set; }
         public float WorldY { get; set; }
         public float WorldZ { get; set; }
-        public string Role { get; set; } = string.Empty; 
+        public string Role { get; set; } = string.Empty;
 
         public override string ToString()
         {
@@ -232,7 +231,6 @@ namespace map_editor
             {
                 marker.PlaceName = existingName ?? string.Empty;
             }
-
             else if (IconToPlaceNameIdMap.TryGetValue(marker.IconId, out uint placeNameId) &&
                      PlaceNameIdToNameMap.TryGetValue(placeNameId, out string? placeName))
             {
@@ -240,7 +238,6 @@ namespace map_editor
                 marker.PlaceName = placeName ?? string.Empty;
             }
         }
-
 
         public static MarkerType InferMarkerTypeFromIconId(uint iconId)
         {
@@ -255,13 +252,13 @@ namespace map_editor
             return type switch
             {
                 MarkerType.Aetheryte => Colors.Blue,
-                MarkerType.Quest => Colors.Gold,   
+                MarkerType.Quest => Colors.Gold,
                 MarkerType.Shop => Colors.Green,
                 MarkerType.Landmark => Colors.Purple,
                 MarkerType.Entrance => Colors.Brown,
                 MarkerType.Symbol => Colors.Teal,
                 MarkerType.Custom => Colors.Magenta,
-                MarkerType.Fate => Colors.Orange, 
+                MarkerType.Fate => Colors.Orange,
                 _ => Colors.Red,
             };
         }
@@ -271,7 +268,7 @@ namespace map_editor
             return type switch
             {
                 MarkerType.Aetheryte => Colors.LightBlue,
-                MarkerType.Quest => Colors.DarkGoldenrod, 
+                MarkerType.Quest => Colors.DarkGoldenrod,
                 MarkerType.Shop => Colors.LightGreen,
                 MarkerType.Landmark => Colors.Violet,
                 MarkerType.Entrance => Colors.SandyBrown,
@@ -293,7 +290,7 @@ namespace map_editor
                 MarkerType.Entrance => "Ellipse",
                 MarkerType.Symbol => "Ellipse",
                 MarkerType.Custom => "Star",
-                MarkerType.Fate => "Diamond", 
+                MarkerType.Fate => "Diamond",
                 _ => "Ellipse",
             };
         }

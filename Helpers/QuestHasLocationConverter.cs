@@ -2,7 +2,7 @@
 using System.Globalization;
 using System.Windows.Data;
 
-namespace map_editor
+namespace Amaurot
 {
     public class QuestHasLocationConverter : IValueConverter
     {

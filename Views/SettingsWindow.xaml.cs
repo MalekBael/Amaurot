@@ -2,11 +2,11 @@
 using System.IO;
 using System.Linq;
 using System.Windows;
-using map_editor.Services;  // ✅ Add this using directive
+using Amaurot.Services;
 using WinForms = System.Windows.Forms;
 using WpfMessageBox = System.Windows.MessageBox;
 
-namespace map_editor
+namespace Amaurot
 {
     public partial class SettingsWindow : Window
     {
