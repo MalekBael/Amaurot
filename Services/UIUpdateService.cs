@@ -1,47 +1,47 @@
 ﻿using System.Collections.ObjectModel;
 using System.Windows.Controls;
 
-namespace Amaurot
+namespace Amaurot.Services
 {
     public class UIUpdateService
     {
-        public void UpdateQuestCount(ObservableCollection<QuestInfo> filteredQuests, TextBlock? questCountText)
+        public void UpdateTerritoryCount(ObservableCollection<TerritoryInfo> territories, TextBlock? countTextBlock)
         {
-            if (questCountText != null)
+            if (countTextBlock != null)
             {
-                questCountText.Text = $"({filteredQuests.Count})";
+                countTextBlock.Text = $"({territories.Count})";
             }
         }
 
-        public void UpdateBNpcCount(ObservableCollection<BNpcInfo> filteredBNpcs, TextBlock? bnpcCountText)
+        public void UpdateQuestCount(ObservableCollection<QuestInfo> quests, TextBlock? countTextBlock)
         {
-            if (bnpcCountText != null)
+            if (countTextBlock != null)
             {
-                bnpcCountText.Text = $"({filteredBNpcs.Count})";
+                countTextBlock.Text = $"({quests.Count})";
             }
         }
 
-        public void UpdateTerritoryCount(ObservableCollection<TerritoryInfo> filteredTerritories, TextBlock? territoryCountText)
+        public void UpdateBNpcCount(ObservableCollection<BNpcInfo> bnpcs, TextBlock? countTextBlock)
         {
-            if (territoryCountText != null)
+            if (countTextBlock != null)
             {
-                territoryCountText.Text = $"({filteredTerritories.Count})";
+                countTextBlock.Text = $"({bnpcs.Count})";
             }
         }
 
-        public void UpdateEventCount(ObservableCollection<EventInfo> filteredEvents, TextBlock? eventCountText)
+        public void UpdateFateCount(ObservableCollection<FateInfo> fates, TextBlock? countTextBlock)
         {
-            if (eventCountText != null)
+            if (countTextBlock != null)
             {
-                eventCountText.Text = $"({filteredEvents.Count})";
+                countTextBlock.Text = $"({fates.Count})";
             }
         }
 
-        public void UpdateFateCount(ObservableCollection<FateInfo> filteredFates, TextBlock? fateCountText)
+        public void UpdateNpcCount(ObservableCollection<NpcInfo> npcs, TextBlock? countTextBlock)
         {
-            if (fateCountText != null)
+            if (countTextBlock != null)
             {
-                fateCountText.Text = $"({filteredFates.Count})";
+                countTextBlock.Text = $"({npcs.Count})";
             }
         }
     }

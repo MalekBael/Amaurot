@@ -7,7 +7,7 @@
         mc:Ignorable="d"
         Title="Amaurot Map Viewer"
         Height="1000"
-        Width="1600"
+        Width="1800"
         Icon="amaurot.ico">
 
     <!--  Window Resources with the converter -->
@@ -23,7 +23,11 @@
         </Grid.ColumnDefinitions>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
+            <!-- Menu Bar -->
+            <RowDefinition Height="Auto" />
+            <!-- Panel Visibility Controls -->
             <RowDefinition Height="*" />
+            <!-- Main Content -->
             <RowDefinition Height="Auto" />
             <!-- Marker Visibility Controls -->
             <RowDefinition Height="Auto" />
@@ -59,16 +63,37 @@
             </MenuItem>
         </Menu>
 
+        <!-- Panel Visibility Controls -->
+        <GroupBox Grid.Row="1" Grid.ColumnSpan="3" Header="Panel Visibility" Margin="5,0,5,5" Background="LightBlue" BorderBrush="Blue" BorderThickness="1">
+            <WrapPanel Orientation="Horizontal" Margin="5">
+                <CheckBox x:Name="ShowQuestsCheckBox" Content="Quests" IsChecked="True"
+                          Margin="5,0" Checked="PanelVisibility_Changed" Unchecked="PanelVisibility_Changed" />
+                <CheckBox x:Name="ShowNpcsCheckBox" Content="NPCs" IsChecked="True"
+                          Margin="5,0" Checked="PanelVisibility_Changed" Unchecked="PanelVisibility_Changed" />
+                <CheckBox x:Name="ShowBNpcsCheckBox" Content="BNpcs" IsChecked="True"
+                          Margin="5,0" Checked="PanelVisibility_Changed" Unchecked="PanelVisibility_Changed" />
+                <CheckBox x:Name="ShowFatesCheckBox" Content="Fates" IsChecked="True"
+                          Margin="5,0" Checked="PanelVisibility_Changed" Unchecked="PanelVisibility_Changed" />
+                <CheckBox x:Name="ShowEobjsCheckBox" Content="Eobjs" IsChecked="False"
+                          Margin="5,0" Checked="PanelVisibility_Changed" Unchecked="PanelVisibility_Changed" />
+                <CheckBox x:Name="ShowEventItemCheckBox" Content="EventItem" IsChecked="False"
+                          Margin="5,0" Checked="PanelVisibility_Changed" Unchecked="PanelVisibility_Changed" />
+            </WrapPanel>
+        </GroupBox>
+
         <!-- Main Content -->
-        <Grid Grid.Row="1" Grid.ColumnSpan="3">
+        <Grid Grid.Row="2" Grid.ColumnSpan="3">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="280" />
+                <ColumnDefinition Width="250" />
+                <!-- Territory List: Fixed 250px -->
                 <ColumnDefinition Width="5" />
-                <ColumnDefinition Width="*" />
+                <!-- Splitter: Fixed 5px -->
+                <ColumnDefinition Width="*" MinWidth="400" />
+                <!-- Map Area: Takes remaining space -->
                 <ColumnDefinition Width="5" />
-                <ColumnDefinition Width="280" />
-                <ColumnDefinition Width="5" />
-                <ColumnDefinition Width="280" />
+                <!-- Splitter: Fixed 5px -->
+                <ColumnDefinition Width="500" x:Name="PanelAreaColumn" />
+                <!-- ✅ CHANGED: Fixed 500px width -->
             </Grid.ColumnDefinitions>
 
             <!-- Territory List -->
@@ -198,183 +223,242 @@
 
             <GridSplitter Grid.Column="3" HorizontalAlignment="Stretch" />
 
-            <!-- Right Panels Grid - Split horizontally -->
-            <Grid Grid.Column="4">
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="*" />
-                    <RowDefinition Height="5" />
-                    <RowDefinition Height="*" />
-                </Grid.RowDefinitions>
+            <!-- ✅ FIXED: Dynamic Panel Grid Area - panels will be moved here by ReorganizePanels() -->
+            <Border Grid.Column="4" x:Name="PanelGridArea" Background="White" BorderBrush="Gray" BorderThickness="1" Margin="2">
+                <Grid x:Name="DynamicPanelGrid" Margin="2">
+                    <!-- Grid structure and panels will be added dynamically -->
+                </Grid>
+            </Border>
+        </Grid>
 
-                <!-- Quest List Panel (Top) -->
-                <DockPanel Grid.Row="0">
-                    <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="5">
+        <!-- ✅ HIDDEN: Panel definitions - these will be moved to DynamicPanelGrid when visible -->
+        <Grid x:Name="PanelContainer" Visibility="Collapsed">
+
+            <!-- Quests Panel -->
+            <DockPanel x:Name="QuestsPanel" Visibility="Visible" Margin="2">
+                <Border DockPanel.Dock="Top" Background="LightBlue" Padding="5" Margin="0,0,0,2">
+                    <StackPanel Orientation="Horizontal">
                         <TextBlock Text="Quests" FontWeight="Bold" VerticalAlignment="Center" />
-                        <TextBlock x:Name="QuestCountText" Text="(0)" Margin="5,0,0,0" Foreground="Gray" VerticalAlignment="Center" />
+                        <TextBlock x:Name="QuestCountText" Text="(0)" Margin="5,0,0,0" Foreground="DarkBlue" VerticalAlignment="Center" />
                     </StackPanel>
-                    <TextBox DockPanel.Dock="Top" x:Name="QuestSearchBox" Margin="5,0,5,5"
-                             Text="" TextChanged="QuestSearchBox_TextChanged"
-                             Background="White" BorderThickness="1" BorderBrush="Gray"
-                             ToolTip="Search quests by name or ID" />
-                    <ListBox Name="QuestList"
-                             ItemsSource="{Binding FilteredQuests}"
-                             SelectionChanged="QuestList_SelectionChanged"
-                             MouseDoubleClick="QuestList_MouseDoubleClick"
-                             Margin="5,0,5,5">
-                        <ListBox.ItemTemplate>
-                            <DataTemplate>
-                                <Grid>
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="Auto" />
-                                        <ColumnDefinition Width="*" />
-                                        <ColumnDefinition Width="Auto" />
-                                    </Grid.ColumnDefinitions>
+                </Border>
+                <TextBox DockPanel.Dock="Top" x:Name="QuestSearchBox" Margin="2"
+                         Text="" TextChanged="QuestSearchBox_TextChanged"
+                         Background="White" BorderThickness="1" BorderBrush="Gray"
+                         ToolTip="Search quests by name or ID" />
+                <!-- ✅ FIXED: Added MaxHeight and proper scrolling -->
+                <ListBox Name="QuestList"
+                         ItemsSource="{Binding FilteredQuests}"
+                         SelectionChanged="QuestList_SelectionChanged"
+                         MouseDoubleClick="QuestList_MouseDoubleClick"
+                         Margin="2"
+                         ScrollViewer.VerticalScrollBarVisibility="Auto"
+                         ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate>
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
 
-                                    <!-- Location Indicator -->
-                                    <TextBlock Grid.Column="0"
-                                               Text="📍"
-                                               FontSize="12"
-                                               Margin="0,0,5,0"
-                                               VerticalAlignment="Center"
-                                               ToolTip="Quest has location data">
-                                        <TextBlock.Style>
-                                            <Style TargetType="TextBlock">
-                                                <Setter Property="Visibility" Value="Collapsed" />
-                                                <Style.Triggers>
-                                                    <DataTrigger Binding="{Binding Path=., Converter={StaticResource QuestHasLocationConverter}}" Value="True">
-                                                        <Setter Property="Visibility" Value="Visible" />
-                                                    </DataTrigger>
-                                                </Style.Triggers>
-                                            </Style>
-                                        </TextBlock.Style>
-                                    </TextBlock>
+                                <!-- Location Indicator -->
+                                <TextBlock Grid.Column="0"
+                                           Text="📍"
+                                           FontSize="12"
+                                           Margin="0,0,5,0"
+                                           VerticalAlignment="Center"
+                                           ToolTip="Quest has location data">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock">
+                                            <Setter Property="Visibility" Value="Collapsed" />
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding Path=., Converter={StaticResource QuestHasLocationConverter}}" Value="True">
+                                                    <Setter Property="Visibility" Value="Visible" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
 
-                                    <!-- Quest Name -->
-                                    <TextBlock Grid.Column="1" Text="{Binding}" ToolTip="{Binding Name}"
-                                               VerticalAlignment="Center" Margin="0,2" />
+                                <!-- Quest Name -->
+                                <TextBlock Grid.Column="1" Text="{Binding}" ToolTip="{Binding Name}"
+                                           VerticalAlignment="Center" Margin="0,2" />
 
-                                    <!-- Cogwheel Icon for Quest Details -->
-                                    <Button Grid.Column="2"
-                                            Width="20" Height="20"
-                                            Margin="5,0,0,0"
-                                            Background="Transparent"
-                                            BorderThickness="0"
-                                            VerticalAlignment="Center"
-                                            ToolTip="View quest details"
-                                            Click="QuestDetailsButton_Click"
-                                            Tag="{Binding}">
-                                        <Button.Content>
-                                            <TextBlock Text="⚙" FontSize="12" Foreground="Gray" />
-                                        </Button.Content>
-                                        <Button.Style>
-                                            <Style TargetType="Button">
-                                                <Setter Property="Cursor" Value="Hand" />
-                                                <Style.Triggers>
-                                                    <Trigger Property="IsMouseOver" Value="True">
-                                                        <Setter Property="Background" Value="LightGray" />
-                                                    </Trigger>
-                                                </Style.Triggers>
-                                            </Style>
-                                        </Button.Style>
-                                    </Button>
-                                </Grid>
-                            </DataTemplate>
-                        </ListBox.ItemTemplate>
-                    </ListBox>
-                </DockPanel>
+                                <!-- Cogwheel Icon for Quest Details -->
+                                <Button Grid.Column="2"
+                                        Width="20" Height="20"
+                                        Margin="5,0,0,0"
+                                        Background="Transparent"
+                                        BorderThickness="0"
+                                        VerticalAlignment="Center"
+                                        ToolTip="View quest details"
+                                        Click="QuestDetailsButton_Click"
+                                        Tag="{Binding}">
+                                    <Button.Content>
+                                        <TextBlock Text="⚙" FontSize="12" Foreground="Gray" />
+                                    </Button.Content>
+                                    <Button.Style>
+                                        <Style TargetType="Button">
+                                            <Setter Property="Cursor" Value="Hand" />
+                                            <Style.Triggers>
+                                                <Trigger Property="IsMouseOver" Value="True">
+                                                    <Setter Property="Background" Value="LightGray" />
+                                                </Trigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Button.Style>
+                                </Button>
+                            </Grid>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+            </DockPanel>
 
-                <!-- Horizontal Splitter -->
-                <GridSplitter Grid.Row="1" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" />
-
-                <!-- NPC Panel (Bottom) - RENAMED from Events Panel -->
-                <DockPanel Grid.Row="2">
-                    <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="5">
+            <!-- NPCs Panel -->
+            <DockPanel x:Name="NpcsPanel" Visibility="Visible" Margin="2">
+                <Border DockPanel.Dock="Top" Background="LightGreen" Padding="5" Margin="0,0,0,2">
+                    <StackPanel Orientation="Horizontal">
                         <TextBlock Text="NPCs" FontWeight="Bold" VerticalAlignment="Center" />
-                        <TextBlock x:Name="NpcCountText" Text="(0)" Margin="5,0,0,0" Foreground="Gray" VerticalAlignment="Center" />
+                        <TextBlock x:Name="NpcCountText" Text="(0)" Margin="5,0,0,0" Foreground="DarkGreen" VerticalAlignment="Center" />
                     </StackPanel>
-                    <TextBox DockPanel.Dock="Top" x:Name="NpcSearchBox" Margin="5,0,5,5"
-                             Text="" TextChanged="NpcSearchBox_TextChanged"
-                             Background="White" BorderThickness="1" BorderBrush="Gray"
-                             ToolTip="Search NPCs by name or ID" />
-                    <ListBox Name="NpcList"
-                             ItemsSource="{Binding FilteredNpcs}"
-                             SelectionChanged="NpcList_SelectionChanged"
-                             MouseDoubleClick="NpcList_MouseDoubleClick"
-                             Margin="5,0,5,5">
-                        <ListBox.ItemTemplate>
-                            <DataTemplate>
-                                <StackPanel Margin="2">
-                                    <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold" />
-                                    <TextBlock Text="{Binding QuestCount, StringFormat={}{0} quest(s)}"
-                                               FontSize="10" Foreground="Gray" />
-                                </StackPanel>
-                            </DataTemplate>
-                        </ListBox.ItemTemplate>
-                    </ListBox>
-                </DockPanel>
-            </Grid>
+                </Border>
+                <TextBox DockPanel.Dock="Top" x:Name="NpcSearchBox" Margin="2"
+                         Text="" TextChanged="NpcSearchBox_TextChanged"
+                         Background="White" BorderThickness="1" BorderBrush="Gray"
+                         ToolTip="Search NPCs by name or ID" />
+                <!-- ✅ FIXED: Added MaxHeight and proper scrolling -->
+                <ListBox Name="NpcList"
+                         ItemsSource="{Binding FilteredNpcs}"
+                         SelectionChanged="NpcList_SelectionChanged"
+                         MouseDoubleClick="NpcList_MouseDoubleClick"
+                         Margin="2"
+                         ScrollViewer.VerticalScrollBarVisibility="Auto"
+                         ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate>
+                            <StackPanel Margin="2">
+                                <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold" />
+                                <TextBlock Text="{Binding QuestCount, StringFormat={}{0} quest(s)}"
+                                           FontSize="10" Foreground="Gray" />
+                            </StackPanel>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+            </DockPanel>
 
-            <GridSplitter Grid.Column="5" HorizontalAlignment="Stretch" />
-
-            <!-- Far Right Panels Grid - Split horizontally -->
-            <Grid Grid.Column="6">
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="*" />
-                    <RowDefinition Height="5" />
-                    <RowDefinition Height="*" />
-                </Grid.RowDefinitions>
-
-                <!-- BNpc List Panel (Top) -->
-                <DockPanel Grid.Row="0">
-                    <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="5">
+            <!-- BNpcs Panel -->
+            <DockPanel x:Name="BNpcsPanel" Visibility="Visible" Margin="2">
+                <Border DockPanel.Dock="Top" Background="LightCoral" Padding="5" Margin="0,0,0,2">
+                    <StackPanel Orientation="Horizontal">
                         <TextBlock Text="BNpcs" FontWeight="Bold" VerticalAlignment="Center" />
-                        <TextBlock x:Name="BNpcCountText" Text="(0)" Margin="5,0,0,0" Foreground="Gray" VerticalAlignment="Center" />
+                        <TextBlock x:Name="BNpcCountText" Text="(0)" Margin="5,0,0,0" Foreground="DarkRed" VerticalAlignment="Center" />
                     </StackPanel>
-                    <TextBox DockPanel.Dock="Top" x:Name="BNpcSearchBox" Margin="5,0,5,5"
-                             Text="" TextChanged="BNpcSearchBox_TextChanged"
-                             Background="White" BorderThickness="1" BorderBrush="Gray"
-                             ToolTip="Search NPCs by name or Base ID" />
-                    <ListBox Name="BNpcList"
-                             ItemsSource="{Binding FilteredBNpcs}"
-                             SelectionChanged="BNpcList_SelectionChanged"
-                             Margin="5,0,5,5">
-                        <ListBox.ItemTemplate>
-                            <DataTemplate>
-                                <TextBlock Text="{Binding}" ToolTip="{Binding BNpcName}" />
-                            </DataTemplate>
-                        </ListBox.ItemTemplate>
-                    </ListBox>
-                </DockPanel>
+                </Border>
+                <TextBox DockPanel.Dock="Top" x:Name="BNpcSearchBox" Margin="2"
+                         Text="" TextChanged="BNpcSearchBox_TextChanged"
+                         Background="White" BorderThickness="1" BorderBrush="Gray"
+                         ToolTip="Search NPCs by name or Base ID" />
+                <!-- ✅ FIXED: Added MaxHeight and proper scrolling -->
+                <ListBox Name="BNpcList"
+                         ItemsSource="{Binding FilteredBNpcs}"
+                         SelectionChanged="BNpcList_SelectionChanged"
+                         Margin="2"
+                         ScrollViewer.VerticalScrollBarVisibility="Auto"
+                         ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate>
+                            <TextBlock Text="{Binding}" ToolTip="{Binding BNpcName}" />
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+            </DockPanel>
 
-                <!-- Horizontal Splitter -->
-                <GridSplitter Grid.Row="1" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" />
-
-                <!-- Fates Panel (Bottom) -->
-                <DockPanel Grid.Row="2">
-                    <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="5">
+            <!-- Fates Panel -->
+            <DockPanel x:Name="FatesPanel" Visibility="Visible" Margin="2">
+                <Border DockPanel.Dock="Top" Background="LightYellow" Padding="5" Margin="0,0,0,2">
+                    <StackPanel Orientation="Horizontal">
                         <TextBlock Text="Fates" FontWeight="Bold" VerticalAlignment="Center" />
-                        <TextBlock x:Name="FateCountText" Text="(0)" Margin="5,0,0,0" Foreground="Gray" VerticalAlignment="Center" />
+                        <TextBlock x:Name="FateCountText" Text="(0)" Margin="5,0,0,0" Foreground="DarkOrange" VerticalAlignment="Center" />
                     </StackPanel>
-                    <TextBox DockPanel.Dock="Top" x:Name="FateSearchBox" Margin="5,0,5,5"
-                             Text="" TextChanged="FateSearchBox_TextChanged"
-                             Background="White" BorderThickness="1" BorderBrush="Gray"
-                             ToolTip="Search fates by name or ID" />
-                    <ListBox Name="FateList"
-                             ItemsSource="{Binding FilteredFates}"
-                             SelectionChanged="FateList_SelectionChanged"
-                             Margin="5,0,5,5">
-                        <ListBox.ItemTemplate>
-                            <DataTemplate>
-                                <TextBlock Text="{Binding}" ToolTip="{Binding Name}" />
-                            </DataTemplate>
-                        </ListBox.ItemTemplate>
-                    </ListBox>
-                </DockPanel>
-            </Grid>
+                </Border>
+                <TextBox DockPanel.Dock="Top" x:Name="FateSearchBox" Margin="2"
+                         Text="" TextChanged="FateSearchBox_TextChanged"
+                         Background="White" BorderThickness="1" BorderBrush="Gray"
+                         ToolTip="Search fates by name or ID" />
+                <!-- ✅ FIXED: Added MaxHeight and proper scrolling -->
+                <ListBox Name="FateList"
+                         ItemsSource="{Binding FilteredFates}"
+                         SelectionChanged="FateList_SelectionChanged"
+                         Margin="2"
+                         ScrollViewer.VerticalScrollBarVisibility="Auto"
+                         ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate>
+                            <TextBlock Text="{Binding}" ToolTip="{Binding Name}" />
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+            </DockPanel>
+
+            <!-- Eobjs Panel -->
+            <DockPanel x:Name="EobjsPanel" Visibility="Collapsed" Margin="2">
+                <Border DockPanel.Dock="Top" Background="LightPink" Padding="5" Margin="0,0,0,2">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="Eobj" FontWeight="Bold" VerticalAlignment="Center" />
+                        <TextBlock x:Name="EobjCountText" Text="(0)" Margin="5,0,0,0" Foreground="Purple" VerticalAlignment="Center" />
+                    </StackPanel>
+                </Border>
+                <TextBox DockPanel.Dock="Top" x:Name="EobjSearchBox" Margin="2"
+                         Text="" TextChanged="EobjSearchBox_TextChanged"
+                         Background="White" BorderThickness="1" BorderBrush="Gray"
+                         ToolTip="Search Eobjs by name or ID" />
+                <!-- ✅ FIXED: Added MaxHeight and proper scrolling -->
+                <ListBox Name="EobjList" Margin="2"
+                         ScrollViewer.VerticalScrollBarVisibility="Auto"
+                         ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate>
+                            <StackPanel Margin="2">
+                                <TextBlock Text="Sample Eobj 1" FontWeight="SemiBold" />
+                                <TextBlock Text="Points: 10" FontSize="10" Foreground="Gray" />
+                            </StackPanel>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+            </DockPanel>
+
+            <!-- EventItem Panel -->
+            <DockPanel x:Name="EventItemPanel" Visibility="Collapsed" Margin="2">
+                <Border DockPanel.Dock="Top" Background="LightCyan" Padding="5" Margin="0,0,0,2">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="EventItem" FontWeight="Bold" VerticalAlignment="Center" />
+                        <TextBlock x:Name="LeveCountText" Text="(0)" Margin="5,0,0,0" Foreground="DarkCyan" VerticalAlignment="Center" />
+                    </StackPanel>
+                </Border>
+                <TextBox DockPanel.Dock="Top" x:Name="EventItemSearchBox" Margin="2"
+                         Text="" TextChanged="EventItemSearchBox_TextChanged"
+                         Background="White" BorderThickness="1" BorderBrush="Gray"
+                         ToolTip="Search EventItem by name or ID" />
+                <!-- ✅ FIXED: Added MaxHeight and proper scrolling -->
+                <ListBox Name="LeveList" Margin="2"
+                         ScrollViewer.VerticalScrollBarVisibility="Auto"
+                         ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate>
+                            <StackPanel Margin="2">
+                                <TextBlock Text="Sample Leve 1" FontWeight="SemiBold" />
+                                <TextBlock Text="Type: Battlecraft" FontSize="10" Foreground="Gray" />
+                            </StackPanel>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+            </DockPanel>
         </Grid>
 
         <!-- Marker Visibility Controls -->
-        <GroupBox Grid.Row="2" Grid.ColumnSpan="3" Header="Marker Visibility" Margin="5,0,5,5" Background="LightBlue" BorderBrush="Blue" BorderThickness="1">
+        <GroupBox Grid.Row="3" Grid.ColumnSpan="3" Header="Marker Visibility" Margin="5,0,5,5" Background="LightBlue" BorderBrush="Blue" BorderThickness="1">
             <StackPanel Orientation="Horizontal" Margin="5">
                 <CheckBox x:Name="ShowAetheryteMarkersCheckBox" Content="Aetherytes" IsChecked="True"
                           Margin="5,0" Checked="MarkerVisibility_Changed" Unchecked="MarkerVisibility_Changed" />
@@ -393,8 +477,8 @@
             </StackPanel>
         </GroupBox>
 
-        <!-- Debug Information - Move this down -->
-        <Expander Grid.Row="3" Grid.ColumnSpan="3" Margin="5" Background="LightGray" BorderBrush="Gray" BorderThickness="1" IsExpanded="False">
+        <!-- Debug Information -->
+        <Expander Grid.Row="4" Grid.ColumnSpan="3" Margin="5" Background="LightGray" BorderBrush="Gray" BorderThickness="1" IsExpanded="False">
             <Expander.Header>
                 <DockPanel Width="{Binding ActualWidth, RelativeSource={RelativeSource AncestorType=Expander}}">
                     <TextBlock Text="Debug Information" VerticalAlignment="Center" />
@@ -423,11 +507,11 @@
         </Expander>
 
         <!-- Status Bar -->
-        <StatusBar Grid.Row="4" Grid.ColumnSpan="3">
+        <StatusBar Grid.Row="5" Grid.ColumnSpan="3">
             <TextBlock Name="StatusText" Text="Ready - Load FFXIV data to begin" />
         </StatusBar>
 
-        <Grid Grid.RowSpan="5" Grid.ColumnSpan="3" x:Name="ProgressOverlay"
+        <Grid Grid.RowSpan="6" Grid.ColumnSpan="3" x:Name="ProgressOverlay"
               Background="#80000000" Visibility="Collapsed" Panel.ZIndex="1000">
             <Border Background="White" CornerRadius="10" Padding="30"
                     HorizontalAlignment="Center" VerticalAlignment="Center"

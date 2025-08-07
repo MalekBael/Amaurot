@@ -21,7 +21,7 @@ notes/*.csv
 notes/Lumina/
 Libs/app_data.sqlite
 Libs/SaintCoinach.History.zip
-
+Resources/
 
 # Build results
 [Dd]ebug/

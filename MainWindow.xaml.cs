@@ -26,11 +26,18 @@ using WpfImage = System.Windows.Controls.Image;
 using WpfMessageBox = System.Windows.MessageBox;
 using WpfPanel = System.Windows.Controls.Panel;
 using WpfSaveFileDialog = Microsoft.Win32.SaveFileDialog;
+using WpfCheckBox = System.Windows.Controls.CheckBox;
+using WpfTextBox = System.Windows.Controls.TextBox;
+using WpfListBox = System.Windows.Controls.ListBox;
+using System.Windows.Threading;
 
 namespace Amaurot
 {
     public partial class MainWindow : Window
     {
+        // ✅ ADD: Flag to prevent layout thrashing during data loading
+        private bool _isLoadingData = false;
+
         private ARealmReversed? _realm;
         private bool _hideDuplicateTerritories = false;
         private bool _isDragging = false;
@@ -180,12 +187,15 @@ namespace Amaurot
         {
             try
             {
+                ShowProgressOverlay("quest extraction", "Initializing quest extraction...");
+
                 // Check if quest_parse.exe exists
                 var toolsDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Tools");
                 var questParseExe = Path.Combine(toolsDir, "quest_parse.exe");
 
                 if (!File.Exists(questParseExe))
                 {
+                    HideProgressOverlay();
                     WpfMessageBox.Show($"Quest extraction tool not found at:\n{questParseExe}\n\nPlease ensure the quest_parse.exe is available in the Tools folder.",
                         "Quest Parse Tool Not Found", MessageBoxButton.OK, MessageBoxImage.Error);
                     return;
@@ -196,6 +206,7 @@ namespace Amaurot
 
                 if (string.IsNullOrEmpty(gamePath) || !_settingsService.IsValidGamePath())
                 {
+                    HideProgressOverlay();
                     WpfMessageBox.Show("FFXIV game path is not configured or invalid.\n\nPlease configure it in Settings first.",
                         "Game Path Not Set", MessageBoxButton.OK, MessageBoxImage.Information);
 
@@ -207,6 +218,7 @@ namespace Amaurot
                 var sqpackPath = Path.Combine(gamePath, "game", "sqpack");
                 if (!Directory.Exists(sqpackPath))
                 {
+                    HideProgressOverlay();
                     WpfMessageBox.Show($"FFXIV sqpack directory not found at:\n{sqpackPath}\n\nPlease verify your game installation path.",
                         "Sqpack Directory Not Found", MessageBoxButton.OK, MessageBoxImage.Error);
                     return;
@@ -217,6 +229,7 @@ namespace Amaurot
             }
             catch (Exception ex)
             {
+                HideProgressOverlay();
                 LogDebug($"Error in quest file extraction: {ex.Message}");
                 WpfMessageBox.Show($"Error in quest file extraction: {ex.Message}",
                     "Error", MessageBoxButton.OK, MessageBoxImage.Error);
@@ -227,7 +240,8 @@ namespace Amaurot
         {
             // This method handles when a quest is selected in the quest list
             // We don't need to do anything special here as double-click handles quest details
-            if (QuestList.SelectedItem is QuestInfo selectedQuest)
+            var questList = this.FindName("QuestList") as WpfListBox;
+            if (questList?.SelectedItem is QuestInfo selectedQuest)
             {
                 LogDebug($"Quest selected: {selectedQuest.Name} (ID: {selectedQuest.Id})");
             }
@@ -257,6 +271,16 @@ namespace Amaurot
             }
         }
 
+        private void ShowNpcMarkersCheckBox_Checked(object sender, RoutedEventArgs e)
+        {
+            ToggleNpcMarkers(true);
+        }
+
+        private void ShowNpcMarkersCheckBox_Unchecked(object sender, RoutedEventArgs e)
+        {
+            ToggleNpcMarkers(false);
+        }
+
         private void ShowQuestDetails(QuestInfo questInfo)
         {
             try
@@ -276,7 +300,7 @@ namespace Amaurot
         private void NpcList_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
             // Handle NPC selection if needed
-            if (sender is System.Windows.Controls.ListBox npcListBox && npcListBox.SelectedItem is NpcInfo selectedNpc)
+            if (sender is WpfListBox npcListBox && npcListBox.SelectedItem is NpcInfo selectedNpc)
             {
                 LogDebug($"NPC selected: {selectedNpc.NpcName} (ID: {selectedNpc.NpcId})");
             }
@@ -286,7 +310,7 @@ namespace Amaurot
         {
             try
             {
-                if (sender is System.Windows.Controls.ListBox npcListBox && npcListBox.SelectedItem is NpcInfo selectedNpc)
+                if (sender is WpfListBox npcListBox && npcListBox.SelectedItem is NpcInfo selectedNpc)
                 {
                     LogDebug($"Double-clicked NPC: {selectedNpc.NpcName} (ID: {selectedNpc.NpcId})");
 
@@ -315,7 +339,7 @@ namespace Amaurot
         private void BNpcList_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
             // Handle BNpc (Battle NPC/Monster) selection if needed
-            if (sender is System.Windows.Controls.ListBox bnpcListBox && bnpcListBox.SelectedItem is BNpcInfo selectedBNpc)
+            if (sender is WpfListBox bnpcListBox && bnpcListBox.SelectedItem is BNpcInfo selectedBNpc)
             {
                 LogDebug($"BNpc selected: {selectedBNpc.BNpcName} (ID: {selectedBNpc.BNpcNameId})");
             }
@@ -324,7 +348,7 @@ namespace Amaurot
         private void FateList_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
             // Handle FATE selection if needed
-            if (sender is System.Windows.Controls.ListBox fateListBox && fateListBox.SelectedItem is FateInfo selectedFate)
+            if (sender is WpfListBox fateListBox && fateListBox.SelectedItem is FateInfo selectedFate)
             {
                 LogDebug($"FATE selected: {selectedFate.Name} (ID: {selectedFate.FateId})");
             }
@@ -381,11 +405,12 @@ namespace Amaurot
         {
             await WpfApplication.Current.Dispatcher.InvokeAsync(() =>
             {
-                if (QuestList?.ItemsSource != null)
+                var questList = this.FindName("QuestList") as WpfListBox;
+                if (questList?.ItemsSource != null)
                 {
-                    var itemsSource = QuestList.ItemsSource;
-                    QuestList.ItemsSource = null;
-                    QuestList.ItemsSource = itemsSource;
+                    var itemsSource = questList.ItemsSource;
+                    questList.ItemsSource = null;
+                    questList.ItemsSource = itemsSource;
                 }
             });
         }
@@ -494,6 +519,28 @@ namespace Amaurot
             {
                 LogDebug($"Error opening LGB Parser console: {ex.Message}");
                 WpfMessageBox.Show($"Failed to open LGB Parser console:\n\n{ex.Message}",
+                    "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        private async Task RunLgbParserBatchModeAsync(string lgbParserExe, string gamePath)
+        {
+            try
+            {
+                ShowProgressOverlay("LGB parsing", "Starting LGB Parser in batch mode...");
+
+                var arguments = new[] { "--game", gamePath, "--batch" };
+
+                await RunLgbParserProcessAsync(lgbParserExe, arguments);
+
+                HideProgressOverlay();
+                StatusText.Text = "LGB Parser batch mode completed";
+            }
+            catch (Exception ex)
+            {
+                HideProgressOverlay();
+                LogDebug($"Error in LGB Parser batch mode: {ex.Message}");
+                WpfMessageBox.Show($"Error running LGB Parser batch mode: {ex.Message}",
                     "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
@@ -615,7 +662,7 @@ namespace Amaurot
                     HorizontalScrollBarVisibility = ScrollBarVisibility.Auto
                 };
 
-                var textBox = new System.Windows.Controls.TextBox
+                var textBox = new WpfTextBox
                 {
                     Text = string.Join("\n", outputLines),
                     IsReadOnly = true,
@@ -659,6 +706,12 @@ namespace Amaurot
             }
 
             ApplySavedSettings();
+
+            // Add this line to set initial panel visibility
+            UpdatePanelAreaVisibility();
+
+            // ✅ ADD: Initialize the dynamic panel layout
+            InitializeDynamicPanelLayout();
 
             if (_settingsService?.Settings.AutoLoadGameData == true && _settingsService.IsValidGamePath())
             {
@@ -1116,6 +1169,9 @@ namespace Amaurot
         {
             try
             {
+                // ✅ ADD: Set loading flag
+                _isLoadingData = true;
+
                 StatusText.Text = "Loading FFXIV data...";
 
                 if (!ValidateGameDirectory(gameDirectory))
@@ -1182,7 +1238,8 @@ namespace Amaurot
                         Quests.Add(quest);
                         _filteredQuests.Add(quest);
                     }
-                    _uiUpdateService?.UpdateQuestCount(_filteredQuests, QuestCountText);
+                    var questCountText = this.FindName("QuestCountText") as TextBlock;
+                    _uiUpdateService?.UpdateQuestCount(_filteredQuests, questCountText);
                 });
 
                 // Load BNpcS
@@ -1197,7 +1254,8 @@ namespace Amaurot
                         BNpcs.Add(bnpc);
                         _filteredBNpcs.Add(bnpc);
                     }
-                    _uiUpdateService?.UpdateBNpcCount(_filteredBNpcs, BNpcCountText);
+                    var bnpcCountText = this.FindName("BNpcCountText") as TextBlock;
+                    _uiUpdateService?.UpdateBNpcCount(_filteredBNpcs, bnpcCountText);
                 });
 
                 StatusText.Text = "Loading fates...";
@@ -1211,7 +1269,8 @@ namespace Amaurot
                         Fates.Add(fate);
                         _filteredFates.Add(fate);
                     }
-                    _uiUpdateService?.UpdateFateCount(_filteredFates, FateCountText);
+                    var fateCountText = this.FindName("FateCountText") as TextBlock;
+                    _uiUpdateService?.UpdateFateCount(_filteredFates, fateCountText);
                 });
 
                 // ✅ UPDATED: Log message to reflect that Events are no longer loaded
@@ -1250,6 +1309,12 @@ namespace Amaurot
                 WpfMessageBox.Show($"Failed to load FFXIV data: {ex.Message}", "Error",
                     MessageBoxButton.OK, MessageBoxImage.Error);
             }
+            finally
+            {
+                // ✅ ADD: Clear loading flag and reorganize panels one final time
+                _isLoadingData = false;
+                ReorganizePanels();
+            }
         }
 
         private async Task LoadNpcsAsync()
@@ -1266,18 +1331,22 @@ namespace Amaurot
 
                     _allNpcs = await _npcService.ExtractNpcsWithPositionsAsync();
 
-                    FilterNpcs();
+                    // ✅ FIXED: Don't call FilterNpcs() during initial data loading
+                    // FilterNpcs(); // ❌ REMOVED: This was causing layout conflicts
 
                     Dispatcher.Invoke(() =>
                     {
-                        if (NpcCountText != null)
+                        var npcCountText = this.FindName("NpcCountText") as TextBlock;
+                        if (npcCountText != null)
                         {
-                            NpcCountText.Text = $"({_allNpcs.Count})";
+                            npcCountText.Text = $"({_allNpcs.Count})";
                         }
 
-                        if (NpcList != null)
+                        var npcList = this.FindName("NpcList") as WpfListBox;
+                        if (npcList != null)
                         {
-                            NpcList.ItemsSource = _filteredNpcsCollection;
+                            // ✅ FIXED: Set ItemsSource directly instead of calling FilterNpcs()
+                            npcList.ItemsSource = _filteredNpcsCollection;
                         }
                     });
 
@@ -1293,7 +1362,6 @@ namespace Amaurot
         private async Task LoadDataAsync<T>(Func<Task<List<T>>> loadFunction,
             ObservableCollection<T> sourceCollection,
             ObservableCollection<T> filteredCollection,
-
             Action<ObservableCollection<T>, TextBlock?> updateCountAction,
             TextBlock? countTextBlock)
         {
@@ -1361,15 +1429,48 @@ namespace Amaurot
             }
         }
 
+        private void EobjSearchBox_TextChanged(object sender, TextChangedEventArgs e)
+        {
+            // TODO: Implement Eobj search functionality when Eobj data is available
+            LogDebug("Eobj search functionality - placeholder for future implementation");
+
+            // For now, just log the search text
+            var eobjSearchBox = this.FindName("EobjSearchBox") as WpfTextBox;
+            string searchText = eobjSearchBox?.Text ?? "";
+
+            if (!string.IsNullOrEmpty(searchText))
+            {
+                LogDebug($"Eobj search: '{searchText}' (feature not yet implemented)");
+            }
+        }
+
+        private void EventItemSearchBox_TextChanged(object sender, TextChangedEventArgs e)
+        {
+            // TODO: Implement EventItem search functionality when EventItem data is available
+            LogDebug("EventItem search functionality - placeholder for future implementation");
+
+            // For now, just log the search text
+            var eventItemSearchBox = this.FindName("EventItemSearchBox") as WpfTextBox;
+            string searchText = eventItemSearchBox?.Text ?? "";
+
+            if (!string.IsNullOrEmpty(searchText))
+            {
+                LogDebug($"EventItem search: '{searchText}' (feature not yet implemented)");
+            }
+        }
+
         private void QuestSearchBox_TextChanged(object sender, TextChangedEventArgs e)
         {
-            _searchFilterService?.FilterQuests(QuestSearchBox.Text ?? "", Quests, _filteredQuests);
-            _uiUpdateService?.UpdateQuestCount(_filteredQuests, QuestCountText);
+            var questSearchBox = this.FindName("QuestSearchBox") as WpfTextBox;
+            var questCountText = this.FindName("QuestCountText") as TextBlock;
+            _searchFilterService?.FilterQuests(questSearchBox?.Text ?? "", Quests, _filteredQuests);
+            _uiUpdateService?.UpdateQuestCount(_filteredQuests, questCountText);
         }
 
         private void BNpcSearchBox_TextChanged(object sender, TextChangedEventArgs e)
         {
-            string searchText = BNpcSearchBox.Text ?? "";  // ✅ Remove ToLower()
+            var bnpcSearchBox = this.FindName("BNpcSearchBox") as WpfTextBox;
+            string searchText = bnpcSearchBox?.Text ?? "";  // ✅ Remove ToLower()
 
             _filteredBNpcs.Clear();
 
@@ -1387,7 +1488,8 @@ namespace Amaurot
                 }
             }
 
-            _uiUpdateService?.UpdateBNpcCount(_filteredBNpcs, BNpcCountText);
+            var bnpcCountText = this.FindName("BNpcCountText") as TextBlock;
+            _uiUpdateService?.UpdateBNpcCount(_filteredBNpcs, bnpcCountText);
         }
 
         private void TerritorySearchBox_TextChanged(object sender, TextChangedEventArgs e)
@@ -1414,7 +1516,7 @@ namespace Amaurot
             LogDebug($"Hide duplicates: {_hideDuplicateTerritories}");
             LogDebug($"Search text: '{TerritorySearchBox?.Text}'");
 
-            string searchText = TerritorySearchBox?.Text ?? "";  // ✅ Remove ToLower()
+            string searchText = TerritorySearchBox?.Text ?? "";
 
             Task.Run(() =>
             {
@@ -1423,7 +1525,7 @@ namespace Amaurot
                 if (!string.IsNullOrEmpty(searchText))
                 {
                     filteredTerritories = filteredTerritories.Where(territory =>
-                        territory.PlaceName.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||  // ✅ Use StringComparison
+                        territory.PlaceName.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
                         territory.Id.ToString().Contains(searchText) ||
                         territory.Region.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
                         territory.TerritoryNameId.Contains(searchText, StringComparison.OrdinalIgnoreCase));
@@ -1444,9 +1546,10 @@ namespace Amaurot
                             continue;
                         }
 
-                        // ✅ Remove Contains check - HashSet.Add returns false if already exists
-                        seenPlaceNames.Add(placeName);
-                        territoriesToKeep.Add(territory);
+                        if (seenPlaceNames.Add(placeName))
+                        {
+                            territoriesToKeep.Add(territory);
+                        }
                     }
 
                     filteredTerritories = territoriesToKeep;
@@ -1471,10 +1574,8 @@ namespace Amaurot
             });
         }
 
-        // ✅ FIXED: EventSearchBox text changed event - ensure proper filtering
         private void NpcSearchBox_TextChanged(object sender, TextChangedEventArgs e)
         {
-            // ✅ Add debouncing to prevent excessive filtering during typing
             _searchDebounceTimer?.Stop();
             _searchDebounceTimer = new System.Windows.Threading.DispatcherTimer
             {
@@ -1484,7 +1585,7 @@ namespace Amaurot
             _searchDebounceTimer.Tick += (s, args) =>
             {
                 _searchDebounceTimer.Stop();
-                FilterNpcs(); // ✅ Use the fixed FilterNpcs method
+                FilterNpcs();
             };
 
             _searchDebounceTimer.Start();
@@ -1492,13 +1593,13 @@ namespace Amaurot
 
         private void FateSearchBox_TextChanged(object sender, TextChangedEventArgs e)
         {
-            string searchText = FateSearchBox.Text ?? "";  // ✅ Remove ToLower()
+            var fateSearchBox = this.FindName("FateSearchBox") as WpfTextBox;
+            string searchText = fateSearchBox?.Text ?? "";
 
             _filteredFates.Clear();
 
             foreach (var fate in Fates)
             {
-                // ✅ Use StringComparison.OrdinalIgnoreCase
                 bool matches = string.IsNullOrEmpty(searchText) ||
                               fate.Name.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
                               fate.FateId.ToString().Contains(searchText);
@@ -1509,7 +1610,8 @@ namespace Amaurot
                 }
             }
 
-            _uiUpdateService?.UpdateFateCount(_filteredFates, FateCountText);
+            var fateCountText = this.FindName("FateCountText") as TextBlock;
+            _uiUpdateService?.UpdateFateCount(_filteredFates, fateCountText);
         }
 
         private void MapCanvas_MouseWheel(object sender, MouseWheelEventArgs e)
@@ -1550,7 +1652,6 @@ namespace Amaurot
                 var deltaX = currentPosition.X - _lastMousePosition.X;
                 var deltaY = currentPosition.Y - _lastMousePosition.Y;
 
-                // ✅ Use pattern matching
                 if (MapImageControl.RenderTransform is TransformGroup transformGroup)
                 {
                     var translateTransform = transformGroup.Children.OfType<TranslateTransform>().FirstOrDefault();
@@ -1564,7 +1665,6 @@ namespace Amaurot
                 _lastMousePosition = currentPosition;
                 SyncOverlayWithMap();
             }
-            // Removed the debug logging section since _debugLoggingEnabled is always false
         }
 
         private async void TerritoryList_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -1589,8 +1689,8 @@ namespace Amaurot
                 }
             }
 
-            // ✅ ADD: Filter NPCs when territory changes
-            if (_allNpcs.Count > 0)
+            // ✅ FIXED: Only filter NPCs if we have data and we're not in the middle of initial loading
+            if (_allNpcs.Count > 0 && TerritoryList.SelectedItem != null)
             {
                 FilterNpcs();
             }
@@ -1658,12 +1758,10 @@ namespace Amaurot
 
                         StatusText.Text = $"Map loaded for {territory.PlaceName}. Loading markers...";
 
-                        // Load original map markers
                         List<MapMarker> originalMarkers = await Task.Run(() =>
                             _mapService?.LoadMapMarkers(territory.MapId) ?? new List<MapMarker>()
                         );
 
-                        // CHANGED: Create NPC markers instead of quest markers
                         var npcMarkersForThisMap = CreateNpcMarkers(territory.MapId);
 
                         LogDebug($"🧙 NPC MARKER DEBUG for Map {territory.MapId}:");
@@ -1678,14 +1776,12 @@ namespace Amaurot
                             }
                         }
 
-                        // Combine all markers
                         _currentMapMarkers.Clear();
                         _currentMapMarkers.AddRange(originalMarkers);
                         _currentMapMarkers.AddRange(npcMarkersForThisMap);
 
                         LogDebug($"Total markers for {territory.PlaceName}: {_currentMapMarkers.Count} (original: {originalMarkers.Count}, npc: {npcMarkersForThisMap.Count})");
 
-                        // DEBUG: Check marker visibility filtering
                         var npcMarkersVisible = _currentMapMarkers.Where(m => m.Type == MarkerType.Npc).Count();
                         var npcCheckboxChecked = ShowNpcMarkersCheckBox?.IsChecked == true;
 
@@ -1699,14 +1795,13 @@ namespace Amaurot
                             bitmapSource.PixelWidth,
                             bitmapSource.PixelHeight);
 
-                        // Apply marker filtering before displaying
                         var visibleMarkers = new List<MapMarker>();
                         foreach (var marker in _currentMapMarkers)
                         {
                             bool shouldShow = marker.Type switch
                             {
                                 MarkerType.Aetheryte => ShowAetheryteMarkersCheckBox?.IsChecked == true,
-                                MarkerType.Npc => ShowNpcMarkersCheckBox?.IsChecked == true,  // CHANGED
+                                MarkerType.Npc => ShowNpcMarkersCheckBox?.IsChecked == true,
                                 MarkerType.Shop => ShowShopMarkersCheckBox?.IsChecked == true,
                                 MarkerType.Landmark => ShowLandmarkMarkersCheckBox?.IsChecked == true,
                                 MarkerType.Fate => ShowFateMarkersCheckBox?.IsChecked == true,
@@ -1847,13 +1942,11 @@ namespace Amaurot
             {
                 bool debugEnabled = checkBox.IsChecked == true;
 
-                // Update the static debug mode manager
                 DebugModeManager.IsDebugModeEnabled = debugEnabled;
 
                 _mapService?.SetVerboseDebugMode(debugEnabled);
                 _dataLoaderService?.SetVerboseDebugMode(debugEnabled);
 
-                // Save the setting
                 if (_settingsService != null)
                 {
                     _settingsService.UpdateDebugMode(debugEnabled);
@@ -1907,18 +2000,12 @@ namespace Amaurot
             }
         }
 
-        // ✅ Keep only ONE AddCustomMarker method (this one should already exist)
         public void AddCustomMarker(MapMarker marker)
         {
             try
             {
-                // Remove any existing marker with the same ID
                 _currentMapMarkers.RemoveAll(m => m.Id == marker.Id);
-
-                // Add the new marker
                 _currentMapMarkers.Add(marker);
-
-                // Refresh the display
                 RefreshMarkers();
 
                 LogDebug($"Added custom marker: {marker.PlaceName} at ({marker.X:F1}, {marker.Y:F1})");
@@ -1929,7 +2016,6 @@ namespace Amaurot
             }
         }
 
-        // Delegated methods to DebugHelper
         public void LogDebug(string message)
         {
             _debugHelper?.LogDebug(message);
@@ -1960,26 +2046,23 @@ namespace Amaurot
 
         private async void QuestList_MouseDoubleClick(object sender, System.Windows.Input.MouseButtonEventArgs e)
         {
-            if (QuestList.SelectedItem is QuestInfo selectedQuest)
+            var questList = this.FindName("QuestList") as WpfListBox;
+            if (questList?.SelectedItem is QuestInfo selectedQuest)
             {
                 try
                 {
                     LogDebug($"Double-clicked quest: {selectedQuest.Name} (ID: {selectedQuest.Id})");
 
-                    // Check if the quest has valid map data
                     if (selectedQuest.MapId > 0)
                     {
-                        // Find the territory that corresponds to this quest's map
                         var targetTerritory = FindTerritoryByMapId(selectedQuest.MapId);
 
                         if (targetTerritory != null)
                         {
                             LogDebug($"Switching to map for quest '{selectedQuest.Name}' - Territory: {targetTerritory.PlaceName} (MapId: {selectedQuest.MapId})");
 
-                            // Update the territory selection in the UI
                             TerritoryList.SelectedItem = targetTerritory;
 
-                            // Load the map for this territory
                             StatusText.Text = $"Loading map for quest '{selectedQuest.Name}' in {targetTerritory.PlaceName}...";
                             bool success = await LoadTerritoryMapAsync(targetTerritory);
 
@@ -2001,17 +2084,14 @@ namespace Amaurot
                     }
                     else if (!string.IsNullOrEmpty(selectedQuest.PlaceName))
                     {
-                        // Try to find territory by PlaceName if MapId is not available
                         var targetTerritory = FindTerritoryByPlaceName(selectedQuest.PlaceName);
 
                         if (targetTerritory != null)
                         {
                             LogDebug($"Switching to map for quest '{selectedQuest.Name}' by PlaceName - Territory: {targetTerritory.PlaceName}");
 
-                            // Update the territory selection in the UI
                             TerritoryList.SelectedItem = targetTerritory;
 
-                            // Load the map for this territory
                             StatusText.Text = $"Loading map for quest '{selectedQuest.Name}' in {targetTerritory.PlaceName}...";
                             bool success = await LoadTerritoryMapAsync(targetTerritory);
 
@@ -2062,18 +2142,16 @@ namespace Amaurot
         {
             try
             {
-                string searchText = NpcSearchBox?.Text ?? "";
+                var npcSearchBox = this.FindName("NpcSearchBox") as WpfTextBox;
+                string searchText = npcSearchBox?.Text ?? "";
                 uint currentTerritoryMapId = _currentTerritory?.MapId ?? 0;
 
-                // Clear the ObservableCollection instead of the List
                 _filteredNpcsCollection.Clear();
 
                 var npcsToShow = _allNpcs.Where(npc =>
                 {
-                    // Territory filter: only show NPCs from current territory if one is selected
                     bool territoryMatch = currentTerritoryMapId == 0 || npc.MapId == currentTerritoryMapId;
 
-                    // Search filter
                     bool searchMatch = string.IsNullOrEmpty(searchText) ||
                                       npc.NpcName.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
                                       npc.NpcId.ToString().Contains(searchText);
@@ -2081,7 +2159,6 @@ namespace Amaurot
                     return territoryMatch && searchMatch;
                 }).ToList();
 
-                // Add to the ObservableCollection instead of replacing the List
                 foreach (var npc in npcsToShow)
                 {
                     _filteredNpcsCollection.Add(npc);
@@ -2089,9 +2166,10 @@ namespace Amaurot
 
                 Dispatcher.Invoke(() =>
                 {
-                    if (NpcCountText != null)
+                    var npcCountText = this.FindName("NpcCountText") as TextBlock;
+                    if (npcCountText != null)
                     {
-                        NpcCountText.Text = $"({_filteredNpcsCollection.Count})";
+                        npcCountText.Text = $"({_filteredNpcsCollection.Count})";
                     }
                 });
 
@@ -2103,125 +2181,280 @@ namespace Amaurot
             }
         }
 
-        // Remove the duplicate _questScriptService declaration at line 1813
-        // Keep only the one at the top with other fields (around line 30)
-
-        // Add these missing methods to MainWindow.xaml.cs:
-
-        private void ShowNpcMarkersCheckBox_Checked(object sender, RoutedEventArgs e)
+        private void PanelVisibility_Changed(object sender, RoutedEventArgs e)
         {
-            MarkerVisibility_Changed(sender, e);
+            if (sender is WpfCheckBox checkBox)
+            {
+                bool isVisible = checkBox.IsChecked == true;
+                DockPanel? targetPanel = null;
+                string panelName = "";
+
+                switch (checkBox.Name)
+                {
+                    case "ShowQuestsCheckBox":
+                        targetPanel = this.FindName("QuestsPanel") as DockPanel;
+                        panelName = "Quests";
+                        break;
+
+                    case "ShowNpcsCheckBox":
+                        targetPanel = this.FindName("NpcsPanel") as DockPanel;
+                        panelName = "NPCs";
+                        break;
+
+                    case "ShowBNpcsCheckBox":
+                        targetPanel = this.FindName("BNpcsPanel") as DockPanel;
+                        panelName = "BNpcs";
+                        break;
+
+                    case "ShowFatesCheckBox":
+                        targetPanel = this.FindName("FatesPanel") as DockPanel;
+                        panelName = "Fates";
+                        break;
+
+                    case "ShowEobjsCheckBox":
+                        targetPanel = this.FindName("EobjsPanel") as DockPanel;
+                        panelName = "Eobjs";
+                        break;
+
+                    case "ShowEventItemCheckBox":
+                        targetPanel = this.FindName("EventItemPanel") as DockPanel;
+                        panelName = "EventItem";
+                        break;
+                }
+
+                if (targetPanel != null)
+                {
+                    UpdatePanelVisibility(targetPanel, isVisible, panelName);
+                }
+
+                UpdatePanelAreaVisibility();
+            }
         }
 
-        private void ShowNpcMarkersCheckBox_Unchecked(object sender, RoutedEventArgs e)
+        private void UpdatePanelVisibility(DockPanel panel, bool isVisible, string panelName)
         {
-            MarkerVisibility_Changed(sender, e);
-        }
+            if (panel == null) return;
 
-        private async Task RunLgbParserBatchModeAsync(string lgbParserExe, string gamePath)
-        {
             try
             {
-                ShowProgressOverlay("LGB parsing", "Starting batch LGB parsing...");
-
-                // ✅ CHANGED: Add "json" format argument to default to JSON output when run from map editor
-                var arguments = new[] { "--game", gamePath, "--batch", "lgb_output", "json" };
-                await RunLgbParserProcessWithProgressAsync(lgbParserExe, arguments);
-
-                HideProgressOverlay();
-                StatusText.Text = "LGB batch parsing completed";
+                panel.Visibility = isVisible ? Visibility.Visible : Visibility.Collapsed;
+                LogDebug($"Panel '{panelName}' {(isVisible ? "shown" : "hidden")}");
             }
             catch (Exception ex)
             {
-                HideProgressOverlay();
-                LogDebug($"Error in batch LGB parsing: {ex.Message}");
-                WpfMessageBox.Show($"Error in batch LGB parsing: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                LogDebug($"Error updating panel visibility for '{panelName}': {ex.Message}");
             }
         }
 
-        private async Task RunLgbParserProcessWithProgressAsync(string lgbParserExe, string[] arguments)
+        private void UpdatePanelAreaVisibility()
         {
             try
             {
-                UpdateProgressStatus("Starting LGB parser...");
-                LogDebug($"Starting LGB parser: {lgbParserExe}");
-                LogDebug($"Arguments: {string.Join(" ", arguments.Select(a => $"\"{a}\""))}");
+                var questsPanel = this.FindName("QuestsPanel") as DockPanel;
+                var npcsPanel = this.FindName("NpcsPanel") as DockPanel;
+                var bnpcsPanel = this.FindName("BNpcsPanel") as DockPanel;
+                var fatesPanel = this.FindName("FatesPanel") as DockPanel;
+                var eobjsPanel = this.FindName("EobjsPanel") as DockPanel;
+                var eventItemPanel = this.FindName("EventItemPanel") as DockPanel;
 
-                var processInfo = new System.Diagnostics.ProcessStartInfo
+                bool anyPanelVisible =
+                    (questsPanel?.Visibility == Visibility.Visible) ||
+                    (npcsPanel?.Visibility == Visibility.Visible) ||
+                    (bnpcsPanel?.Visibility == Visibility.Visible) ||
+                    (fatesPanel?.Visibility == Visibility.Visible) ||
+                    (eobjsPanel?.Visibility == Visibility.Visible) ||
+                    (eventItemPanel?.Visibility == Visibility.Visible);
+
+                if (PanelAreaColumn != null)
                 {
-                    FileName = lgbParserExe,
-                    Arguments = string.Join(" ", arguments.Select(a => $"\"{a}\"")),
-                    WorkingDirectory = Path.GetDirectoryName(lgbParserExe),
-                    UseShellExecute = false,
-                    RedirectStandardOutput = true,
-                    RedirectStandardError = true,
-                    CreateNoWindow = true
-                };
+                    PanelAreaColumn.Width = anyPanelVisible ? new GridLength(500) : new GridLength(0);
+                }
 
-                using var process = new System.Diagnostics.Process { StartInfo = processInfo };
-
-                var outputLines = new List<string>();
-                var errorLines = new List<string>();
-
-                process.OutputDataReceived += (sender, e) =>
+                if (PanelGridArea != null)
                 {
-                    if (!string.IsNullOrEmpty(e.Data))
+                    PanelGridArea.Visibility = anyPanelVisible ? Visibility.Visible : Visibility.Collapsed;
+                }
+
+                // ✅ ADD: Only reorganize if we're not in the middle of data loading
+                if (!_isLoadingData)
+                {
+                    ReorganizePanels();
+                }
+
+                LogDebug($"Panel area visibility: {(anyPanelVisible ? "visible" : "hidden")}");
+            }
+            catch (Exception ex)
+            {
+                LogDebug($"Error updating panel area visibility: {ex.Message}");
+            }
+        }
+
+        private void ReorganizePanels()
+        {
+            try
+            {
+                // ✅ UPDATED: Changed panel order - modify the priority numbers to change order
+                var panels = new List<(DockPanel? panel, string name, int priority)>
+        {
+            (this.FindName("QuestsPanel") as DockPanel, "Quests", 1),      // Top-left (Row 0, Col 0)
+            (this.FindName("NpcsPanel") as DockPanel, "NPCs", 2),          // Top-middle (Row 0, Col 1)
+            (this.FindName("FatesPanel") as DockPanel, "Fates", 3),        // Top-right (Row 0, Col 2)
+            (this.FindName("BNpcsPanel") as DockPanel, "BNpcs", 4),        // Bottom-left (Row 1, Col 0)
+            (this.FindName("EobjsPanel") as DockPanel, "Eobjs", 5),        // Bottom-middle (Row 1, Col 1)
+            (this.FindName("EventItemPanel") as DockPanel, "EventItem", 6) // Bottom-right (Row 1, Col 2)
+        };
+
+                // ✅ OPTIONAL: Sort by priority to ensure correct order
+                var visiblePanels = panels
+                    .Where(p => p.panel != null && p.panel.Visibility == Visibility.Visible)
+                    .OrderBy(p => p.priority)
+                    .ToList();
+
+                var dynamicPanelGrid = this.FindName("DynamicPanelGrid") as Grid;
+                if (dynamicPanelGrid == null)
+                {
+                    LogDebug("DynamicPanelGrid not found, cannot reorganize panels");
+                    return;
+                }
+
+                // ✅ FIXED: Clear the dynamic panel grid completely
+                dynamicPanelGrid.Children.Clear();
+                dynamicPanelGrid.RowDefinitions.Clear();
+                dynamicPanelGrid.ColumnDefinitions.Clear();
+
+                if (visiblePanels.Count == 0)
+                {
+                    if (PanelAreaColumn != null)
+                        PanelAreaColumn.Width = new GridLength(0);
+                    return;
+                }
+
+                // ✅ CRITICAL FIX: Always use 3×2 grid regardless of panel count
+                const int FIXED_COLUMNS = 3;
+                const int FIXED_ROWS = 2;
+
+                LogDebug($"🎛️ Creating FIXED grid layout: {visiblePanels.Count} panels -> {FIXED_COLUMNS} columns x {FIXED_ROWS} rows (3×2 grid)");
+
+                // Create column definitions - Always 3 columns
+                for (int col = 0; col < FIXED_COLUMNS; col++)
+                {
+                    dynamicPanelGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+                    if (col < FIXED_COLUMNS - 1)
                     {
-                        outputLines.Add(e.Data);
-                        WpfApplication.Current.Dispatcher.InvokeAsync(() =>
+                        dynamicPanelGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(5) });
+                    }
+                }
+
+                // Create row definitions - Always 2 rows
+                for (int row = 0; row < FIXED_ROWS; row++)
+                {
+                    dynamicPanelGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+
+                    if (row < FIXED_ROWS - 1)
+                    {
+                        dynamicPanelGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(5) });
+                    }
+                }
+
+                // ✅ FIXED: Only declare panelIndex once and place panels in fixed 3×2 grid positions
+                int panelIndex = 0;
+                for (int row = 0; row < FIXED_ROWS && panelIndex < visiblePanels.Count; row++)
+                {
+                    for (int col = 0; col < FIXED_COLUMNS && panelIndex < visiblePanels.Count; col++)
+                    {
+                        var panel = visiblePanels[panelIndex].panel;
+                        if (panel == null) continue;
+
+                        // ✅ CRITICAL FIX: Remove panel from its current parent before adding to new parent
+                        if (panel.Parent is System.Windows.Controls.Panel parentPanel)
                         {
-                            LogDebug($"[LGB Parser] {e.Data}");
-                            UpdateProgressStatus($"Processing: {e.Data}");
-                        });
-                    }
-                };
+                            parentPanel.Children.Remove(panel);
+                        }
 
-                process.ErrorDataReceived += (sender, e) =>
+                        // Set grid position (accounting for splitters)
+                        Grid.SetRow(panel, row * 2);
+                        Grid.SetColumn(panel, col * 2);
+
+                        // Add to the dynamic panel grid
+                        dynamicPanelGrid.Children.Add(panel);
+
+                        LogDebug($"   📍 Panel {panelIndex + 1} ({visiblePanels[panelIndex].name}) -> Row {row}, Col {col}");
+
+                        panelIndex++;
+                    }
+                }
+
+                // Add horizontal splitters between rows
+                for (int row = 0; row < FIXED_ROWS - 1; row++)
                 {
-                    if (!string.IsNullOrEmpty(e.Data))
+                    var horizontalSplitter = new GridSplitter
                     {
-                        errorLines.Add(e.Data);
-                        WpfApplication.Current.Dispatcher.InvokeAsync(() =>
-                            LogDebug($"[LGB Parser Error] {e.Data}"));
-                    }
-                };
+                        HorizontalAlignment = System.Windows.HorizontalAlignment.Stretch,
+                        VerticalAlignment = VerticalAlignment.Stretch,
+                        Height = 5,
+                        Background = new SolidColorBrush(Colors.LightGray)
+                    };
+                    Grid.SetRow(horizontalSplitter, (row * 2) + 1);
+                    Grid.SetColumn(horizontalSplitter, 0);
+                    Grid.SetColumnSpan(horizontalSplitter, FIXED_COLUMNS * 2 - 1);
+                    dynamicPanelGrid.Children.Add(horizontalSplitter);
+                }
 
-                process.Start();
-                process.BeginOutputReadLine();
-                process.BeginErrorReadLine();
-
-                await Task.Run(() => process.WaitForExit());
-
-                WpfApplication.Current.Dispatcher.Invoke(() =>
+                // Add vertical splitters between columns
+                for (int col = 0; col < FIXED_COLUMNS - 1; col++)
                 {
-                    if (process.ExitCode == 0)
+                    var verticalSplitter = new GridSplitter
                     {
-                        LogDebug("LGB Parser completed successfully");
-                        StatusText.Text = $"LGB Parser completed - {outputLines.Count} lines processed";
-                    }
-                    else
-                    {
-                        LogDebug($"LGB Parser exited with code: {process.ExitCode}");
-                        StatusText.Text = $"LGB Parser failed with exit code: {process.ExitCode}";
+                        HorizontalAlignment = System.Windows.HorizontalAlignment.Stretch,
+                        VerticalAlignment = VerticalAlignment.Stretch,
+                        Width = 5,
+                        Background = new SolidColorBrush(Colors.LightGray)
+                    };
+                    Grid.SetRow(verticalSplitter, 0);
+                    Grid.SetColumn(verticalSplitter, (col * 2) + 1);
+                    Grid.SetRowSpan(verticalSplitter, FIXED_ROWS * 2 - 1);
+                    dynamicPanelGrid.Children.Add(verticalSplitter);
+                }
 
-                        if (errorLines.Count > 0)
+                LogDebug($"✅ Reorganized {visiblePanels.Count} panels into FIXED {FIXED_COLUMNS} columns x {FIXED_ROWS} rows layout");
+
+                // ✅ FIXED: Use System.Action explicitly to avoid ambiguity
+                Dispatcher.BeginInvoke(new System.Action(() =>
+                {
+                    LogDebug($"🔍 POST-LAYOUT VERIFICATION:");
+                    LogDebug($"   DynamicPanelGrid children count: {dynamicPanelGrid.Children.Count}");
+                    LogDebug($"   Column definitions: {dynamicPanelGrid.ColumnDefinitions.Count}");
+                    LogDebug($"   Row definitions: {dynamicPanelGrid.RowDefinitions.Count}");
+
+                    foreach (UIElement child in dynamicPanelGrid.Children)
+                    {
+                        if (child is DockPanel panel)
                         {
-                            var errorMessage = string.Join("\n", errorLines.Take(10));
-                            WpfMessageBox.Show($"LGB Parser errors:\n\n{errorMessage}",
-                                "LGB Parser Error", MessageBoxButton.OK, MessageBoxImage.Warning);
+                            var row = Grid.GetRow(panel);
+                            var col = Grid.GetColumn(panel);
+                            LogDebug($"   Panel '{panel.Name}' at Grid Row={row}, Col={col}");
                         }
                     }
-                });
+                }), DispatcherPriority.Loaded);
             }
             catch (Exception ex)
             {
-                WpfApplication.Current.Dispatcher.Invoke(() =>
-                {
-                    LogDebug($"Exception during LGB Parser execution: {ex.Message}");
-                    StatusText.Text = "LGB Parser execution failed";
-                    WpfMessageBox.Show($"An error occurred running LGB Parser:\n\n{ex.Message}",
-                        "LGB Parser Error", MessageBoxButton.OK, MessageBoxImage.Error);
-                });
+                LogDebug($"❌ Error reorganizing panels: {ex.Message}");
+                LogDebug($"   Stack trace: {ex.StackTrace}");
+            }
+        }
+
+        private void InitializeDynamicPanelLayout()
+        {
+            try
+            {
+                ReorganizePanels();
+                LogDebug("Dynamic panel layout initialized");
+            }
+            catch (Exception ex)
+            {
+                LogDebug($"Error initializing dynamic panel layout: {ex.Message}");
             }
         }
     }

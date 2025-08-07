@@ -1,10 +1,7 @@
-﻿using System.ComponentModel;
+﻿using System;
 
 namespace Amaurot
 {
-    /// <summary>
-    /// Static manager for debug mode state that can be accessed globally
-    /// </summary>
     public static class DebugModeManager
     {
         private static bool _isDebugModeEnabled = false;
@@ -17,11 +14,27 @@ namespace Amaurot
                 if (_isDebugModeEnabled != value)
                 {
                     _isDebugModeEnabled = value;
-                    DebugModeChanged?.Invoke();
+                    DebugModeChanged?.Invoke(value);
                 }
             }
         }
 
-        public static event System.Action? DebugModeChanged;
+        public static event Action<bool>? DebugModeChanged;
+
+        public static void LogDebug(string message)
+        {
+            if (_isDebugModeEnabled)
+            {
+                System.Diagnostics.Debug.WriteLine($"[DEBUG] {message}");
+            }
+        }
+
+        public static void LogVerbose(string message)
+        {
+            if (_isDebugModeEnabled)
+            {
+                System.Diagnostics.Debug.WriteLine($"[VERBOSE] {message}");
+            }
+        }
     }
 }
