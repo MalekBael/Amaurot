@@ -6,8 +6,9 @@
         xmlns:local="clr-namespace:Amaurot"
         mc:Ignorable="d"
         Title="Amaurot Map Viewer"
-        Height="1000"
-        Width="1800"
+        Height="1200"
+        Width="2000"
+        WindowStartupLocation="CenterScreen"
         Icon="amaurot.ico">
 
     <!--  Window Resources with the converter -->
@@ -67,17 +68,18 @@
         <GroupBox Grid.Row="1" Grid.ColumnSpan="3" Header="Panel Visibility" Margin="5,0,5,5" Background="LightBlue" BorderBrush="Blue" BorderThickness="1">
             <WrapPanel Orientation="Horizontal" Margin="5">
                 <CheckBox x:Name="ShowQuestsCheckBox" Content="Quests" IsChecked="True"
-                          Margin="5,0" Checked="PanelVisibility_Changed" Unchecked="PanelVisibility_Changed" />
+                  Margin="5,0" Checked="PanelVisibility_Changed" Unchecked="PanelVisibility_Changed" />
                 <CheckBox x:Name="ShowNpcsCheckBox" Content="NPCs" IsChecked="True"
-                          Margin="5,0" Checked="PanelVisibility_Changed" Unchecked="PanelVisibility_Changed" />
+                  Margin="5,0" Checked="PanelVisibility_Changed" Unchecked="PanelVisibility_Changed" />
                 <CheckBox x:Name="ShowBNpcsCheckBox" Content="BNpcs" IsChecked="True"
-                          Margin="5,0" Checked="PanelVisibility_Changed" Unchecked="PanelVisibility_Changed" />
+                  Margin="5,0" Checked="PanelVisibility_Changed" Unchecked="PanelVisibility_Changed" />
                 <CheckBox x:Name="ShowFatesCheckBox" Content="Fates" IsChecked="True"
-                          Margin="5,0" Checked="PanelVisibility_Changed" Unchecked="PanelVisibility_Changed" />
+                  Margin="5,0" Checked="PanelVisibility_Changed" Unchecked="PanelVisibility_Changed" />
+                <!-- ✅ CHANGED: Default to False for 2×2 layout -->
                 <CheckBox x:Name="ShowEobjsCheckBox" Content="Eobjs" IsChecked="False"
-                          Margin="5,0" Checked="PanelVisibility_Changed" Unchecked="PanelVisibility_Changed" />
+                  Margin="5,0" Checked="PanelVisibility_Changed" Unchecked="PanelVisibility_Changed" />
                 <CheckBox x:Name="ShowEventItemCheckBox" Content="EventItem" IsChecked="False"
-                          Margin="5,0" Checked="PanelVisibility_Changed" Unchecked="PanelVisibility_Changed" />
+                  Margin="5,0" Checked="PanelVisibility_Changed" Unchecked="PanelVisibility_Changed" />
             </WrapPanel>
         </GroupBox>
 
@@ -239,7 +241,7 @@
                 <Border DockPanel.Dock="Top" Background="LightBlue" Padding="5" Margin="0,0,0,2">
                     <StackPanel Orientation="Horizontal">
                         <TextBlock Text="Quests" FontWeight="Bold" VerticalAlignment="Center" />
-                        <TextBlock x:Name="QuestCountText" Text="(0)" Margin="5,0,0,0" Foreground="DarkBlue" VerticalAlignment="Center" />
+                        <TextBlock x:Name="QuestCountText" Text="(0)" Margin="5,0,0,0" Foreground="Gray" VerticalAlignment="Center" />
                     </StackPanel>
                 </Border>
                 <TextBox DockPanel.Dock="Top" x:Name="QuestSearchBox" Margin="2"
@@ -318,10 +320,10 @@
 
             <!-- NPCs Panel -->
             <DockPanel x:Name="NpcsPanel" Visibility="Visible" Margin="2">
-                <Border DockPanel.Dock="Top" Background="LightGreen" Padding="5" Margin="0,0,0,2">
+                <Border DockPanel.Dock="Top" Background="LightBlue" Padding="5" Margin="0,0,0,2">
                     <StackPanel Orientation="Horizontal">
                         <TextBlock Text="NPCs" FontWeight="Bold" VerticalAlignment="Center" />
-                        <TextBlock x:Name="NpcCountText" Text="(0)" Margin="5,0,0,0" Foreground="DarkGreen" VerticalAlignment="Center" />
+                        <TextBlock x:Name="NpcCountText" Text="(0)" Margin="5,0,0,0" Foreground="Gray" VerticalAlignment="Center" />
                     </StackPanel>
                 </Border>
                 <TextBox DockPanel.Dock="Top" x:Name="NpcSearchBox" Margin="2"
@@ -350,10 +352,10 @@
 
             <!-- BNpcs Panel -->
             <DockPanel x:Name="BNpcsPanel" Visibility="Visible" Margin="2">
-                <Border DockPanel.Dock="Top" Background="LightCoral" Padding="5" Margin="0,0,0,2">
+                <Border DockPanel.Dock="Top" Background="LightBlue" Padding="5" Margin="0,0,0,2">
                     <StackPanel Orientation="Horizontal">
                         <TextBlock Text="BNpcs" FontWeight="Bold" VerticalAlignment="Center" />
-                        <TextBlock x:Name="BNpcCountText" Text="(0)" Margin="5,0,0,0" Foreground="DarkRed" VerticalAlignment="Center" />
+                        <TextBlock x:Name="BNpcCountText" Text="(0)" Margin="5,0,0,0" Foreground="Gray" VerticalAlignment="Center" />
                     </StackPanel>
                 </Border>
                 <TextBox DockPanel.Dock="Top" x:Name="BNpcSearchBox" Margin="2"
@@ -377,10 +379,10 @@
 
             <!-- Fates Panel -->
             <DockPanel x:Name="FatesPanel" Visibility="Visible" Margin="2">
-                <Border DockPanel.Dock="Top" Background="LightYellow" Padding="5" Margin="0,0,0,2">
+                <Border DockPanel.Dock="Top" Background="LightBlue" Padding="5" Margin="0,0,0,2">
                     <StackPanel Orientation="Horizontal">
                         <TextBlock Text="Fates" FontWeight="Bold" VerticalAlignment="Center" />
-                        <TextBlock x:Name="FateCountText" Text="(0)" Margin="5,0,0,0" Foreground="DarkOrange" VerticalAlignment="Center" />
+                        <TextBlock x:Name="FateCountText" Text="(0)" Margin="5,0,0,0" Foreground="Gray" VerticalAlignment="Center" />
                     </StackPanel>
                 </Border>
                 <TextBox DockPanel.Dock="Top" x:Name="FateSearchBox" Margin="2"
@@ -404,10 +406,10 @@
 
             <!-- Eobjs Panel -->
             <DockPanel x:Name="EobjsPanel" Visibility="Collapsed" Margin="2">
-                <Border DockPanel.Dock="Top" Background="LightPink" Padding="5" Margin="0,0,0,2">
+                <Border DockPanel.Dock="Top" Background="LightBlue" Padding="5" Margin="0,0,0,2">
                     <StackPanel Orientation="Horizontal">
                         <TextBlock Text="Eobj" FontWeight="Bold" VerticalAlignment="Center" />
-                        <TextBlock x:Name="EobjCountText" Text="(0)" Margin="5,0,0,0" Foreground="Purple" VerticalAlignment="Center" />
+                        <TextBlock x:Name="EobjCountText" Text="(0)" Margin="5,0,0,0" Foreground="Gray" VerticalAlignment="Center" />
                     </StackPanel>
                 </Border>
                 <TextBox DockPanel.Dock="Top" x:Name="EobjSearchBox" Margin="2"
@@ -431,10 +433,10 @@
 
             <!-- EventItem Panel -->
             <DockPanel x:Name="EventItemPanel" Visibility="Collapsed" Margin="2">
-                <Border DockPanel.Dock="Top" Background="LightCyan" Padding="5" Margin="0,0,0,2">
+                <Border DockPanel.Dock="Top" Background="LightBlue" Padding="5" Margin="0,0,0,2">
                     <StackPanel Orientation="Horizontal">
                         <TextBlock Text="EventItem" FontWeight="Bold" VerticalAlignment="Center" />
-                        <TextBlock x:Name="LeveCountText" Text="(0)" Margin="5,0,0,0" Foreground="DarkCyan" VerticalAlignment="Center" />
+                        <TextBlock x:Name="LeveCountText" Text="(0)" Margin="5,0,0,0" Foreground="Gray" VerticalAlignment="Center" />
                     </StackPanel>
                 </Border>
                 <TextBox DockPanel.Dock="Top" x:Name="EventItemSearchBox" Margin="2"

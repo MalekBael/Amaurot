@@ -279,7 +279,7 @@ namespace Amaurot
                     {
                         var vsButton = new System.Windows.Controls.Button
                         {
-                            Content = "Open in VS",
+                            Content = "Open in Visual Studio",
                             Padding = new Thickness(8, 4, 8, 4),
                             Background = new SolidColorBrush(System.Windows.Media.Color.FromRgb(104, 33, 122)), // ✅ FIXED: Fully qualified
                             Foreground = new SolidColorBrush(Colors.White),

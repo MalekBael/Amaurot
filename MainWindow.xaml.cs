@@ -1331,9 +1331,7 @@ namespace Amaurot
 
                     _allNpcs = await _npcService.ExtractNpcsWithPositionsAsync();
 
-                    // ✅ FIXED: Don't call FilterNpcs() during initial data loading
-                    // FilterNpcs(); // ❌ REMOVED: This was causing layout conflicts
-
+                    // ✅ NEW: Load ALL NPCs initially instead of staying empty
                     Dispatcher.Invoke(() =>
                     {
                         var npcCountText = this.FindName("NpcCountText") as TextBlock;
@@ -1345,9 +1343,17 @@ namespace Amaurot
                         var npcList = this.FindName("NpcList") as WpfListBox;
                         if (npcList != null)
                         {
-                            // ✅ FIXED: Set ItemsSource directly instead of calling FilterNpcs()
                             npcList.ItemsSource = _filteredNpcsCollection;
                         }
+
+                        // ✅ NEW: Initially load ALL NPCs (no territory filter)
+                        _filteredNpcsCollection.Clear();
+                        foreach (var npc in _allNpcs)
+                        {
+                            _filteredNpcsCollection.Add(npc);
+                        }
+
+                        LogDebug($"🧙 Initially loaded ALL {_filteredNpcsCollection.Count} NPCs into NPC list");
                     });
 
                     LogDebug($"🧙 Loaded {_allNpcs.Count} NPCs from Saint Coinach");
@@ -1867,7 +1873,8 @@ namespace Amaurot
             double scaleX = canvasWidth / imageWidth;
             double scaleY = canvasHeight / imageHeight;
             double fitScale = Math.Min(scaleX, scaleY);
-            _currentScale = fitScale * 0.9;
+
+            _currentScale = 1.0;
 
             double centeredX = (canvasWidth - (imageWidth * _currentScale)) / 2;
             double centeredY = (canvasHeight - (imageHeight * _currentScale)) / 2;
@@ -1885,7 +1892,7 @@ namespace Amaurot
             MapImageControl.RenderTransform = transformGroup;
             MapImageControl.RenderTransformOrigin = new System.Windows.Point(0, 0);
 
-            LogDebug($"Map scaled to {_currentScale:F2} and positioned via transform at ({centeredX:F1}, {centeredY:F1})");
+            LogDebug($"Map scaled to {_currentScale:F2} (90% zoom) and positioned via transform at ({centeredX:F1}, {centeredY:F1})");
         }
 
         private void RefreshMarkers()
@@ -2150,6 +2157,7 @@ namespace Amaurot
 
                 var npcsToShow = _allNpcs.Where(npc =>
                 {
+                    // ✅ UPDATED: Only filter by territory if a territory is actually selected
                     bool territoryMatch = currentTerritoryMapId == 0 || npc.MapId == currentTerritoryMapId;
 
                     bool searchMatch = string.IsNullOrEmpty(searchText) ||
@@ -2265,9 +2273,14 @@ namespace Amaurot
                     (eobjsPanel?.Visibility == Visibility.Visible) ||
                     (eventItemPanel?.Visibility == Visibility.Visible);
 
+                // ✅ UPDATED: Don't set width here - let ReorganizePanels() handle it dynamically
                 if (PanelAreaColumn != null)
                 {
-                    PanelAreaColumn.Width = anyPanelVisible ? new GridLength(500) : new GridLength(0);
+                    if (!anyPanelVisible)
+                    {
+                        PanelAreaColumn.Width = new GridLength(0);
+                    }
+                    // Width will be set by ReorganizePanels() based on layout
                 }
 
                 if (PanelGridArea != null)
@@ -2293,18 +2306,17 @@ namespace Amaurot
         {
             try
             {
-                // ✅ UPDATED: Changed panel order - modify the priority numbers to change order
+                // ✅ UPDATED: Changed panel order for your desired layout
                 var panels = new List<(DockPanel? panel, string name, int priority)>
         {
             (this.FindName("QuestsPanel") as DockPanel, "Quests", 1),      // Top-left (Row 0, Col 0)
-            (this.FindName("NpcsPanel") as DockPanel, "NPCs", 2),          // Top-middle (Row 0, Col 1)
-            (this.FindName("FatesPanel") as DockPanel, "Fates", 3),        // Top-right (Row 0, Col 2)
-            (this.FindName("BNpcsPanel") as DockPanel, "BNpcs", 4),        // Bottom-left (Row 1, Col 0)
-            (this.FindName("EobjsPanel") as DockPanel, "Eobjs", 5),        // Bottom-middle (Row 1, Col 1)
-            (this.FindName("EventItemPanel") as DockPanel, "EventItem", 6) // Bottom-right (Row 1, Col 2)
+            (this.FindName("NpcsPanel") as DockPanel, "NPCs", 2),          // Top-right (Row 0, Col 1)
+            (this.FindName("FatesPanel") as DockPanel, "Fates", 3),        // Bottom-left (Row 1, Col 0)
+            (this.FindName("BNpcsPanel") as DockPanel, "BNpcs", 4),        // Bottom-right (Row 1, Col 1)
+            (this.FindName("EobjsPanel") as DockPanel, "Eobjs", 5),        // Additional panel (Row 0, Col 2)
+            (this.FindName("EventItemPanel") as DockPanel, "EventItem", 6) // Additional panel (Row 1, Col 2)
         };
 
-                // ✅ OPTIONAL: Sort by priority to ensure correct order
                 var visiblePanels = panels
                     .Where(p => p.panel != null && p.panel.Visibility == Visibility.Visible)
                     .OrderBy(p => p.priority)
@@ -2317,7 +2329,7 @@ namespace Amaurot
                     return;
                 }
 
-                // ✅ FIXED: Clear the dynamic panel grid completely
+                // Clear the dynamic panel grid completely
                 dynamicPanelGrid.Children.Clear();
                 dynamicPanelGrid.RowDefinitions.Clear();
                 dynamicPanelGrid.ColumnDefinitions.Clear();
@@ -2329,44 +2341,64 @@ namespace Amaurot
                     return;
                 }
 
-                // ✅ CRITICAL FIX: Always use 3×2 grid regardless of panel count
-                const int FIXED_COLUMNS = 3;
-                const int FIXED_ROWS = 2;
+                // ✅ NEW: Dynamic layout - 2×2 for 4 panels, 3×2 for 5+ panels
+                int columns, rows;
+                double panelAreaWidth; // ✅ ADD: Dynamic width calculation
 
-                LogDebug($"🎛️ Creating FIXED grid layout: {visiblePanels.Count} panels -> {FIXED_COLUMNS} columns x {FIXED_ROWS} rows (3×2 grid)");
+                if (visiblePanels.Count <= 4)
+                {
+                    columns = 2;
+                    rows = 2;
+                    panelAreaWidth = 500; // Keep original width for 2×2
+                    LogDebug($"🎛️ Creating 2×2 grid layout: {visiblePanels.Count} panels -> {columns} columns x {rows} rows (width: {panelAreaWidth}px)");
+                }
+                else
+                {
+                    columns = 3;
+                    rows = 2;
+                    panelAreaWidth = 750; // ✅ NEW: Increase width for 3×2 to maintain panel size (500 * 3/2 = 750)
+                    LogDebug($"🎛️ Creating 3×2 grid layout: {visiblePanels.Count} panels -> {columns} columns x {rows} rows (width: {panelAreaWidth}px)");
+                }
 
-                // Create column definitions - Always 3 columns
-                for (int col = 0; col < FIXED_COLUMNS; col++)
+                // ✅ NEW: Update the panel area column width dynamically
+                if (PanelAreaColumn != null)
+                {
+                    PanelAreaColumn.Width = new GridLength(panelAreaWidth);
+                    LogDebug($"   📏 Updated PanelAreaColumn width to {panelAreaWidth}px");
+                }
+
+                // Create column definitions
+                for (int col = 0; col < columns; col++)
                 {
                     dynamicPanelGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
 
-                    if (col < FIXED_COLUMNS - 1)
+                    if (col < columns - 1)
                     {
                         dynamicPanelGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(5) });
                     }
                 }
 
-                // Create row definitions - Always 2 rows
-                for (int row = 0; row < FIXED_ROWS; row++)
+                // Create row definitions
+                for (int row = 0; row < rows; row++)
                 {
                     dynamicPanelGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
 
-                    if (row < FIXED_ROWS - 1)
+                    if (row < rows - 1)
                     {
                         dynamicPanelGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(5) });
                     }
                 }
 
-                // ✅ FIXED: Only declare panelIndex once and place panels in fixed 3×2 grid positions
+                // Place panels in grid positions
                 int panelIndex = 0;
-                for (int row = 0; row < FIXED_ROWS && panelIndex < visiblePanels.Count; row++)
+                for (int row = 0; row < rows && panelIndex < visiblePanels.Count; row++)
                 {
-                    for (int col = 0; col < FIXED_COLUMNS && panelIndex < visiblePanels.Count; col++)
+                    for (int col = 0; col < columns && panelIndex < visiblePanels.Count; col++)
                     {
                         var panel = visiblePanels[panelIndex].panel;
                         if (panel == null) continue;
 
-                        // ✅ CRITICAL FIX: Remove panel from its current parent before adding to new parent
+                        // Remove panel from its current parent before adding to new parent
                         if (panel.Parent is System.Windows.Controls.Panel parentPanel)
                         {
                             parentPanel.Children.Remove(panel);
@@ -2386,7 +2418,7 @@ namespace Amaurot
                 }
 
                 // Add horizontal splitters between rows
-                for (int row = 0; row < FIXED_ROWS - 1; row++)
+                for (int row = 0; row < rows - 1; row++)
                 {
                     var horizontalSplitter = new GridSplitter
                     {
@@ -2397,12 +2429,12 @@ namespace Amaurot
                     };
                     Grid.SetRow(horizontalSplitter, (row * 2) + 1);
                     Grid.SetColumn(horizontalSplitter, 0);
-                    Grid.SetColumnSpan(horizontalSplitter, FIXED_COLUMNS * 2 - 1);
+                    Grid.SetColumnSpan(horizontalSplitter, columns * 2 - 1);
                     dynamicPanelGrid.Children.Add(horizontalSplitter);
                 }
 
                 // Add vertical splitters between columns
-                for (int col = 0; col < FIXED_COLUMNS - 1; col++)
+                for (int col = 0; col < columns - 1; col++)
                 {
                     var verticalSplitter = new GridSplitter
                     {
@@ -2413,19 +2445,20 @@ namespace Amaurot
                     };
                     Grid.SetRow(verticalSplitter, 0);
                     Grid.SetColumn(verticalSplitter, (col * 2) + 1);
-                    Grid.SetRowSpan(verticalSplitter, FIXED_ROWS * 2 - 1);
+                    Grid.SetRowSpan(verticalSplitter, rows * 2 - 1);
                     dynamicPanelGrid.Children.Add(verticalSplitter);
                 }
 
-                LogDebug($"✅ Reorganized {visiblePanels.Count} panels into FIXED {FIXED_COLUMNS} columns x {FIXED_ROWS} rows layout");
+                LogDebug($"✅ Reorganized {visiblePanels.Count} panels into {columns}×{rows} layout with {panelAreaWidth}px total width");
 
-                // ✅ FIXED: Use System.Action explicitly to avoid ambiguity
+                // Verification
                 Dispatcher.BeginInvoke(new System.Action(() =>
                 {
                     LogDebug($"🔍 POST-LAYOUT VERIFICATION:");
                     LogDebug($"   DynamicPanelGrid children count: {dynamicPanelGrid.Children.Count}");
                     LogDebug($"   Column definitions: {dynamicPanelGrid.ColumnDefinitions.Count}");
                     LogDebug($"   Row definitions: {dynamicPanelGrid.RowDefinitions.Count}");
+                    LogDebug($"   PanelAreaColumn width: {PanelAreaColumn?.Width.Value}px");
 
                     foreach (UIElement child in dynamicPanelGrid.Children)
                     {
