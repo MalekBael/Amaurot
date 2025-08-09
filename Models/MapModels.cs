@@ -69,121 +69,23 @@ namespace Amaurot
         public List<MapMarker> Markers { get; set; } = new List<MapMarker>();
     }
 
+    // REMOVE OR COMMENT OUT THE CONFLICTING CLASSES:
+    // The QuestInfo and QuestNpcInfo classes here conflict with the ones in Services.Entities
+    // Comment them out or delete them entirely:
+
+    /*
     public class QuestInfo
     {
-        public uint Id { get; set; }
-        public string Name { get; set; } = string.Empty;
-
-        public string QuestIdString { get; set; } = string.Empty;
-
-        public string JournalGenre { get; set; } = string.Empty;
-        public uint ClassJobCategoryId { get; set; }
-        public uint ClassJobLevelRequired { get; set; }
-        public string ClassJobCategoryName { get; set; } = string.Empty;
-        public bool IsMainScenarioQuest { get; set; }
-        public bool IsFeatureQuest { get; set; }
-        public uint PreviousQuestId { get; set; }
-        public uint ExpReward { get; set; }
-        public uint GilReward { get; set; }
-
-        public string PlaceName { get; set; } = string.Empty;
-        public uint PlaceNameId { get; set; }
-        public uint MapId { get; set; }
-        public uint IconId { get; set; }
-        public string Description { get; set; } = string.Empty;
-        public bool IsRepeatable { get; set; }
-
-        public double X { get; set; } = 0;
-        public double Y { get; set; } = 0;
-        public double Z { get; set; } = 0;
-        public uint TerritoryId { get; set; } = 0;
-
-        public List<QuestNpcInfo> StartNpcs { get; set; } = new List<QuestNpcInfo>();
-        public List<QuestNpcInfo> ObjectiveNpcs { get; set; } = new List<QuestNpcInfo>();
-        public List<QuestNpcInfo> EndNpcs { get; set; } = new List<QuestNpcInfo>();
-
-        public override string ToString()
-        {
-            string prefix = IsMainScenarioQuest ? "[MSQ] " : IsFeatureQuest ? "[FEATURE] " : "";
-            return $"{Id} - {prefix}{Name}";
-        }
+        // This conflicts with Amaurot.Services.Entities.QuestInfo
+        // Remove this entire class definition
     }
 
     public class QuestNpcInfo
     {
-        public uint NpcId { get; set; }
-        public string NpcName { get; set; } = string.Empty;
-        public uint TerritoryId { get; set; }
-        public string TerritoryName { get; set; } = string.Empty;
-        public uint MapId { get; set; }
-        public double MapX { get; set; }
-        public double MapY { get; set; }
-        public double MapZ { get; set; }
-        public float WorldX { get; set; }
-        public float WorldY { get; set; }
-        public float WorldZ { get; set; }
-        public string Role { get; set; } = string.Empty;
-
-        public override string ToString()
-        {
-            return $"{NpcName} ({Role}) - {TerritoryName} ({MapX:F1}, {MapY:F1})";
-        }
+        // This conflicts with Amaurot.Services.Entities.QuestNpcInfo
+        // Remove this entire class definition
     }
-
-    public class BNpcInfo
-    {
-        public uint BNpcNameId { get; set; }
-        public string BNpcName { get; set; } = string.Empty;
-        public uint BNpcBaseId { get; set; }
-        public string Title { get; set; } = string.Empty;
-        public uint TribeId { get; set; }
-        public string TribeName { get; set; } = string.Empty;
-
-        public override string ToString()
-        {
-            if (!string.IsNullOrEmpty(Title))
-                return $"{BNpcName} - {Title} (Base: {BNpcBaseId})";
-            else
-                return $"{BNpcName} (Base: {BNpcBaseId})";
-        }
-    }
-
-    public class EventInfo
-    {
-        public uint Id { get; set; }
-        public string Name { get; set; } = string.Empty;
-        public uint EventId { get; set; }
-        public string EventType { get; set; } = string.Empty;
-        public string Description { get; set; } = string.Empty;
-        public uint TerritoryId { get; set; }
-        public string TerritoryName { get; set; } = string.Empty;
-
-        public override string ToString()
-        {
-            return $"{EventId} - {Name}";
-        }
-    }
-
-    public class FateInfo
-    {
-        public uint Id { get; set; }
-        public string Name { get; set; } = string.Empty;
-        public uint FateId { get; set; }
-        public string Description { get; set; } = string.Empty;
-        public uint Level { get; set; }
-        public uint ClassJobLevel { get; set; }
-        public uint TerritoryId { get; set; }
-        public string TerritoryName { get; set; } = string.Empty;
-        public uint IconId { get; set; }
-        public double X { get; set; }
-        public double Y { get; set; }
-        public double Z { get; set; }
-
-        public override string ToString()
-        {
-            return $"{FateId} - {Name} (Lv.{Level})";
-        }
-    }
+    */
 
     public static class MapMarkerHelper
     {

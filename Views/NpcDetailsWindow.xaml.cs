@@ -5,6 +5,9 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using Amaurot.Services;
+using NpcInfo = Amaurot.Services.Entities.NpcInfo;
+using NpcQuestInfo = Amaurot.Services.Entities.NpcQuestInfo;
+using TerritoryInfo = Amaurot.Services.Entities.TerritoryInfo;
 
 namespace Amaurot
 {

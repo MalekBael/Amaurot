@@ -1,140 +1,85 @@
-﻿using Bitmap = System.Drawing.Bitmap;
-using Amaurot.Services;
-using SaintCoinach.Ex;
-using SaintCoinach.Xiv.Items;
-using SaintCoinach.Xiv;
-using SaintCoinach;
+﻿using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
-using System.Drawing.Imaging;
-using System.Drawing;
 using System.IO;
 using System.Linq;
-using System.Reflection;
 using System.Threading.Tasks;
+using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
-using System.Windows.Media.Imaging;
 using System.Windows.Media;
-using System.Windows;
-using System;
-using WfColor = System.Windows.Media.Color;
-using WinForms = System.Windows.Forms;
-using WpfApplication = System.Windows.Application;
-using WpfButton = System.Windows.Controls.Button;
-using WpfImage = System.Windows.Controls.Image;
-using WpfMessageBox = System.Windows.MessageBox;
-using WpfPanel = System.Windows.Controls.Panel;
-using WpfSaveFileDialog = Microsoft.Win32.SaveFileDialog;
-using WpfCheckBox = System.Windows.Controls.CheckBox;
-using WpfTextBox = System.Windows.Controls.TextBox;
-using WpfListBox = System.Windows.Controls.ListBox;
+using System.Windows.Media.Imaging;
 using System.Windows.Threading;
+using Amaurot.Services;
+using SaintCoinach;
+using SaintCoinach.Ex;
+using Microsoft.Win32;
+using System.Threading;
+
+using TerritoryInfo = Amaurot.Services.Entities.TerritoryInfo;
+using QuestInfo = Amaurot.Services.Entities.QuestInfo;
+using EntityNpcInfo = Amaurot.Services.Entities.NpcInfo;
+using BNpcInfo = Amaurot.Services.Entities.BNpcInfo;
+using FateInfo = Amaurot.Services.Entities.FateInfo;
+using ServiceNpcInfo = Amaurot.Services.NpcInfo;
+using ServiceNpcQuestInfo = Amaurot.Services.NpcQuestInfo;
+using EntityNpcQuestInfo = Amaurot.Services.Entities.NpcQuestInfo;
 
 namespace Amaurot
 {
     public partial class MainWindow : Window
     {
-        // ✅ ADD: Flag to prevent layout thrashing during data loading
-        private bool _isLoadingData = false;
+        #region Fields
+
+        private readonly ServiceContainer _services = new();
+        private readonly EntityCollectionManager _entities = new();
+        private readonly MapStateManager _mapState = new();
+        private readonly ProgressManager _progressManager;
 
         private ARealmReversed? _realm;
-        private bool _hideDuplicateTerritories = false;
-        private bool _isDragging = false;
-        private DataLoaderService? _dataLoaderService;
-        private DebugHelper? _debugHelper;
-        private double _currentScale = 1.0;
-        private List<MapMarker> _allNpcMarkers = new List<MapMarker>();
-        private List<MapMarker> _allQuestMarkers = new List<MapMarker>();
-        private List<MapMarker> _currentMapMarkers = [];
-        private List<NpcInfo> _allNpcs = new List<NpcInfo>();
-        private List<NpcInfo> _filteredNpcs = new List<NpcInfo>();
-        private MapInteractionService? _mapInteractionService;
-        private MapRenderer? _mapRenderer;
-        private MapService? _mapService;
-        private NpcService? _npcService;
-        private QuestLocationService? _questLocationService;
-        private QuestMarkerService? _questMarkerService;
-        private readonly ObservableCollection<NpcInfo> _filteredNpcsCollection = [];
-        public ObservableCollection<NpcInfo> FilteredNpcs => _filteredNpcsCollection;
-        private readonly ObservableCollection<BNpcInfo> _filteredBNpcs = [];
-        private readonly ObservableCollection<EventInfo> _filteredEvents = [];
-        private readonly ObservableCollection<FateInfo> _filteredFates = [];
-        private readonly ObservableCollection<QuestInfo> _filteredQuests = [];
-        private readonly ObservableCollection<TerritoryInfo> _filteredTerritories = [];
-        private SaintCoinach.Xiv.Map? _currentMap;
-        private SearchFilterService? _searchFilterService;
-        private SettingsService? _settingsService;
-        private System.Diagnostics.Process? _questExtractionProcess;
-        private System.Threading.CancellationTokenSource? _extractionCancellationSource;
-        private System.Windows.Point _lastMousePosition;
-        private System.Windows.Threading.DispatcherTimer? _searchDebounceTimer;
-        private TerritoryInfo? _currentTerritory;
-        private UIUpdateService? _uiUpdateService;
-        public double CurrentScale => _currentScale;
-        public ObservableCollection<BNpcInfo> BNpcs { get; set; } = [];
-        public ObservableCollection<BNpcInfo> FilteredBNpcs => _filteredBNpcs;
-        public ObservableCollection<EventInfo> Events { get; set; } = [];
-        public ObservableCollection<FateInfo> Fates { get; set; } = [];
-        public ObservableCollection<FateInfo> FilteredFates => _filteredFates;
-        public ObservableCollection<QuestInfo> FilteredQuests => _filteredQuests;
-        public ObservableCollection<QuestInfo> Quests { get; set; } = [];
-        public ObservableCollection<TerritoryInfo> FilteredTerritories => _filteredTerritories;
-        public ObservableCollection<TerritoryInfo> Territories { get; set; } = [];
+        private bool _isLoadingData;
+        private DispatcherTimer? _searchDebounceTimer;
 
-        private QuestScriptService? _questScriptService;
+        #endregion Fields
+
+        #region Properties
+
+        public ObservableCollection<TerritoryInfo> Territories => _entities.Territories;
+        public ObservableCollection<QuestInfo> Quests => _entities.Quests;
+        public ObservableCollection<EntityNpcInfo> FilteredNpcs => _entities.FilteredNpcs;
+        public ObservableCollection<BNpcInfo> BNpcs => _entities.BNpcs;
+        public ObservableCollection<FateInfo> Fates => _entities.Fates;
+        public ObservableCollection<TerritoryInfo> FilteredTerritories => _entities.FilteredTerritories;
+        public ObservableCollection<QuestInfo> FilteredQuests => _entities.FilteredQuests;
+        public ObservableCollection<BNpcInfo> FilteredBNpcs => _entities.FilteredBNpcs;
+        public ObservableCollection<FateInfo> FilteredFates => _entities.FilteredFates;
+        public double CurrentScale => _mapState.CurrentScale;
+
+        #endregion Properties
 
         public MainWindow()
         {
             InitializeComponent();
             DataContext = this;
-
-            _settingsService = new SettingsService();
-
+            _progressManager = new ProgressManager(this);
             InitializeServices();
-            this.Loaded += MainWindow_Loaded;
+            Loaded += OnWindowLoaded;
         }
 
-        private List<MapMarker> CreateNpcMarkers(uint mapId)
-        {
-            var npcMarkers = new List<MapMarker>();
-
-            var npcsForMap = _allNpcs.Where(npc => npc.MapId == mapId && npc.QuestCount > 0).ToList();
-
-            foreach (var npc in npcsForMap)
-            {
-                var marker = new MapMarker
-                {
-                    Id = npc.NpcId,
-                    MapId = mapId,
-                    PlaceNameId = 0,
-                    PlaceName = $"{npc.NpcName} ({npc.QuestCount} quest{(npc.QuestCount != 1 ? "s" : "")})",
-                    X = npc.MapX,
-                    Y = npc.MapY,
-                    Z = npc.MapZ,
-                    IconId = 61411,  // Use a generic NPC icon ID, or you could vary by quest type
-                    Type = MarkerType.Npc,
-                    IsVisible = true
-                };
-
-                npcMarkers.Add(marker);
-            }
-
-            LogDebug($"Created {npcMarkers.Count} NPC markers for map {mapId}");
-            return npcMarkers;
-        }
+        #region Initialization
 
         private void InitializeServices()
         {
             try
             {
-                _debugHelper = new DebugHelper(this);
-                _searchFilterService = new SearchFilterService(LogDebug);
-                _mapInteractionService = new MapInteractionService(LogDebug);
-                _uiUpdateService = new UIUpdateService();
-                _mapRenderer = new MapRenderer(_realm);
+                _services.Register(new SettingsService());
+                _services.Register(new DebugHelper(this));
+                _services.Register(new MapRenderer(_realm));
+                _services.Register(new UIUpdateService());
+                _services.Register(new FilterService(LogDebug));  // ✅ Changed from SearchFilterService
+                _services.Register(new MapInteractionService(LogDebug));
 
-                LogDebug("Basic services initialized successfully");
+                LogDebug("Services initialized successfully");
             }
             catch (Exception ex)
             {
@@ -142,556 +87,41 @@ namespace Amaurot
             }
         }
 
-        private void Exit_Click(object sender, RoutedEventArgs e)
-        {
-            try
-            {
-                LogDebug("Application exit requested by user");
-                WpfApplication.Current.Shutdown();
-            }
-            catch (Exception ex)
-            {
-                LogDebug($"Error during application exit: {ex.Message}");
-                // Force exit if normal shutdown fails
-                Environment.Exit(0);
-            }
-        }
-
-        private void OpenSapphireRepo_Click(object sender, RoutedEventArgs e)
-        {
-            try
-            {
-                if (_settingsService != null && _settingsService.IsValidSapphireServerPath())
-                {
-                    _settingsService.OpenSapphireServerPath();
-                    LogDebug("Opened Sapphire Server repository path");
-                }
-                else
-                {
-                    WpfMessageBox.Show("Sapphire Server path is not configured or invalid.\n\nPlease configure it in Settings first.",
-                        "Sapphire Path Not Set", MessageBoxButton.OK, MessageBoxImage.Information);
-
-                    // Open settings to configure the path
-                    OpenSettings_Click(sender, e);
-                }
-            }
-            catch (Exception ex)
-            {
-                LogDebug($"Error opening Sapphire Server repository: {ex.Message}");
-                WpfMessageBox.Show($"Error opening Sapphire Server repository: {ex.Message}",
-                    "Error", MessageBoxButton.OK, MessageBoxImage.Error);
-            }
-        }
-
-        private async void ExtractQuestFiles_Click(object sender, RoutedEventArgs e)
-        {
-            try
-            {
-                ShowProgressOverlay("quest extraction", "Initializing quest extraction...");
-
-                // Check if quest_parse.exe exists
-                var toolsDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Tools");
-                var questParseExe = Path.Combine(toolsDir, "quest_parse.exe");
-
-                if (!File.Exists(questParseExe))
-                {
-                    HideProgressOverlay();
-                    WpfMessageBox.Show($"Quest extraction tool not found at:\n{questParseExe}\n\nPlease ensure the quest_parse.exe is available in the Tools folder.",
-                        "Quest Parse Tool Not Found", MessageBoxButton.OK, MessageBoxImage.Error);
-                    return;
-                }
-
-                // Get the FFXIV game path from settings
-                string? gamePath = _settingsService?.Settings.GameInstallationPath;
-
-                if (string.IsNullOrEmpty(gamePath) || !_settingsService.IsValidGamePath())
-                {
-                    HideProgressOverlay();
-                    WpfMessageBox.Show("FFXIV game path is not configured or invalid.\n\nPlease configure it in Settings first.",
-                        "Game Path Not Set", MessageBoxButton.OK, MessageBoxImage.Information);
-
-                    // Open settings to configure the path
-                    OpenSettings_Click(sender, e);
-                    return;
-                }
-
-                var sqpackPath = Path.Combine(gamePath, "game", "sqpack");
-                if (!Directory.Exists(sqpackPath))
-                {
-                    HideProgressOverlay();
-                    WpfMessageBox.Show($"FFXIV sqpack directory not found at:\n{sqpackPath}\n\nPlease verify your game installation path.",
-                        "Sqpack Directory Not Found", MessageBoxButton.OK, MessageBoxImage.Error);
-                    return;
-                }
-
-                LogDebug($"Starting quest file extraction from: {sqpackPath}");
-                await RunQuestParseToolWithProgressAsync(questParseExe, sqpackPath);
-            }
-            catch (Exception ex)
-            {
-                HideProgressOverlay();
-                LogDebug($"Error in quest file extraction: {ex.Message}");
-                WpfMessageBox.Show($"Error in quest file extraction: {ex.Message}",
-                    "Error", MessageBoxButton.OK, MessageBoxImage.Error);
-            }
-        }
-
-        private void QuestList_SelectionChanged(object sender, SelectionChangedEventArgs e)
-        {
-            // This method handles when a quest is selected in the quest list
-            // We don't need to do anything special here as double-click handles quest details
-            var questList = this.FindName("QuestList") as WpfListBox;
-            if (questList?.SelectedItem is QuestInfo selectedQuest)
-            {
-                LogDebug($"Quest selected: {selectedQuest.Name} (ID: {selectedQuest.Id})");
-            }
-        }
-
-        private void QuestDetailsButton_Click(object sender, RoutedEventArgs e)
-        {
-            try
-            {
-                // Get the quest from the button's Tag property
-                if (sender is System.Windows.Controls.Button button && button.Tag is QuestInfo selectedQuest)
-                {
-                    LogDebug($"Opening quest details for: {selectedQuest.Name} (ID: {selectedQuest.Id})");
-                    ShowQuestDetails(selectedQuest);
-                }
-                else
-                {
-                    WpfMessageBox.Show("Please select a quest from the list first.",
-                        "No Quest Selected", MessageBoxButton.OK, MessageBoxImage.Information);
-                }
-            }
-            catch (Exception ex)
-            {
-                LogDebug($"Error opening quest details: {ex.Message}");
-                WpfMessageBox.Show($"Error opening quest details: {ex.Message}",
-                    "Error", MessageBoxButton.OK, MessageBoxImage.Error);
-            }
-        }
-
-        private void ShowNpcMarkersCheckBox_Checked(object sender, RoutedEventArgs e)
-        {
-            ToggleNpcMarkers(true);
-        }
-
-        private void ShowNpcMarkersCheckBox_Unchecked(object sender, RoutedEventArgs e)
-        {
-            ToggleNpcMarkers(false);
-        }
-
-        private void ShowQuestDetails(QuestInfo questInfo)
-        {
-            try
-            {
-                var questDetailsWindow = new QuestDetailsWindow(questInfo, this, _questScriptService);
-                questDetailsWindow.Show();
-                LogDebug($"Opened quest details window for: {questInfo.Name}");
-            }
-            catch (Exception ex)
-            {
-                LogDebug($"Error showing quest details: {ex.Message}");
-                WpfMessageBox.Show($"Error showing quest details: {ex.Message}", "Error",
-                    MessageBoxButton.OK, MessageBoxImage.Error);
-            }
-        }
-
-        private void NpcList_SelectionChanged(object sender, SelectionChangedEventArgs e)
-        {
-            // Handle NPC selection if needed
-            if (sender is WpfListBox npcListBox && npcListBox.SelectedItem is NpcInfo selectedNpc)
-            {
-                LogDebug($"NPC selected: {selectedNpc.NpcName} (ID: {selectedNpc.NpcId})");
-            }
-        }
-
-        private void NpcList_MouseDoubleClick(object sender, MouseButtonEventArgs e)
-        {
-            try
-            {
-                if (sender is WpfListBox npcListBox && npcListBox.SelectedItem is NpcInfo selectedNpc)
-                {
-                    LogDebug($"Double-clicked NPC: {selectedNpc.NpcName} (ID: {selectedNpc.NpcId})");
-
-                    // If the NPC has quests, show the quest popup
-                    if (selectedNpc.QuestCount > 0)
-                    {
-                        var questPopup = new NpcQuestPopupWindow(selectedNpc, this);
-                        questPopup.Show();
-                        LogDebug($"Opened quest popup for NPC: {selectedNpc.NpcName} ({selectedNpc.QuestCount} quests)");
-                    }
-                    else
-                    {
-                        WpfMessageBox.Show($"NPC '{selectedNpc.NpcName}' has no associated quests.",
-                            "No Quests", MessageBoxButton.OK, MessageBoxImage.Information);
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                LogDebug($"Error handling NPC double-click: {ex.Message}");
-                WpfMessageBox.Show($"Error opening NPC details: {ex.Message}",
-                    "Error", MessageBoxButton.OK, MessageBoxImage.Error);
-            }
-        }
-
-        private void BNpcList_SelectionChanged(object sender, SelectionChangedEventArgs e)
-        {
-            // Handle BNpc (Battle NPC/Monster) selection if needed
-            if (sender is WpfListBox bnpcListBox && bnpcListBox.SelectedItem is BNpcInfo selectedBNpc)
-            {
-                LogDebug($"BNpc selected: {selectedBNpc.BNpcName} (ID: {selectedBNpc.BNpcNameId})");
-            }
-        }
-
-        private void FateList_SelectionChanged(object sender, SelectionChangedEventArgs e)
-        {
-            // Handle FATE selection if needed
-            if (sender is WpfListBox fateListBox && fateListBox.SelectedItem is FateInfo selectedFate)
-            {
-                LogDebug($"FATE selected: {selectedFate.Name} (ID: {selectedFate.FateId})");
-            }
-        }
-
-        private void OpenSapphireBuild_Click(object sender, RoutedEventArgs e)
-        {
-            try
-            {
-                if (_settingsService != null && _settingsService.IsValidSapphireBuildPath())
-                {
-                    _settingsService.OpenSapphireBuildPath();
-                    LogDebug("Opened Sapphire Server build path");
-                }
-                else
-                {
-                    WpfMessageBox.Show("Sapphire Server build path is not configured or invalid.\n\nPlease configure it in Settings first.",
-                        "Sapphire Build Path Not Set", MessageBoxButton.OK, MessageBoxImage.Information);
-
-                    // Open settings to configure the path
-                    OpenSettings_Click(sender, e);
-                }
-            }
-            catch (Exception ex)
-            {
-                LogDebug($"Error opening Sapphire Server build path: {ex.Message}");
-                WpfMessageBox.Show($"{ex.Message}",
-                    "Error", MessageBoxButton.OK, MessageBoxImage.Error);
-            }
-        }
-
         private void InitializeRealmDependentServices()
         {
-            try
-            {
-                if (_realm != null)
-                {
-                    _dataLoaderService = new DataLoaderService(_realm, LogDebug);
-                    _questMarkerService = new QuestMarkerService(_realm, LogDebug);
+            if (_realm == null) return;
 
-                    // ✅ ADD: Initialize quest location service
-                    _questLocationService = new QuestLocationService(_realm, LogDebug);
+            _services.Register(new DataLoaderService(_realm, LogDebug));
+            _services.Register(new QuestMarkerService(_realm, LogDebug));
+            _services.Register(new QuestLocationService(_realm, LogDebug));
+            _services.Register(new MapService(_realm, LogDebug));
+            _services.Register(new NpcService(_realm, LogDebug));
+            _services.Register(new QuestScriptService(_services.Get<SettingsService>()!, LogDebug));
 
-                    LogDebug("Realm-dependent services initialized successfully");
-                }
-            }
-            catch (Exception ex)
+            _services.Get<MapRenderer>()?.UpdateRealm(_realm);
+            LogDebug("Realm-dependent services initialized");
+        }
+
+        private async void OnWindowLoaded(object sender, RoutedEventArgs e)
+        {
+            InitializeUI();
+            ApplySavedSettings();
+
+            var settings = _services.Get<SettingsService>();
+            if (settings?.Settings.AutoLoadGameData == true && settings.IsValidGamePath())
             {
-                LogDebug($"Error initializing realm-dependent services: {ex.Message}");
+                LogDebug("Auto-loading game data...");
+                await LoadFFXIVDataAsync(settings.Settings.GameInstallationPath);
             }
         }
 
-        private async void OnDebugModeChanged()
+        private void InitializeUI()
         {
-            await WpfApplication.Current.Dispatcher.InvokeAsync(() =>
+            var renderer = _services.Get<MapRenderer>();
+            if (renderer != null)
             {
-                var questList = this.FindName("QuestList") as WpfListBox;
-                if (questList?.ItemsSource != null)
-                {
-                    var itemsSource = questList.ItemsSource;
-                    questList.ItemsSource = null;
-                    questList.ItemsSource = itemsSource;
-                }
-            });
-        }
-
-        // ✅ FIXED: Updated LGB Parser event handlers with proper type resolution
-        private async void RunLgbParser_Click(object sender, RoutedEventArgs e)
-        {
-            try
-            {
-                // Check if LGB Parser executable exists
-                var toolsDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Tools");
-                var lgbParserExe = Path.Combine(toolsDir, "lgb-parser.exe");
-
-                if (!File.Exists(lgbParserExe))
-                {
-                    WpfMessageBox.Show($"LGB Parser not found at:\n{lgbParserExe}\n\nPlease ensure the LGB-Parser project is built and the executable is copied to the Tools folder.",
-                        "LGB Parser Not Found", MessageBoxButton.OK, MessageBoxImage.Error);
-                    return;
-                }
-
-                // Get the FFXIV game path from settings
-                string? gamePath = _settingsService?.Settings.GameInstallationPath;
-
-                if (string.IsNullOrEmpty(gamePath) || !_settingsService.IsValidGamePath())
-                {
-                    var result = WpfMessageBox.Show("FFXIV game path is not configured or invalid.\n\nWould you like to:\n\n" +
-                                                   "Yes - Open LGB Parser in standalone console window\n" +
-                                                   "No - Configure game path first\n" +
-                                                   "Cancel - Exit",
-                        "Game Path Not Set", MessageBoxButton.YesNoCancel, MessageBoxImage.Question);
-
-                    switch (result)
-                    {
-                        case MessageBoxResult.Yes:
-                            // Open LGB Parser in standalone console window
-                            OpenLgbParserInConsole(lgbParserExe, new string[0]);
-                            return;
-
-                        case MessageBoxResult.No:
-                            // Open settings
-                            OpenSettings_Click(sender, e);
-                            return;
-
-                        default:
-                            return;
-                    }
-                }
-
-                // ✅ UPDATED: Modified options dialog to include batch parsing
-                var optionsResult = WpfMessageBox.Show($"LGB Parser Options:\n\n" +
-                                                     $"Yes - Parse all LGB files from client (batch mode)\n" +
-                                                     $"No - List available zones\n" +
-                                                     $"Cancel - Show help\n\n" +
-                                                     $"Game Path: {gamePath}",
-                                                     "LGB Parser", MessageBoxButton.YesNoCancel, MessageBoxImage.Question);
-
-                switch (optionsResult)
-                {
-                    case MessageBoxResult.Yes:
-                        // ✅ NEW: Parse all LGB files using batch command
-                        await RunLgbParserBatchModeAsync(lgbParserExe, gamePath);
-                        break;
-
-                    case MessageBoxResult.No:
-                        // List available zones in console
-                        OpenLgbParserInConsole(lgbParserExe, new[] { "--game", gamePath, "--list-zones" });
-                        break;
-
-                    default:
-                        // Show help in console
-                        OpenLgbParserInConsole(lgbParserExe, new string[0]);
-                        break;
-                }
-            }
-            catch (Exception ex)
-            {
-                LogDebug($"Error running LGB Parser: {ex.Message}");
-                WpfMessageBox.Show($"Failed to run LGB Parser:\n\n{ex.Message}",
-                    "Error", MessageBoxButton.OK, MessageBoxImage.Error);
-            }
-        }
-
-        // ✅ ADD: Missing OpenLgbParserInConsole method
-        private void OpenLgbParserInConsole(string lgbParserExe, string[] arguments)
-        {
-            try
-            {
-                LogDebug($"Opening LGB Parser in console window: {lgbParserExe}");
-                LogDebug($"Arguments: {string.Join(" ", arguments.Select(a => $"\"{a}\""))}");
-
-                var processInfo = new System.Diagnostics.ProcessStartInfo
-                {
-                    FileName = "cmd.exe",
-                    Arguments = $"/k \"\"{lgbParserExe}\" {string.Join(" ", arguments.Select(a => $"\"{a}\""))}\"",
-                    WorkingDirectory = Path.GetDirectoryName(lgbParserExe),
-                    UseShellExecute = true, // ✅ This allows the console window to stay open
-                    CreateNoWindow = false  // ✅ Show the console window
-                };
-
-                System.Diagnostics.Process.Start(processInfo);
-
-                StatusText.Text = "LGB Parser opened in console window";
-                LogDebug("LGB Parser console window opened successfully");
-            }
-            catch (Exception ex)
-            {
-                LogDebug($"Error opening LGB Parser console: {ex.Message}");
-                WpfMessageBox.Show($"Failed to open LGB Parser console:\n\n{ex.Message}",
-                    "Error", MessageBoxButton.OK, MessageBoxImage.Error);
-            }
-        }
-
-        private async Task RunLgbParserBatchModeAsync(string lgbParserExe, string gamePath)
-        {
-            try
-            {
-                ShowProgressOverlay("LGB parsing", "Starting LGB Parser in batch mode...");
-
-                var arguments = new[] { "--game", gamePath, "--batch" };
-
-                await RunLgbParserProcessAsync(lgbParserExe, arguments);
-
-                HideProgressOverlay();
-                StatusText.Text = "LGB Parser batch mode completed";
-            }
-            catch (Exception ex)
-            {
-                HideProgressOverlay();
-                LogDebug($"Error in LGB Parser batch mode: {ex.Message}");
-                WpfMessageBox.Show($"Error running LGB Parser batch mode: {ex.Message}",
-                    "Error", MessageBoxButton.OK, MessageBoxImage.Error);
-            }
-        }
-
-        // ✅ FIXED: Updated method with better console handling (make it synchronous to avoid ENC0085 error)
-        private async Task RunLgbParserProcessAsync(string lgbParserExe, string[] arguments)
-        {
-            try
-            {
-                LogDebug($"Starting LGB Parser: {lgbParserExe}");
-                LogDebug($"Arguments: {string.Join(" ", arguments.Select(a => $"\"{a}\""))}");
-
-                // If no arguments, open in console window instead
-                if (arguments.Length == 0)
-                {
-                    OpenLgbParserInConsole(lgbParserExe, arguments);
-                    return;
-                }
-
-                var processInfo = new System.Diagnostics.ProcessStartInfo
-                {
-                    FileName = lgbParserExe,
-                    Arguments = string.Join(" ", arguments.Select(a => $"\"{a}\"")),
-                    WorkingDirectory = Path.GetDirectoryName(lgbParserExe),
-                    UseShellExecute = false,
-                    RedirectStandardOutput = true,
-                    RedirectStandardError = true,
-                    CreateNoWindow = true // Keep this for background processing
-                };
-
-                using var process = new System.Diagnostics.Process { StartInfo = processInfo };
-
-                // Capture output for logging
-                var outputLines = new List<string>();
-                var errorLines = new List<string>();
-
-                process.OutputDataReceived += (sender, e) =>
-                {
-                    if (!string.IsNullOrEmpty(e.Data))
-                    {
-                        outputLines.Add(e.Data);
-                        WpfApplication.Current.Dispatcher.InvokeAsync(() =>
-                            LogDebug($"[LGB Parser] {e.Data}"));
-                    }
-                };
-
-                process.ErrorDataReceived += (sender, e) =>
-                {
-                    if (!string.IsNullOrEmpty(e.Data))
-                    {
-                        errorLines.Add(e.Data);
-                        WpfApplication.Current.Dispatcher.InvokeAsync(() =>
-                            LogDebug($"[LGB Parser Error] {e.Data}"));
-                    }
-                };
-
-                process.Start();
-                process.BeginOutputReadLine();
-                process.BeginErrorReadLine();
-
-                // Wait for completion
-                await Task.Run(() => process.WaitForExit());
-
-                WpfApplication.Current.Dispatcher.Invoke(() =>
-                {
-                    if (process.ExitCode == 0)
-                    {
-                        LogDebug("LGB Parser completed successfully");
-                        StatusText.Text = $"LGB Parser completed successfully - {outputLines.Count} lines of output";
-
-                        // ✅ For commands that produce a lot of output, show results in a window
-                        if (outputLines.Count > 50)
-                        {
-                            ShowLgbParserResults(outputLines, arguments);
-                        }
-                    }
-                    else
-                    {
-                        LogDebug($"LGB Parser exited with code: {process.ExitCode}");
-                        StatusText.Text = $"LGB Parser exited with code: {process.ExitCode}";
-
-                        if (errorLines.Count > 0)
-                        {
-                            var errorMessage = string.Join("\n", errorLines.Take(10));
-                            WpfMessageBox.Show($"LGB Parser errors:\n\n{errorMessage}",
-                                "LGB Parser Error", MessageBoxButton.OK, MessageBoxImage.Warning);
-                        }
-                    }
-                });
-            }
-            catch (Exception ex)
-            {
-                WpfApplication.Current.Dispatcher.Invoke(() =>
-                {
-                    LogDebug($"Exception during LGB Parser execution: {ex.Message}");
-                    StatusText.Text = "LGB Parser execution failed";
-                    WpfMessageBox.Show($"An error occurred running LGB Parser:\n\n{ex.Message}",
-                        "LGB Parser Error", MessageBoxButton.OK, MessageBoxImage.Error);
-                });
-            }
-        }
-
-        private void ShowLgbParserResults(List<string> outputLines, string[] arguments)
-        {
-            try
-            {
-                var resultsWindow = new Window
-                {
-                    Title = $"LGB Parser Results - {string.Join(" ", arguments)}",
-                    Width = 800,
-                    Height = 600,
-                    Owner = this,
-                    WindowStartupLocation = WindowStartupLocation.CenterOwner
-                };
-
-                var scrollViewer = new ScrollViewer
-                {
-                    VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-                    HorizontalScrollBarVisibility = ScrollBarVisibility.Auto
-                };
-
-                var textBox = new WpfTextBox
-                {
-                    Text = string.Join("\n", outputLines),
-                    IsReadOnly = true,
-                    FontFamily = new System.Windows.Media.FontFamily("Consolas"),
-                    FontSize = 12,
-                    TextWrapping = TextWrapping.NoWrap,
-                    AcceptsReturn = true,
-                    VerticalAlignment = VerticalAlignment.Stretch,
-                    HorizontalAlignment = System.Windows.HorizontalAlignment.Stretch // ✅ FIXED: Fully qualified namespace
-                };
-
-                scrollViewer.Content = textBox;
-                resultsWindow.Content = scrollViewer;
-
-                resultsWindow.Show();
-            }
-            catch (Exception ex)
-            {
-                LogDebug($"Error showing LGB Parser results: {ex.Message}");
-            }
-        }
-
-        private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
-        {
-            if (_mapRenderer != null)
-            {
-                _mapRenderer.SetOverlayCanvas(OverlayCanvas);
-                _mapRenderer.SetMainWindow(this);
-                LogDebug("OverlayCanvas from XAML is now set in MapRenderer.");
+                renderer.SetOverlayCanvas(OverlayCanvas);
+                renderer.SetMainWindow(this);
             }
 
             if (OverlayCanvas != null)
@@ -705,49 +135,30 @@ namespace Amaurot
                 CalculateAndApplyInitialScale(bitmapSource);
             }
 
-            ApplySavedSettings();
-
-            // Add this line to set initial panel visibility
             UpdatePanelAreaVisibility();
-
-            // ✅ ADD: Initialize the dynamic panel layout
             InitializeDynamicPanelLayout();
 
-            if (_settingsService?.Settings.AutoLoadGameData == true && _settingsService.IsValidGamePath())
-            {
-                LogDebug("Auto-loading game data from saved path...");
-                await LoadFFXIVDataAsync(_settingsService.Settings.GameInstallationPath);
-            }
-
-            // CHANGED: Connect NPC marker checkbox events instead of quest markers
             if (ShowNpcMarkersCheckBox != null)
             {
-                ShowNpcMarkersCheckBox.Checked += ShowNpcMarkersCheckBox_Checked;
-                ShowNpcMarkersCheckBox.Unchecked += ShowNpcMarkersCheckBox_Unchecked;
-                ShowNpcMarkersCheckBox.IsChecked = true; // Default to showing NPC markers
-                LogDebug("NPC marker checkbox events connected and set to checked");
+                ShowNpcMarkersCheckBox.IsChecked = true;
             }
         }
 
         private void ApplySavedSettings()
         {
-            if (_settingsService == null) return;
-
-            var settings = _settingsService.Settings;
+            var settings = _services.Get<SettingsService>()?.Settings;
+            if (settings == null) return;
 
             if (DebugModeCheckBox != null)
             {
                 DebugModeCheckBox.IsChecked = settings.DebugMode;
-
                 DebugModeManager.IsDebugModeEnabled = settings.DebugMode;
-
-                _mapService?.SetVerboseDebugMode(settings.DebugMode);
             }
 
             if (HideDuplicateTerritoriesCheckBox != null)
             {
                 HideDuplicateTerritoriesCheckBox.IsChecked = settings.HideDuplicateTerritories;
-                _hideDuplicateTerritories = settings.HideDuplicateTerritories;
+                _mapState.HideDuplicateTerritories = settings.HideDuplicateTerritories;
             }
 
             if (AutoLoadMenuItem != null)
@@ -755,54 +166,431 @@ namespace Amaurot
                 AutoLoadMenuItem.IsChecked = settings.AutoLoadGameData;
             }
 
-            LogDebug($"Applied saved settings - Auto-load: {settings.AutoLoadGameData}, Debug: {settings.DebugMode}");
+            LogDebug($"Settings applied - Auto-load: {settings.AutoLoadGameData}, Debug: {settings.DebugMode}");
         }
 
-        private void OpenSettings_Click(object sender, RoutedEventArgs e)
+        #endregion Initialization
+
+        #region Data Loading
+
+        private async void LoadGameData_Click(object sender, RoutedEventArgs e)
+        {
+            var dialog = new System.Windows.Forms.FolderBrowserDialog
+            {
+                Description = "Select FFXIV game installation folder",
+                UseDescriptionForTitle = true,
+                SelectedPath = _services.Get<SettingsService>()?.Settings.GameInstallationPath ?? ""
+            };
+
+            if (dialog.ShowDialog() == System.Windows.Forms.DialogResult.OK)
+            {
+                _services.Get<SettingsService>()?.UpdateGamePath(dialog.SelectedPath);
+                await LoadFFXIVDataAsync(dialog.SelectedPath);
+            }
+        }
+
+        private async Task LoadFFXIVDataAsync(string gameDirectory)
         {
             try
             {
-                if (_settingsService != null)
-                {
-                    var settingsWindow = new SettingsWindow(_settingsService, LogDebug)
-                    {
-                        Owner = this
-                    };
+                _isLoadingData = true;
+                StatusText.Text = "Loading FFXIV data...";
 
-                    if (settingsWindow.ShowDialog() == true)
-                    {
-                        ApplySavedSettings();
-                        LogDebug("Settings updated and applied");
-                    }
+                if (!ValidateGameDirectory(gameDirectory))
+                {
+                    System.Windows.MessageBox.Show(
+                        "Invalid FFXIV installation folder.\nPlease select the folder containing 'game' and 'boot' folders.",
+                        "Invalid Directory", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    return;
                 }
+
+                await InitializeRealm(gameDirectory);
+                InitializeRealmDependentServices();
+
+                await LoadAllGameData();
+
+                StatusText.Text = $"Data loaded from: {gameDirectory}";
             }
             catch (Exception ex)
             {
-                LogDebug($"Error opening settings window: {ex.Message}");
-                WpfMessageBox.Show($"Error opening settings: {ex.Message}", "Error",
+                StatusText.Text = $"Error: {ex.Message}";
+                LogDebug($"Error loading data: {ex.Message}\n{ex.StackTrace}");
+                System.Windows.MessageBox.Show($"Failed to load data: {ex.Message}", "Error",
                     MessageBoxButton.OK, MessageBoxImage.Error);
             }
-        }
-
-        private void AutoLoadMenuItem_Changed(object sender, RoutedEventArgs e)
-        {
-            if (_settingsService != null && AutoLoadMenuItem != null)
+            finally
             {
-                _settingsService.UpdateAutoLoad(AutoLoadMenuItem.IsChecked);
-                LogDebug($"Auto-load setting changed to: {AutoLoadMenuItem.IsChecked}");
+                _isLoadingData = false;
+                ReorganizePanels();
             }
         }
 
-        private void MarkerVisibility_Changed(object sender, RoutedEventArgs e)
+        private async Task InitializeRealm(string gameDirectory)
         {
-            if (_mapRenderer == null || _currentMapMarkers == null || _currentMapMarkers.Count == 0)
-                return;
-
-            var visibleMarkers = new List<MapMarker>();
-
-            foreach (var marker in _currentMapMarkers)
+            await Task.Run(() =>
             {
-                bool shouldShow = marker.Type switch
+                _realm = new ARealmReversed(gameDirectory, SaintCoinach.Ex.Language.English);
+            });
+
+            _services.Get<MapRenderer>()?.UpdateRealm(_realm);
+            LogDebug($"Realm initialized: {_realm != null}");
+        }
+
+        private async Task LoadAllGameData()
+        {
+            var dataLoader = _services.Get<DataLoaderService>();
+            if (dataLoader == null) return;
+
+            await LoadEntityData<TerritoryInfo>(
+                () => dataLoader.LoadTerritoriesAsync(),
+                _entities.Territories,
+                _entities.FilteredTerritories,
+                "Loading territories...");
+
+            await LoadEntityData<QuestInfo>(
+                () => dataLoader.LoadQuestsAsync(),
+                _entities.Quests,
+                _entities.FilteredQuests,
+                "Loading quests...");
+
+            await LoadEntityData<BNpcInfo>(
+                () => dataLoader.LoadBNpcsAsync(),
+                _entities.BNpcs,
+                _entities.FilteredBNpcs,
+                "Loading NPCs...");
+
+            await LoadEntityData<FateInfo>(
+                () => dataLoader.LoadFatesAsync(),
+                _entities.Fates,
+                _entities.FilteredFates,
+                "Loading fates...");
+
+            await LoadNpcsAsync();
+
+            StatusText.Text = "Extracting quest markers...";
+            var questMarkers = await _services.Get<QuestMarkerService>()?.ExtractAllQuestMarkersAsync();
+            if (questMarkers != null)
+            {
+                _mapState.AllQuestMarkers.AddRange(questMarkers);
+                LogDebug($"Extracted {questMarkers.Count} quest markers");
+            }
+
+            StatusText.Text = "Loading quest locations...";
+            await dataLoader.LoadQuestLocationsAsync(_entities.Quests.ToList());
+
+            if (_entities.Territories.Count > 0)
+            {
+                ApplyTerritoryFilters();
+            }
+        }
+
+        private async Task LoadEntityData<T>(
+            Func<Task<List<T>>> loadFunc,
+            ObservableCollection<T> sourceCollection,
+            ObservableCollection<T> filteredCollection,
+            string statusMessage) where T : class
+        {
+            StatusText.Text = statusMessage;
+
+            try
+            {
+                var data = await loadFunc();
+
+                await Dispatcher.InvokeAsync(() =>
+                {
+                    sourceCollection.Clear();
+                    filteredCollection.Clear();
+
+                    foreach (var item in data)
+                    {
+                        sourceCollection.Add(item);
+                        filteredCollection.Add(item);
+                    }
+
+                    UpdateEntityCount<T>();
+                });
+
+                LogDebug($"Loaded {data.Count} {typeof(T).Name} items");
+            }
+            catch (Exception ex)
+            {
+                LogDebug($"Error loading {typeof(T).Name}: {ex.Message}");
+            }
+        }
+
+        private async Task LoadNpcsAsync()
+        {
+            try
+            {
+                if (_realm == null) return;
+
+                var npcService = _services.Get<NpcService>();
+                if (npcService == null) return;
+
+                LogDebug("Loading NPCs from Saint Coinach...");
+                var npcs = await npcService.ExtractNpcsWithPositionsAsync();
+
+                await Dispatcher.InvokeAsync(() =>
+                {
+                    _entities.AllNpcs.Clear();
+
+                    var entityNpcs = npcs.Select(serviceNpc => new EntityNpcInfo
+                    {
+                        Id = serviceNpc.NpcId,
+                        Name = serviceNpc.NpcName,
+                        NpcName = serviceNpc.NpcName,
+                        MapId = serviceNpc.MapId,
+                        MapX = serviceNpc.MapX,
+                        MapY = serviceNpc.MapY,
+                        MapZ = serviceNpc.MapZ,
+                        TerritoryId = serviceNpc.TerritoryId,
+                        TerritoryName = serviceNpc.TerritoryName,
+                        WorldX = serviceNpc.WorldX,
+                        WorldY = serviceNpc.WorldY,
+                        WorldZ = serviceNpc.WorldZ,
+                        QuestCount = serviceNpc.QuestCount,
+                        Quests = serviceNpc.Quests.Select(q => new EntityNpcQuestInfo
+                        {
+                            QuestId = q.QuestId,
+                            QuestName = q.QuestName,
+                            MapId = q.MapId,
+                            TerritoryId = q.TerritoryId,
+                            MapX = q.MapX,
+                            MapY = q.MapY,
+                            MapZ = q.MapZ,
+                            JournalGenre = q.JournalGenre,
+                            LevelRequired = q.LevelRequired,
+                            IsMainScenario = q.IsMainScenario,
+                            IsFeatureQuest = q.IsFeatureQuest,
+                            ExpReward = q.ExpReward,
+                            GilReward = q.GilReward,
+                            PlaceNameId = q.PlaceNameId,
+                            PlaceName = q.PlaceName
+                        }).ToList()
+                    }).ToList();
+
+                    _entities.AllNpcs.AddRange(entityNpcs);
+                    _entities.FilteredNpcs.Clear();
+
+                    foreach (var npc in entityNpcs)
+                    {
+                        _entities.FilteredNpcs.Add(npc);
+                    }
+
+                    UpdateEntityCount<EntityNpcInfo>();
+                });
+
+                LogDebug($"Loaded {npcs.Count} NPCs");
+            }
+            catch (Exception ex)
+            {
+                LogDebug($"Error loading NPCs: {ex.Message}");
+            }
+        }
+
+        #endregion Data Loading
+
+        #region Map Operations
+
+        private async void TerritoryList_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (TerritoryList.SelectedItem is TerritoryInfo territory)
+            {
+                try
+                {
+                    StatusText.Text = $"Loading map for {territory.PlaceName}...";
+                    bool success = await LoadTerritoryMapAsync(territory);
+
+                    if (!success)
+                    {
+                        StatusText.Text = $"Failed to load map for {territory.PlaceName}";
+                    }
+                }
+                catch (Exception ex)
+                {
+                    LogDebug($"Error loading territory: {ex.Message}");
+                    StatusText.Text = "Error loading territory map";
+                }
+            }
+
+            if (_entities.AllNpcs.Count > 0 && TerritoryList.SelectedItem != null)
+            {
+                FilterNpcs();
+            }
+        }
+
+        private async Task<bool> LoadTerritoryMapAsync(TerritoryInfo territory)
+        {
+            try
+            {
+                _mapState.CurrentTerritory = territory;
+                _mapState.CurrentMap = null;
+
+                UpdateMapInfo(territory);
+                MapImageControl.Source = null;
+                _services.Get<MapRenderer>()?.ClearMarkers();
+
+                if (_realm == null)
+                {
+                    StatusText.Text = "Game data not loaded.";
+                    return false;
+                }
+
+                var map = await LoadMapData(territory);
+                if (map == null) return false;
+
+                _mapState.CurrentMap = map;
+
+                var mapImage = await LoadMapImage(map);
+                if (mapImage == null) return false;
+
+                await DisplayMap(mapImage, territory);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                MapInfoText.Text = $"Error: {ex.Message}";
+                LogDebug($"Error loading map: {ex.Message}\n{ex.StackTrace}");
+                return false;
+            }
+        }
+
+        private void UpdateMapInfo(TerritoryInfo territory)
+        {
+            MapInfoText.Text = $"""
+                Region: {territory.Region}
+                Place Name: {territory.PlaceName}
+                Territory ID: {territory.Id}
+                Territory Name ID: {territory.TerritoryNameId}
+                Map ID: {territory.MapId}
+                """;
+        }
+
+        private async Task<SaintCoinach.Xiv.Map?> LoadMapData(TerritoryInfo territory)
+        {
+            return await Task.Run(() =>
+            {
+                var mapSheet = _realm?.GameData.GetSheet<SaintCoinach.Xiv.Map>();
+                return mapSheet?.FirstOrDefault(m => m.Key == territory.MapId);
+            });
+        }
+
+        private async Task<System.Drawing.Image?> LoadMapImage(SaintCoinach.Xiv.Map map)
+        {
+            return await Task.Run(() =>
+            {
+                var image = map.MediumImage;
+                if (image == null)
+                {
+                    LogDebug($"Failed to load map image for Map ID: {map.Key}");
+                }
+                return image;
+            });
+        }
+
+        private async Task DisplayMap(System.Drawing.Image mapImage, TerritoryInfo territory)
+        {
+            using var bitmap = new System.Drawing.Bitmap(mapImage);
+            var handle = bitmap.GetHbitmap();
+
+            try
+            {
+                var bitmapSource = System.Windows.Interop.Imaging.CreateBitmapSourceFromHBitmap(
+                    handle, IntPtr.Zero, Int32Rect.Empty, BitmapSizeOptions.FromEmptyOptions());
+
+                MapImageControl.Source = bitmapSource;
+
+                if (!MapCanvas.Children.Contains(MapImageControl))
+                {
+                    MapCanvas.Children.Insert(0, MapImageControl);
+                }
+
+                CalculateAndApplyInitialScale(bitmapSource);
+                MapPlaceholderText.Visibility = Visibility.Collapsed;
+
+                await LoadMapMarkers(territory);
+            }
+            finally
+            {
+                DeleteObject(handle);
+            }
+        }
+
+        private async Task LoadMapMarkers(TerritoryInfo territory)
+        {
+            StatusText.Text = $"Loading markers for {territory.PlaceName}...";
+
+            var mapService = _services.Get<MapService>();
+            var originalMarkers = await Task.Run(() =>
+                mapService?.LoadMapMarkers(territory.MapId) ?? new List<MapMarker>());
+
+            var npcMarkers = CreateNpcMarkers(territory.MapId);
+
+            _mapState.CurrentMapMarkers.Clear();
+            _mapState.CurrentMapMarkers.AddRange(originalMarkers);
+            _mapState.CurrentMapMarkers.AddRange(npcMarkers);
+
+            LogDebug($"Loaded {_mapState.CurrentMapMarkers.Count} markers " +
+                     $"({originalMarkers.Count} original, {npcMarkers.Count} NPC)");
+
+            RefreshMarkerDisplay();
+
+            StatusText.Text = $"Map loaded for '{territory.PlaceName}' - " +
+                              $"{_mapState.CurrentMapMarkers.Count} markers found";
+        }
+
+        private List<MapMarker> CreateNpcMarkers(uint mapId)
+        {
+            var markers = new List<MapMarker>();
+            var npcsForMap = _entities.AllNpcs.Where(npc =>
+                npc.MapId == mapId && npc.QuestCount > 0).ToList();
+
+            foreach (var npc in npcsForMap)
+            {
+                markers.Add(new MapMarker
+                {
+                    Id = npc.NpcId,
+                    MapId = mapId,
+                    PlaceNameId = 0,
+                    PlaceName = $"{npc.NpcName} ({npc.QuestCount} quest{(npc.QuestCount != 1 ? "s" : "")})",
+                    X = npc.MapX,
+                    Y = npc.MapY,
+                    Z = npc.MapZ,
+                    IconId = 61411,
+                    Type = MarkerType.Npc,
+                    IsVisible = true
+                });
+            }
+
+            LogDebug($"Created {markers.Count} NPC markers for map {mapId}");
+            return markers;
+        }
+
+        private void RefreshMarkerDisplay()
+        {
+            var visibleMarkers = GetVisibleMarkers();
+
+            if (_mapState.CurrentMap != null && MapImageControl.Source is BitmapSource bitmapSource)
+            {
+                var imageSize = new System.Windows.Size(bitmapSource.PixelWidth, bitmapSource.PixelHeight);
+                var renderer = _services.Get<MapRenderer>();
+
+                renderer?.DisplayMapMarkers(
+                    visibleMarkers,
+                    _mapState.CurrentMap,
+                    _mapState.CurrentScale,
+                    new System.Windows.Point(0, 0),
+                    imageSize);
+
+                SyncOverlayWithMap();
+            }
+        }
+
+        private List<MapMarker> GetVisibleMarkers()
+        {
+            return _mapState.CurrentMapMarkers.Where(marker =>
+            {
+                return marker.Type switch
                 {
                     MarkerType.Aetheryte => ShowAetheryteMarkersCheckBox?.IsChecked == true,
                     MarkerType.Npc => ShowNpcMarkersCheckBox?.IsChecked == true,
@@ -812,827 +600,29 @@ namespace Amaurot
                     MarkerType.Entrance => ShowEntranceMarkersCheckBox?.IsChecked == true,
                     _ => ShowGenericMarkersCheckBox?.IsChecked == true
                 };
-
-                if (shouldShow)
-                {
-                    visibleMarkers.Add(marker);
-                }
-            }
-
-            RefreshMarkersWithFiltered(visibleMarkers);
-
-            LogDebug($"Marker visibility changed - showing {visibleMarkers.Count} of {_currentMapMarkers.Count} total markers");
+            }).ToList();
         }
 
-        private void RefreshMarkersWithFiltered(List<MapMarker> visibleMarkers)
-        {
-            if (_mapRenderer == null || _currentMap == null) return;
+        #endregion Map Operations
 
-            var imagePosition = new System.Windows.Point(0, 0);
-
-            if (MapImageControl.Source is BitmapSource bitmapSource)
-            {
-                var imageSize = new System.Windows.Size(
-                    bitmapSource.PixelWidth,
-                    bitmapSource.PixelHeight
-                );
-
-                _mapRenderer?.DisplayMapMarkers(visibleMarkers, _currentMap, _currentScale, imagePosition, imageSize);
-                SyncOverlayWithMap();
-
-                LogDebug($"Refreshed with {visibleMarkers.Count} filtered markers on map");
-            }
-        }
-
-        private void SyncOverlayWithMap()
-        {
-            if (OverlayCanvas != null && MapImageControl != null)
-            {
-                OverlayCanvas.RenderTransform = MapImageControl.RenderTransform;
-                OverlayCanvas.RenderTransformOrigin = MapImageControl.RenderTransformOrigin;
-                LogDebug("Overlay synchronized with map transform");
-            }
-        }
-
-        private void ShowProgressOverlay(string operationName = "quest extraction", string initialMessage = "Initializing...")
-        {
-            ProgressOverlay.Visibility = Visibility.Visible;
-            ProgressStatusText.Text = initialMessage;
-            QuestExtractionProgressBar.IsIndeterminate = true;
-            CancelExtractionButton.IsEnabled = true;
-
-            var titleText = FindProgressTitleTextBlock(ProgressOverlay);
-            if (titleText != null)
-            {
-                titleText.Text = operationName switch
-                {
-                    "LGB parsing" => "Parsing LGB Files",
-                    "quest extraction" => "Extracting Quest Files",
-                    _ => "Processing Files"
-                };
-                LogDebug($"Updated progress title to: {titleText.Text}");
-            }
-            else
-            {
-                LogDebug("Could not find progress title TextBlock - title will remain as default");
-            }
-
-            _extractionCancellationSource = new System.Threading.CancellationTokenSource();
-
-            LogDebug($"Progress overlay shown for {operationName}");
-        }
-
-        private TextBlock? FindProgressTitleTextBlock(DependencyObject parent)
-        {
-            for (int i = 0; i < VisualTreeHelper.GetChildrenCount(parent); i++)
-            {
-                var child = VisualTreeHelper.GetChild(parent, i);
-
-                if (child is TextBlock textBlock &&
-                    textBlock.FontSize == 18 &&
-                    textBlock.FontWeight == FontWeights.Bold)
-                {
-                    return textBlock;
-                }
-
-                var result = FindProgressTitleTextBlock(child);
-                if (result != null)
-                    return result;
-            }
-            return null;
-        }
-
-        private void HideProgressOverlay()
-        {
-            ProgressOverlay.Visibility = Visibility.Collapsed;
-            _questExtractionProcess = null;
-            _extractionCancellationSource?.Dispose();
-            _extractionCancellationSource = null;
-
-            LogDebug("Progress overlay hidden");
-        }
-
-        private void UpdateProgressStatus(string message)
-        {
-            WpfApplication.Current.Dispatcher.Invoke(() =>
-            {
-                ProgressStatusText.Text = message;
-                StatusText.Text = message;
-                LogDebug($"Progress: {message}");
-            });
-        }
-
-        private void CancelExtraction_Click(object sender, RoutedEventArgs e)
-        {
-            try
-            {
-                LogDebug("User requested cancellation of operation");
-
-                if (_questExtractionProcess != null && !_questExtractionProcess.HasExited)
-                {
-                    _questExtractionProcess.Kill();
-                    LogDebug("Process terminated by user");
-                }
-
-                _extractionCancellationSource?.Cancel();
-
-                HideProgressOverlay();
-                StatusText.Text = "Operation cancelled by user";
-
-                WpfMessageBox.Show("Operation has been cancelled.", "Operation Cancelled",
-                    MessageBoxButton.OK, MessageBoxImage.Information);
-            }
-            catch (Exception ex)
-            {
-                LogDebug($"Error cancelling operation: {ex.Message}");
-                HideProgressOverlay();
-            }
-        }
-
-        private async Task RunQuestParseToolWithProgressAsync(string questParseExe, string sqpackPath)
-        {
-            try
-            {
-                UpdateProgressStatus("Starting quest_parse.exe...");
-                LogDebug($"Starting quest_parse.exe: {questParseExe}");
-                LogDebug($"Arguments: \"{sqpackPath}\"");
-
-                var processInfo = new System.Diagnostics.ProcessStartInfo
-                {
-                    FileName = questParseExe,
-                    Arguments = $"\"{sqpackPath}\"",
-                    WorkingDirectory = Path.GetDirectoryName(questParseExe),
-                    UseShellExecute = false,
-                    RedirectStandardOutput = true,
-                    RedirectStandardError = true,
-                    CreateNoWindow = true
-                };
-
-                _questExtractionProcess = new System.Diagnostics.Process { StartInfo = processInfo };
-
-                bool hasReceivedOutput = false;
-                var startTime = DateTime.Now;
-                int outputLineCount = 0;
-                bool processCompleted = false;
-
-                _questExtractionProcess.Exited += (sender, e) =>
-                {
-                    WpfApplication.Current.Dispatcher.Invoke(() =>
-                    {
-                        LogDebug($"quest_parse.exe process exited with code: {_questExtractionProcess.ExitCode}");
-                        processCompleted = true;
-                    });
-                };
-
-                _questExtractionProcess.EnableRaisingEvents = true;
-
-                _questExtractionProcess.OutputDataReceived += (sender, e) =>
-                {
-                    if (!string.IsNullOrEmpty(e.Data))
-                    {
-                        WpfApplication.Current.Dispatcher.Invoke(() =>
-                        {
-                            hasReceivedOutput = true;
-                            outputLineCount++;
-                            LogDebug($"[quest_parse #{outputLineCount}] {e.Data}");
-
-                            string cleanOutput = e.Data.Trim();
-                            if (!string.IsNullOrEmpty(cleanOutput))
-                            {
-                                if (cleanOutput.Length > 60)
-                                {
-                                    cleanOutput = string.Concat(cleanOutput.AsSpan(0, 57), "...");
-                                }
-                                UpdateProgressStatus($"[{outputLineCount}] {cleanOutput}");
-                            }
-                        });
-                    }
-                };
-
-                _questExtractionProcess.ErrorDataReceived += (sender, e) =>
-                {
-                    if (!string.IsNullOrEmpty(e.Data))
-                    {
-                        WpfApplication.Current.Dispatcher.InvokeAsync(() =>
-                        {
-                            hasReceivedOutput = true;
-                            LogDebug($"[quest_parse ERROR] {e.Data}");
-
-                            string errorMsg = $"Error: {e.Data.Trim()}";
-                            if (errorMsg.Length > 60)
-                            {
-                                errorMsg = string.Concat(errorMsg.AsSpan(0, 57), "...");
-                            }
-                            UpdateProgressStatus(errorMsg);
-                        });
-                    }
-                };
-
-                _questExtractionProcess.Start();
-                _questExtractionProcess.BeginOutputReadLine();
-                _questExtractionProcess.BeginErrorReadLine();
-
-                LogDebug($"Process started. PID: {_questExtractionProcess.Id}");
-                UpdateProgressStatus("Quest extraction started - initializing...");
-
-                await Task.Run(async () =>
-                {
-                    int secondsElapsed = 0;
-
-                    while (!_questExtractionProcess.HasExited)
-                    {
-                        if (_extractionCancellationSource?.Token.IsCancellationRequested == true)
-                        {
-                            LogDebug("Cancellation requested during extraction");
-                            return;
-                        }
-
-                        if (secondsElapsed % 5 == 0)
-                        {
-                            var elapsed = DateTime.Now - startTime;
-                            WpfApplication.Current.Dispatcher.Invoke(() =>
-                            {
-                                if (hasReceivedOutput)
-                                {
-                                    UpdateProgressStatus($"Processing... ({outputLineCount} lines, {elapsed.Minutes:D2}:{elapsed.Seconds:D2})");
-                                }
-                                else
-                                {
-                                    UpdateProgressStatus($"Processing... (no output yet, {elapsed.Minutes:D2}:{elapsed.Seconds:D2})");
-                                }
-                            });
-                        }
-
-                        await Task.Delay(1000);
-                        secondsElapsed++;
-                    }
-
-                    LogDebug("Process has exited, waiting for final cleanup...");
-                    await Task.Delay(2000);
-                }, _extractionCancellationSource?.Token ?? System.Threading.CancellationToken.None);
-
-                if (_extractionCancellationSource?.Token.IsCancellationRequested == true)
-                {
-                    LogDebug("Extraction was cancelled");
-                    return;
-                }
-
-                if (!_questExtractionProcess.HasExited)
-                {
-                    LogDebug("Waiting for process to fully exit...");
-                    _questExtractionProcess.WaitForExit(5000);
-                }
-
-                WpfApplication.Current.Dispatcher.Invoke(() =>
-                {
-                    var totalTime = DateTime.Now - startTime;
-                    UpdateProgressStatus($"Finishing... ({outputLineCount} lines, took {totalTime.Minutes:D2}:{totalTime.Seconds:D2})");
-                });
-
-                await Task.Delay(1000);
-
-                WpfApplication.Current.Dispatcher.Invoke(() =>
-                {
-                    HideProgressOverlay();
-
-                    LogDebug($"Final process state - HasExited: {_questExtractionProcess.HasExited}, ExitCode: {_questExtractionProcess.ExitCode}");
-                    LogDebug($"Output lines received: {outputLineCount}");
-                    LogDebug($"Process completed flag: {processCompleted}");
-
-                    if (_questExtractionProcess.ExitCode == 0)
-                    {
-                        LogDebug("✅ quest_parse.exe completed successfully with exit code 0");
-                        StatusText.Text = "Quest file extraction completed successfully";
-                        WpfMessageBox.Show($"Quest file extraction completed successfully!\n\nquest_parse.exe finished processing the game data.\n\nOutput lines received: {outputLineCount}",
-                            "Extraction Complete", MessageBoxButton.OK, MessageBoxImage.Information);
-                    }
-                    else
-                    {
-                        LogDebug($"❌ quest_parse.exe failed with exit code: {_questExtractionProcess.ExitCode}");
-                        StatusText.Text = $"Quest extraction failed (Exit code: {_questExtractionProcess.ExitCode})";
-                        WpfMessageBox.Show($"quest_parse.exe failed with exit code: {_questExtractionProcess.ExitCode}\n\nCheck the debug log for details.\n\nOutput lines received: {outputLineCount}",
-                            "Extraction Failed", MessageBoxButton.OK, MessageBoxImage.Warning);
-                    }
-                });
-            }
-            catch (System.OperationCanceledException)
-            {
-                WpfApplication.Current.Dispatcher.Invoke(() =>
-                {
-                    LogDebug("quest_parse.exe operation was cancelled");
-                    HideProgressOverlay();
-                    StatusText.Text = "Quest extraction cancelled";
-                });
-            }
-            catch (Exception ex)
-            {
-                WpfApplication.Current.Dispatcher.Invoke(() =>
-                {
-                    LogDebug($"❌ Exception during quest_parse.exe execution: {ex.Message}");
-                    LogDebug($"Exception stack trace: {ex.StackTrace}");
-                    HideProgressOverlay();
-                    StatusText.Text = "Quest extraction failed";
-                    WpfMessageBox.Show($"An error occurred during quest extraction:\n\n{ex.Message}",
-                        "Extraction Error", MessageBoxButton.OK, MessageBoxImage.Error);
-                });
-            }
-        }
-
-        private async void LoadGameData_Click(object sender, RoutedEventArgs e)
-        {
-            var dialog = new WinForms.FolderBrowserDialog
-            {
-                Description = "Select FFXIV game installation folder",
-                UseDescriptionForTitle = true,
-                SelectedPath = _settingsService?.Settings.GameInstallationPath ?? ""
-            };
-
-            if (dialog.ShowDialog() == WinForms.DialogResult.OK)
-            {
-                var gamePath = dialog.SelectedPath;
-                if (Directory.Exists(gamePath))
-                {
-                    _settingsService?.UpdateGamePath(gamePath);
-                    LogDebug($"Game path saved to settings: {gamePath}");
-
-                    await LoadFFXIVDataAsync(gamePath);
-                }
-                else
-                {
-                    WpfMessageBox.Show("Invalid game folder selected.",
-                        "Error", MessageBoxButton.OK, MessageBoxImage.Error);
-                }
-            }
-        }
-
-        private async Task LoadFFXIVDataAsync(string gameDirectory)
-        {
-            try
-            {
-                // ✅ ADD: Set loading flag
-                _isLoadingData = true;
-
-                StatusText.Text = "Loading FFXIV data...";
-
-                if (!ValidateGameDirectory(gameDirectory))
-                {
-                    WpfMessageBox.Show(
-                        "The selected folder doesn't appear to be a valid FFXIV installation.\n\n" +
-                        "Please select the main FFXIV installation folder that contains the 'game' and 'boot' folders.",
-                        "Invalid Directory", MessageBoxButton.OK, MessageBoxImage.Warning);
-                    return;
-                }
-
-                await Task.Run(() =>
-                {
-                    _realm = new ARealmReversed(gameDirectory, SaintCoinach.Ex.Language.English);
-                });
-
-                LogDebug($"Initialized realm: {(_realm != null ? "Success" : "Failed")}");
-
-                // ✅ Initialize realm-dependent services after _realm is created
-                InitializeRealmDependentServices();
-
-                // ✅ Initialize quest script service
-                if (_settingsService != null)
-                {
-                    _questScriptService = new QuestScriptService(_settingsService, LogDebug);
-                    LogDebug("Quest script service initialized");
-                }
-
-                _mapService = new MapService(_realm, LogDebug);
-                LogDebug("Initialized map service");
-
-                if (_realm != null)
-                {
-                    _mapRenderer?.UpdateRealm(_realm);
-                }
-
-                // ✅ Load data using the new simplified approach
-                LogDebug("Starting to load all data...");
-
-                // Load territories
-                StatusText.Text = "Loading territories...";
-                var territories = await _dataLoaderService!.LoadTerritoriesAsync();
-                WpfApplication.Current.Dispatcher.Invoke(() =>
-                {
-                    Territories.Clear();
-                    _filteredTerritories.Clear();
-                    foreach (var territory in territories)
-                    {
-                        Territories.Add(territory);
-                        _filteredTerritories.Add(territory);
-                    }
-                    _uiUpdateService?.UpdateTerritoryCount(_filteredTerritories, TerritoryCountText);
-                });
-
-                // Load quests
-                StatusText.Text = "Loading quests...";
-                var quests = await _dataLoaderService.LoadQuestsAsync();
-                WpfApplication.Current.Dispatcher.Invoke(() =>
-                {
-                    Quests.Clear();
-                    _filteredQuests.Clear();
-                    foreach (var quest in quests)
-                    {
-                        Quests.Add(quest);
-                        _filteredQuests.Add(quest);
-                    }
-                    var questCountText = this.FindName("QuestCountText") as TextBlock;
-                    _uiUpdateService?.UpdateQuestCount(_filteredQuests, questCountText);
-                });
-
-                // Load BNpcS
-                StatusText.Text = "Loading NPCs...";
-                var bnpcs = await _dataLoaderService.LoadBNpcsAsync();
-                WpfApplication.Current.Dispatcher.Invoke(() =>
-                {
-                    BNpcs.Clear();
-                    _filteredBNpcs.Clear();
-                    foreach (var bnpc in bnpcs)
-                    {
-                        BNpcs.Add(bnpc);
-                        _filteredBNpcs.Add(bnpc);
-                    }
-                    var bnpcCountText = this.FindName("BNpcCountText") as TextBlock;
-                    _uiUpdateService?.UpdateBNpcCount(_filteredBNpcs, bnpcCountText);
-                });
-
-                StatusText.Text = "Loading fates...";
-                var fates = await _dataLoaderService.LoadFatesAsync();
-                WpfApplication.Current.Dispatcher.Invoke(() =>
-                {
-                    Fates.Clear();
-                    _filteredFates.Clear();
-                    foreach (var fate in fates)
-                    {
-                        Fates.Add(fate);
-                        _filteredFates.Add(fate);
-                    }
-                    var fateCountText = this.FindName("FateCountText") as TextBlock;
-                    _uiUpdateService?.UpdateFateCount(_filteredFates, fateCountText);
-                });
-
-                // ✅ UPDATED: Log message to reflect that Events are no longer loaded
-                LogDebug($"Basic data loading complete - Territories: {Territories.Count}, Quests: {Quests.Count}, NPCs: {BNpcs.Count}, Fates: {Fates.Count}");
-
-                StatusText.Text = "Extracting quest markers from Level sheet...";
-                if (_questMarkerService != null)
-                {
-                    _allQuestMarkers = await _questMarkerService.ExtractAllQuestMarkersAsync();
-                    LogDebug($"🎯 Extracted {_allQuestMarkers.Count} quest markers from Level sheet data");
-                }
-
-                if (Territories.Count > 0)
-                {
-                    LogDebug("Applying initial territory filters...");
-                    ApplyTerritoryFilters();
-                }
-
-                StatusText.Text = "Extracting quest locations using Libra Eorzea...";
-                await _dataLoaderService.LoadQuestLocationsAsync(Quests.ToList());
-
-                if (_settingsService?.Settings.DebugMode == true)
-                {
-                    _dataLoaderService.SetVerboseDebugMode(true);
-                }
-
-                // ✅ FIX: Add the missing call to LoadNpcsAsync()
-                await LoadNpcsAsync();
-
-                StatusText.Text = $"Loaded {Territories.Count} territories, {Quests.Count} quests, {BNpcs.Count} NPCs, {Fates.Count} fates, {_allQuestMarkers.Count} quest markers, {_allNpcs.Count} interactive NPCs from: {gameDirectory}";
-            }
-            catch (Exception ex)
-            {
-                StatusText.Text = $"Error loading data: {ex.Message}";
-                LogDebug($"Error loading FFXIV data: {ex.Message}\n{ex.StackTrace}");
-                WpfMessageBox.Show($"Failed to load FFXIV data: {ex.Message}", "Error",
-                    MessageBoxButton.OK, MessageBoxImage.Error);
-            }
-            finally
-            {
-                // ✅ ADD: Clear loading flag and reorganize panels one final time
-                _isLoadingData = false;
-                ReorganizePanels();
-            }
-        }
-
-        private async Task LoadNpcsAsync()
-        {
-            try
-            {
-                if (_realm != null)
-                {
-                    LogDebug("🧙 Initializing Saint Coinach-based NPC service...");
-
-                    _npcService = new NpcService(_realm, LogDebug);
-
-                    LogDebug("🧙 Loading NPCs from Saint Coinach ENpcResident sheet...");
-
-                    _allNpcs = await _npcService.ExtractNpcsWithPositionsAsync();
-
-                    // ✅ NEW: Load ALL NPCs initially instead of staying empty
-                    Dispatcher.Invoke(() =>
-                    {
-                        var npcCountText = this.FindName("NpcCountText") as TextBlock;
-                        if (npcCountText != null)
-                        {
-                            npcCountText.Text = $"({_allNpcs.Count})";
-                        }
-
-                        var npcList = this.FindName("NpcList") as WpfListBox;
-                        if (npcList != null)
-                        {
-                            npcList.ItemsSource = _filteredNpcsCollection;
-                        }
-
-                        // ✅ NEW: Initially load ALL NPCs (no territory filter)
-                        _filteredNpcsCollection.Clear();
-                        foreach (var npc in _allNpcs)
-                        {
-                            _filteredNpcsCollection.Add(npc);
-                        }
-
-                        LogDebug($"🧙 Initially loaded ALL {_filteredNpcsCollection.Count} NPCs into NPC list");
-                    });
-
-                    LogDebug($"🧙 Loaded {_allNpcs.Count} NPCs from Saint Coinach");
-                }
-            }
-            catch (Exception ex)
-            {
-                LogDebug($"❌ Error loading NPCs from Saint Coinach: {ex.Message}");
-            }
-        }
-
-        private async Task LoadDataAsync<T>(Func<Task<List<T>>> loadFunction,
-            ObservableCollection<T> sourceCollection,
-            ObservableCollection<T> filteredCollection,
-            Action<ObservableCollection<T>, TextBlock?> updateCountAction,
-            TextBlock? countTextBlock)
-        {
-            try
-            {
-                LogDebug($"LoadDataAsync starting for type: {typeof(T).Name}");
-                var data = await loadFunction();
-                LogDebug($"LoadDataAsync received {data?.Count ?? 0} items of type: {typeof(T).Name}");
-
-                WpfApplication.Current.Dispatcher.Invoke(() =>
-                {
-                    sourceCollection.Clear();
-                    filteredCollection.Clear();
-                    if (data != null)
-                    {
-                        foreach (var item in data)
-                        {
-                            sourceCollection.Add(item);
-                            filteredCollection.Add(item);
-                        }
-                    }
-                    updateCountAction(filteredCollection, countTextBlock);
-                    LogDebug($"LoadDataAsync completed UI update for {sourceCollection.Count} items of type: {typeof(T).Name}");
-                });
-            }
-            catch (Exception ex)
-            {
-                LogDebug($"LoadDataAsync error for type {typeof(T).Name}: {ex.Message}\n{ex.StackTrace}");
-            }
-        }
-
-        private void MapCanvas_MouseRightButtonDown(object sender, MouseButtonEventArgs e)
-        {
-            if (MapImageControl.Source == null || _mapService == null || _mapRenderer == null)
-                return;
-
-            System.Windows.Point clickPoint = e.GetPosition(MapCanvas);
-            var imagePosition = new System.Windows.Point(0, 0);
-
-            // ✅ Use pattern matching
-            if (MapImageControl.Source is not System.Windows.Media.Imaging.BitmapSource bitmapSource)
-                return;
-
-            var imageSize = new System.Windows.Size(
-                bitmapSource.PixelWidth,
-                bitmapSource.PixelHeight
-            );
-
-            var coordinates = _mapService.ConvertMapToGameCoordinates(
-                clickPoint, imagePosition, _currentScale, imageSize, _currentMap);
-
-            _mapRenderer.ShowCoordinateInfo(coordinates, clickPoint);
-            e.Handled = true;
-        }
-
-        private void HideDuplicateTerritoriesCheckBox_Changed(object sender, RoutedEventArgs e)
-        {
-            bool newValue = HideDuplicateTerritoriesCheckBox?.IsChecked == true;
-
-            if (_hideDuplicateTerritories != newValue)
-            {
-                _hideDuplicateTerritories = newValue;
-                LogDebug($"Hide duplicates checkbox changed to: {_hideDuplicateTerritories}");
-                ApplyTerritoryFilters();
-            }
-        }
-
-        private void EobjSearchBox_TextChanged(object sender, TextChangedEventArgs e)
-        {
-            // TODO: Implement Eobj search functionality when Eobj data is available
-            LogDebug("Eobj search functionality - placeholder for future implementation");
-
-            // For now, just log the search text
-            var eobjSearchBox = this.FindName("EobjSearchBox") as WpfTextBox;
-            string searchText = eobjSearchBox?.Text ?? "";
-
-            if (!string.IsNullOrEmpty(searchText))
-            {
-                LogDebug($"Eobj search: '{searchText}' (feature not yet implemented)");
-            }
-        }
-
-        private void EventItemSearchBox_TextChanged(object sender, TextChangedEventArgs e)
-        {
-            // TODO: Implement EventItem search functionality when EventItem data is available
-            LogDebug("EventItem search functionality - placeholder for future implementation");
-
-            // For now, just log the search text
-            var eventItemSearchBox = this.FindName("EventItemSearchBox") as WpfTextBox;
-            string searchText = eventItemSearchBox?.Text ?? "";
-
-            if (!string.IsNullOrEmpty(searchText))
-            {
-                LogDebug($"EventItem search: '{searchText}' (feature not yet implemented)");
-            }
-        }
-
-        private void QuestSearchBox_TextChanged(object sender, TextChangedEventArgs e)
-        {
-            var questSearchBox = this.FindName("QuestSearchBox") as WpfTextBox;
-            var questCountText = this.FindName("QuestCountText") as TextBlock;
-            _searchFilterService?.FilterQuests(questSearchBox?.Text ?? "", Quests, _filteredQuests);
-            _uiUpdateService?.UpdateQuestCount(_filteredQuests, questCountText);
-        }
-
-        private void BNpcSearchBox_TextChanged(object sender, TextChangedEventArgs e)
-        {
-            var bnpcSearchBox = this.FindName("BNpcSearchBox") as WpfTextBox;
-            string searchText = bnpcSearchBox?.Text ?? "";  // ✅ Remove ToLower()
-
-            _filteredBNpcs.Clear();
-
-            foreach (var bnpc in BNpcs)
-            {
-                // ✅ Use StringComparison.OrdinalIgnoreCase instead of ToLower()
-                bool matches = string.IsNullOrEmpty(searchText) ||
-                              bnpc.BNpcName.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
-                              bnpc.BNpcBaseId.ToString().Contains(searchText) ||
-                              bnpc.TribeName.Contains(searchText, StringComparison.OrdinalIgnoreCase);
-
-                if (matches)
-                {
-                    _filteredBNpcs.Add(bnpc);
-                }
-            }
-
-            var bnpcCountText = this.FindName("BNpcCountText") as TextBlock;
-            _uiUpdateService?.UpdateBNpcCount(_filteredBNpcs, bnpcCountText);
-        }
-
-        private void TerritorySearchBox_TextChanged(object sender, TextChangedEventArgs e)
-        {
-            _searchDebounceTimer?.Stop();
-            _searchDebounceTimer = new System.Windows.Threading.DispatcherTimer
-            {
-                Interval = TimeSpan.FromMilliseconds(300)
-            };
-
-            _searchDebounceTimer.Tick += (s, args) =>
-            {
-                _searchDebounceTimer.Stop();
-                ApplyTerritoryFilters();
-            };
-
-            _searchDebounceTimer.Start();
-        }
-
-        private void ApplyTerritoryFilters()
-        {
-            LogDebug($"=== ApplyTerritoryFilters START ===");
-            LogDebug($"Source Territories count: {Territories.Count}");
-            LogDebug($"Hide duplicates: {_hideDuplicateTerritories}");
-            LogDebug($"Search text: '{TerritorySearchBox?.Text}'");
-
-            string searchText = TerritorySearchBox?.Text ?? "";
-
-            Task.Run(() =>
-            {
-                var filteredTerritories = Territories.AsEnumerable();
-
-                if (!string.IsNullOrEmpty(searchText))
-                {
-                    filteredTerritories = filteredTerritories.Where(territory =>
-                        territory.PlaceName.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
-                        territory.Id.ToString().Contains(searchText) ||
-                        territory.Region.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
-                        territory.TerritoryNameId.Contains(searchText, StringComparison.OrdinalIgnoreCase));
-                }
-
-                if (_hideDuplicateTerritories)
-                {
-                    var seenPlaceNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-                    var territoriesToKeep = new List<TerritoryInfo>();
-
-                    foreach (var territory in filteredTerritories)
-                    {
-                        string placeName = territory.PlaceName ?? territory.Name ?? "";
-
-                        if (placeName.StartsWith("[Territory ID:") || string.IsNullOrEmpty(placeName))
-                        {
-                            territoriesToKeep.Add(territory);
-                            continue;
-                        }
-
-                        if (seenPlaceNames.Add(placeName))
-                        {
-                            territoriesToKeep.Add(territory);
-                        }
-                    }
-
-                    filteredTerritories = territoriesToKeep;
-                }
-
-                var finalResults = filteredTerritories.ToList();
-                LogDebug($"Filtered results count: {finalResults.Count}");
-
-                WpfApplication.Current.Dispatcher.Invoke(() =>
-                {
-                    LogDebug($"Clearing _filteredTerritories (current count: {_filteredTerritories.Count})");
-                    _filteredTerritories.Clear();
-                    foreach (var territory in finalResults)
-                    {
-                        _filteredTerritories.Add(territory);
-                    }
-                    LogDebug($"Added {_filteredTerritories.Count} territories to _filteredTerritories");
-                    _uiUpdateService?.UpdateTerritoryCount(_filteredTerritories, TerritoryCountText);
-                });
-
-                LogDebug($"=== ApplyTerritoryFilters END ===");
-            });
-        }
-
-        private void NpcSearchBox_TextChanged(object sender, TextChangedEventArgs e)
-        {
-            _searchDebounceTimer?.Stop();
-            _searchDebounceTimer = new System.Windows.Threading.DispatcherTimer
-            {
-                Interval = TimeSpan.FromMilliseconds(300)
-            };
-
-            _searchDebounceTimer.Tick += (s, args) =>
-            {
-                _searchDebounceTimer.Stop();
-                FilterNpcs();
-            };
-
-            _searchDebounceTimer.Start();
-        }
-
-        private void FateSearchBox_TextChanged(object sender, TextChangedEventArgs e)
-        {
-            var fateSearchBox = this.FindName("FateSearchBox") as WpfTextBox;
-            string searchText = fateSearchBox?.Text ?? "";
-
-            _filteredFates.Clear();
-
-            foreach (var fate in Fates)
-            {
-                bool matches = string.IsNullOrEmpty(searchText) ||
-                              fate.Name.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
-                              fate.FateId.ToString().Contains(searchText);
-
-                if (matches)
-                {
-                    _filteredFates.Add(fate);
-                }
-            }
-
-            var fateCountText = this.FindName("FateCountText") as TextBlock;
-            _uiUpdateService?.UpdateFateCount(_filteredFates, fateCountText);
-        }
+        #region Map Interaction
 
         private void MapCanvas_MouseWheel(object sender, MouseWheelEventArgs e)
         {
-            _mapInteractionService?.HandleMouseWheel(e, MapCanvas, (WpfImage)MapImageControl,
-                ref _currentScale, OverlayCanvas, SyncOverlayWithMap, RefreshMarkers);
-            StatusText.Text = $"Zoom: {_currentScale:P0}";
+            var service = _services.Get<MapInteractionService>();
+            var scale = _mapState.CurrentScale;
+            service?.HandleMouseWheel(e, MapCanvas, MapImageControl,
+                ref scale, OverlayCanvas, SyncOverlayWithMap, RefreshMarkers);
+            _mapState.SetCurrentScale(scale);
+            StatusText.Text = $"Zoom: {_mapState.CurrentScale:P0}";
         }
 
         private void MapCanvas_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
         {
             if (MapImageControl.Source != null)
             {
-                _lastMousePosition = e.GetPosition(MapCanvas);
-                _isDragging = true;
+                _mapState.LastMousePosition = e.GetPosition(MapCanvas);
+                _mapState.IsDragging = true;
                 MapCanvas.Cursor = System.Windows.Input.Cursors.Hand;
                 MapCanvas.CaptureMouse();
                 e.Handled = true;
@@ -1641,9 +631,9 @@ namespace Amaurot
 
         private void MapCanvas_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
         {
-            if (_isDragging)
+            if (_mapState.IsDragging)
             {
-                _isDragging = false;
+                _mapState.IsDragging = false;
                 MapCanvas.Cursor = System.Windows.Input.Cursors.Arrow;
                 MapCanvas.ReleaseMouseCapture();
                 e.Handled = true;
@@ -1652,11 +642,12 @@ namespace Amaurot
 
         private void MapCanvas_MouseMove(object sender, System.Windows.Input.MouseEventArgs e)
         {
-            if (_isDragging && e.LeftButton == MouseButtonState.Pressed && MapImageControl.Source != null)
+            if (_mapState.IsDragging && e.LeftButton == MouseButtonState.Pressed &&
+                MapImageControl.Source != null)
             {
                 var currentPosition = e.GetPosition(MapCanvas);
-                var deltaX = currentPosition.X - _lastMousePosition.X;
-                var deltaY = currentPosition.Y - _lastMousePosition.Y;
+                var deltaX = currentPosition.X - _mapState.LastMousePosition.X;
+                var deltaY = currentPosition.Y - _mapState.LastMousePosition.Y;
 
                 if (MapImageControl.RenderTransform is TransformGroup transformGroup)
                 {
@@ -1668,216 +659,216 @@ namespace Amaurot
                     }
                 }
 
-                _lastMousePosition = currentPosition;
+                _mapState.LastMousePosition = currentPosition;
                 SyncOverlayWithMap();
             }
         }
 
-        private async void TerritoryList_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        private void MapCanvas_MouseRightButtonDown(object sender, MouseButtonEventArgs e)
         {
-            if (TerritoryList.SelectedItem is TerritoryInfo selectedTerritory)
+            if (MapImageControl.Source == null || _mapState.CurrentMap == null) return;
+
+            var clickPoint = e.GetPosition(MapCanvas);
+
+            if (MapImageControl.Source is BitmapSource bitmapSource)
             {
-                try
-                {
-                    StatusText.Text = $"Loading map for {selectedTerritory.PlaceName}...";
+                var imageSize = new System.Windows.Size(bitmapSource.PixelWidth, bitmapSource.PixelHeight);
+                var mapService = _services.Get<MapService>();
 
-                    bool success = await LoadTerritoryMapAsync(selectedTerritory);
+                var coordinates = mapService?.ConvertMapToGameCoordinates(
+                    clickPoint, new System.Windows.Point(0, 0), _mapState.CurrentScale, imageSize, _mapState.CurrentMap);
 
-                    if (!success)
-                    {
-                        StatusText.Text = $"Failed to load map for {selectedTerritory.PlaceName}";
-                    }
-                }
-                catch (Exception ex)
-                {
-                    LogDebug($"Error loading territory: {ex.Message}");
-                    StatusText.Text = "Error loading territory map";
-                }
-            }
-
-            // ✅ FIXED: Only filter NPCs if we have data and we're not in the middle of initial loading
-            if (_allNpcs.Count > 0 && TerritoryList.SelectedItem != null)
-            {
-                FilterNpcs();
+                _services.Get<MapRenderer>()?.ShowCoordinateInfo(coordinates, clickPoint);
+                e.Handled = true;
             }
         }
 
-        private async Task<bool> LoadTerritoryMapAsync(TerritoryInfo territory)
+        #endregion Map Interaction
+
+        #region Search and Filtering
+
+        private void TerritorySearchBox_TextChanged(object sender, TextChangedEventArgs e)
+        {
+            DebouncedSearch(() => ApplyTerritoryFilters());
+        }
+
+        private void QuestSearchBox_TextChanged(object sender, TextChangedEventArgs e)
+        {
+            var searchText = (FindName("QuestSearchBox") as System.Windows.Controls.TextBox)?.Text ?? "";
+            _services.Get<FilterService>()?.FilterQuests(searchText, _entities.Quests, _entities.FilteredQuests);  // ✅ Changed from SearchFilterService
+            UpdateEntityCount<QuestInfo>();
+        }
+
+        private void NpcSearchBox_TextChanged(object sender, TextChangedEventArgs e)
+        {
+            DebouncedSearch(() => FilterNpcs());
+        }
+
+        private void BNpcSearchBox_TextChanged(object sender, TextChangedEventArgs e)
+        {
+            var searchText = (FindName("BNpcSearchBox") as System.Windows.Controls.TextBox)?.Text ?? "";
+
+            var filterService = _services.Get<FilterService>();  // ✅ Changed from GenericFilterService<BNpcInfo>
+            filterService?.FilterBNpcs(searchText, _entities.BNpcs, _entities.FilteredBNpcs);  // ✅ Use the type-specific method
+
+            UpdateEntityCount<BNpcInfo>();
+        }
+
+        private void FateSearchBox_TextChanged(object sender, TextChangedEventArgs e)
+        {
+            var searchText = (FindName("FateSearchBox") as System.Windows.Controls.TextBox)?.Text ?? "";
+
+            var filterService = _services.Get<FilterService>();  // ✅ Changed from GenericFilterService<FateInfo>
+            filterService?.FilterFates(searchText, _entities.Fates, _entities.FilteredFates);  // ✅ Use the type-specific method
+
+            UpdateEntityCount<FateInfo>();
+        }
+
+        private void EobjSearchBox_TextChanged(object sender, TextChangedEventArgs e)
+        {
+            var searchText = (FindName("EobjSearchBox") as System.Windows.Controls.TextBox)?.Text ?? "";
+            LogDebug($"Eobj search: '{searchText}' (feature not yet implemented)");
+        }
+
+        private void EventItemSearchBox_TextChanged(object sender, TextChangedEventArgs e)
+        {
+            var searchText = (FindName("EventItemSearchBox") as System.Windows.Controls.TextBox)?.Text ?? "";
+            LogDebug($"EventItem search: '{searchText}' (feature not yet implemented)");
+        }
+
+        private void DebouncedSearch(System.Action searchAction)
+        {
+            _searchDebounceTimer?.Stop();
+            _searchDebounceTimer = new DispatcherTimer
+            {
+                Interval = TimeSpan.FromMilliseconds(300)
+            };
+            _searchDebounceTimer.Tick += (s, args) =>
+            {
+                _searchDebounceTimer.Stop();
+                searchAction();
+            };
+            _searchDebounceTimer.Start();
+        }
+
+        private void ApplyTerritoryFilters()
+        {
+            var searchText = TerritorySearchBox?.Text ?? "";
+
+            Task.Run(() =>
+            {
+                var filtered = _entities.Territories.AsEnumerable();
+
+                if (!string.IsNullOrEmpty(searchText))
+                {
+                    filtered = filtered.Where(t =>
+                        t.PlaceName.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
+                        t.Id.ToString().Contains(searchText) ||
+                        t.Region.Contains(searchText, StringComparison.OrdinalIgnoreCase));
+                }
+
+                if (_mapState.HideDuplicateTerritories)
+                {
+                    var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                    filtered = filtered.Where(t =>
+                    {
+                        var placeName = t.PlaceName ?? t.Name ?? "";
+                        return placeName.StartsWith("[Territory ID:") ||
+                               string.IsNullOrEmpty(placeName) ||
+                               seen.Add(placeName);
+                    });
+                }
+
+                var results = filtered.ToList();
+
+                Dispatcher.Invoke(() =>
+                {
+                    _entities.FilteredTerritories.Clear();
+                    foreach (var territory in results)
+                    {
+                        _entities.FilteredTerritories.Add(territory);
+                    }
+                    UpdateEntityCount<TerritoryInfo>();
+                });
+            });
+        }
+
+        private void FilterNpcs()
         {
             try
             {
-                _currentTerritory = territory;
-                _currentMap = null;
+                var searchText = (FindName("NpcSearchBox") as System.Windows.Controls.TextBox)?.Text ?? "";
+                var currentMapId = _mapState.CurrentTerritory?.MapId;
 
-                MapInfoText.Text = $"Region: {territory.Region}\n" +
-                                   $"Place Name: {territory.PlaceName}\n" +
-                                   $"Territory ID: {territory.Id}\n" +
-                                   $"Territory Name ID: {territory.TerritoryNameId}\n" +
-                                   $"Map ID: {territory.MapId}";
+                var filterService = _services.Get<FilterService>();  // ✅ Changed from GenericFilterService<EntityNpcInfo>
+                filterService?.FilterEntitiesWithTerritoryFilter(
+                    searchText,
+                    _entities.AllNpcs,
+                    _entities.FilteredNpcs,
+                    currentMapId,
+                    (npc, text) => npc.NpcName.Contains(text, StringComparison.OrdinalIgnoreCase) ||
+                                  npc.NpcId.ToString().Contains(text));
 
-                MapImageControl.Source = null;
-                _mapRenderer?.ClearMarkers();
-
-                if (_realm == null)
-                {
-                    StatusText.Text = "Game data not loaded.";
-                    return false;
-                }
-
-                var mapSheet = _realm.GameData.GetSheet<SaintCoinach.Xiv.Map>();
-                _currentMap = mapSheet.FirstOrDefault(m => m.Key == territory.MapId);
-
-                if (_currentMap == null)
-                {
-                    StatusText.Text = $"Map not found for MapId: {territory.MapId}";
-                    return false;
-                }
-
-                LogDebug($"Loading map image for Map ID: {_currentMap.Key}");
-                var mapImage = _currentMap.MediumImage;
-                if (mapImage == null)
-                {
-                    StatusText.Text = $"Could not load map image for {territory.PlaceName}.";
-                    LogDebug($"FAILURE: mapImage is null for Map ID: {_currentMap.Key}");
-                    return false;
-                }
-
-                using (var bitmap = new Bitmap(mapImage))
-                {
-                    IntPtr handle = bitmap.GetHbitmap();
-                    try
-                    {
-                        var bitmapSource = System.Windows.Interop.Imaging.CreateBitmapSourceFromHBitmap(
-                            handle, IntPtr.Zero, Int32Rect.Empty, BitmapSizeOptions.FromEmptyOptions());
-
-                        MapImageControl.Source = bitmapSource;
-
-                        if (!MapCanvas.Children.Contains(MapImageControl))
-                        {
-                            MapCanvas.Children.Insert(0, MapImageControl);
-                            LogDebug("Added MapImageControl to MapCanvas");
-                        }
-
-                        CalculateAndApplyInitialScale(bitmapSource);
-
-                        MapPlaceholderText.Visibility = Visibility.Collapsed;
-
-                        StatusText.Text = $"Map loaded for {territory.PlaceName}. Loading markers...";
-
-                        List<MapMarker> originalMarkers = await Task.Run(() =>
-                            _mapService?.LoadMapMarkers(territory.MapId) ?? new List<MapMarker>()
-                        );
-
-                        var npcMarkersForThisMap = CreateNpcMarkers(territory.MapId);
-
-                        LogDebug($"🧙 NPC MARKER DEBUG for Map {territory.MapId}:");
-                        LogDebug($"  NPCs with quests for this map: {npcMarkersForThisMap.Count}");
-
-                        if (npcMarkersForThisMap.Count > 0)
-                        {
-                            LogDebug($"  First 3 NPC markers for this map:");
-                            foreach (var nm in npcMarkersForThisMap.Take(3))
-                            {
-                                LogDebug($"    - ID:{nm.Id}, Name:'{nm.PlaceName}', Coords:({nm.X:F1},{nm.Y:F1}), Type:{nm.Type}");
-                            }
-                        }
-
-                        _currentMapMarkers.Clear();
-                        _currentMapMarkers.AddRange(originalMarkers);
-                        _currentMapMarkers.AddRange(npcMarkersForThisMap);
-
-                        LogDebug($"Total markers for {territory.PlaceName}: {_currentMapMarkers.Count} (original: {originalMarkers.Count}, npc: {npcMarkersForThisMap.Count})");
-
-                        var npcMarkersVisible = _currentMapMarkers.Where(m => m.Type == MarkerType.Npc).Count();
-                        var npcCheckboxChecked = ShowNpcMarkersCheckBox?.IsChecked == true;
-
-                        LogDebug($"🔍 MARKER VISIBILITY DEBUG:");
-                        LogDebug($"  NPC markers in _currentMapMarkers: {npcMarkersVisible}");
-                        LogDebug($"  ShowNpcMarkersCheckBox exists: {ShowNpcMarkersCheckBox != null}");
-                        LogDebug($"  ShowNpcMarkersCheckBox checked: {npcCheckboxChecked}");
-
-                        var imagePosition = new System.Windows.Point(0, 0);
-                        var imageSize = new System.Windows.Size(
-                            bitmapSource.PixelWidth,
-                            bitmapSource.PixelHeight);
-
-                        var visibleMarkers = new List<MapMarker>();
-                        foreach (var marker in _currentMapMarkers)
-                        {
-                            bool shouldShow = marker.Type switch
-                            {
-                                MarkerType.Aetheryte => ShowAetheryteMarkersCheckBox?.IsChecked == true,
-                                MarkerType.Npc => ShowNpcMarkersCheckBox?.IsChecked == true,
-                                MarkerType.Shop => ShowShopMarkersCheckBox?.IsChecked == true,
-                                MarkerType.Landmark => ShowLandmarkMarkersCheckBox?.IsChecked == true,
-                                MarkerType.Fate => ShowFateMarkersCheckBox?.IsChecked == true,
-                                MarkerType.Entrance => ShowEntranceMarkersCheckBox?.IsChecked == true,
-                                _ => ShowGenericMarkersCheckBox?.IsChecked == true
-                            };
-
-                            if (shouldShow)
-                            {
-                                visibleMarkers.Add(marker);
-                            }
-                        }
-
-                        LogDebug($"🔍 FINAL MARKER COUNT:");
-                        LogDebug($"  Total markers: {_currentMapMarkers.Count}");
-                        LogDebug($"  Visible markers after filtering: {visibleMarkers.Count}");
-                        LogDebug($"  NPC markers visible: {visibleMarkers.Count(m => m.Type == MarkerType.Npc)}");
-
-                        _mapRenderer?.DisplayMapMarkers(visibleMarkers, _currentMap, _currentScale, imagePosition, imageSize);
-                        SyncOverlayWithMap();
-                        DebugFateMarkerPositions();
-
-                        _mapRenderer?.AddDebugGridAndBorders();
-                        DiagnoseOverlayCanvas();
-
-                        StatusText.Text = $"Map loaded for '{territory.PlaceName}' - {_currentMapMarkers.Count} markers found ({npcMarkersForThisMap.Count} NPC markers, {visibleMarkers.Count} visible).";
-                        return true;
-                    }
-                    finally
-                    {
-                        DeleteObject(handle);
-                    }
-                }
+                UpdateEntityCount<EntityNpcInfo>();
             }
             catch (Exception ex)
             {
-                MapInfoText.Text = $"Error loading map: {ex.Message}";
-                LogDebug($"Error in LoadTerritoryMapAsync: {ex.Message}");
-                LogDebug($"Stack trace: {ex.StackTrace}");
-                return false;
+                LogDebug($"Error filtering NPCs: {ex.Message}");
             }
         }
 
-        [System.Runtime.InteropServices.DllImport("gdi32.dll")]
-        private static extern bool DeleteObject(IntPtr hObject);
+        #endregion Search and Filtering
 
-        private void CalculateAndApplyInitialScale(System.Windows.Media.Imaging.BitmapSource bitmapSource)
+        #region UI Updates
+
+        private void UpdateEntityCount<T>()
         {
-            _isDragging = false;
+            var count = typeof(T).Name switch
+            {
+                nameof(TerritoryInfo) => _entities.FilteredTerritories.Count,
+                nameof(QuestInfo) => _entities.FilteredQuests.Count,
+                "NpcInfo" => _entities.FilteredNpcs.Count,
+                nameof(BNpcInfo) => _entities.FilteredBNpcs.Count,
+                nameof(FateInfo) => _entities.FilteredFates.Count,
+                _ => 0
+            };
+
+            var textBlockName = typeof(T).Name switch
+            {
+                nameof(TerritoryInfo) => "TerritoryCountText",
+                nameof(QuestInfo) => "QuestCountText",
+                "NpcInfo" => "NpcCountText",
+                nameof(BNpcInfo) => "BNpcCountText",
+                nameof(FateInfo) => "FateCountText",
+                _ => null
+            };
+
+            if (textBlockName != null && FindName(textBlockName) is TextBlock textBlock)
+            {
+                textBlock.Text = $"({count})";
+            }
+        }
+
+        private void CalculateAndApplyInitialScale(BitmapSource bitmapSource)
+        {
+            _mapState.IsDragging = false;
 
             double canvasWidth = MapCanvas.ActualWidth;
             double canvasHeight = MapCanvas.ActualHeight;
 
             if (canvasWidth <= 1 || canvasHeight <= 1)
             {
-                LogDebug("Invalid canvas dimensions, using fallback values");
                 canvasWidth = 800;
                 canvasHeight = 600;
             }
 
             double imageWidth = bitmapSource.PixelWidth;
             double imageHeight = bitmapSource.PixelHeight;
-            double scaleX = canvasWidth / imageWidth;
-            double scaleY = canvasHeight / imageHeight;
-            double fitScale = Math.Min(scaleX, scaleY);
 
-            _currentScale = 1.0;
+            _mapState.SetCurrentScale(1.0);
 
-            double centeredX = (canvasWidth - (imageWidth * _currentScale)) / 2;
-            double centeredY = (canvasHeight - (imageHeight * _currentScale)) / 2;
+            double centeredX = (canvasWidth - imageWidth) / 2;
+            double centeredY = (canvasHeight - imageHeight) / 2;
 
             MapImageControl.Width = imageWidth;
             MapImageControl.Height = imageHeight;
@@ -1887,31 +878,108 @@ namespace Amaurot
             MapImageControl.Visibility = Visibility.Visible;
 
             var transformGroup = new TransformGroup();
-            transformGroup.Children.Add(new ScaleTransform(_currentScale, _currentScale));
+            transformGroup.Children.Add(new ScaleTransform(_mapState.CurrentScale, _mapState.CurrentScale));
             transformGroup.Children.Add(new TranslateTransform(centeredX, centeredY));
             MapImageControl.RenderTransform = transformGroup;
             MapImageControl.RenderTransformOrigin = new System.Windows.Point(0, 0);
 
-            LogDebug($"Map scaled to {_currentScale:F2} (90% zoom) and positioned via transform at ({centeredX:F1}, {centeredY:F1})");
+            LogDebug($"Map scaled to {_mapState.CurrentScale:F2} at ({centeredX:F1}, {centeredY:F1})");
+        }
+
+        private void SyncOverlayWithMap()
+        {
+            if (OverlayCanvas != null && MapImageControl != null)
+            {
+                OverlayCanvas.RenderTransform = MapImageControl.RenderTransform;
+                OverlayCanvas.RenderTransformOrigin = MapImageControl.RenderTransformOrigin;
+            }
         }
 
         private void RefreshMarkers()
         {
-            if (_mapRenderer == null || _currentMap == null) return;
+            if (_mapState.CurrentMap == null) return;
+            RefreshMarkerDisplay();
+        }
 
-            var imagePosition = new System.Windows.Point(0, 0);
+        #endregion UI Updates
 
-            if (MapImageControl.Source is BitmapSource bitmapSource)
+        #region Event Handlers
+
+        private void Exit_Click(object sender, RoutedEventArgs e)
+        {
+            LogDebug("Application exit requested");
+            System.Windows.Application.Current.Shutdown();
+        }
+
+        private void OpenSettings_Click(object sender, RoutedEventArgs e)
+        {
+            try
             {
-                var imageSize = new System.Windows.Size(
-                    bitmapSource.PixelWidth,
-                    bitmapSource.PixelHeight
-                );
+                var settings = _services.Get<SettingsService>();
+                if (settings != null)
+                {
+                    var window = new SettingsWindow(settings, LogDebug) { Owner = this };
+                    if (window.ShowDialog() == true)
+                    {
+                        ApplySavedSettings();
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                LogDebug($"Error opening settings: {ex.Message}");
+                System.Windows.MessageBox.Show($"Error opening settings: {ex.Message}", "Error",
+                    MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
 
-                _mapRenderer?.DisplayMapMarkers(_currentMapMarkers, _currentMap, _currentScale, imagePosition, imageSize);
-                SyncOverlayWithMap();
+        private void ToggleDebugMode_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is System.Windows.Controls.CheckBox checkBox)
+            {
+                bool enabled = checkBox.IsChecked == true;
+                DebugModeManager.IsDebugModeEnabled = enabled;
 
-                LogDebug($"Refreshed {_currentMapMarkers.Count} markers on map");
+                _services.Get<MapService>()?.SetVerboseDebugMode(enabled);
+                _services.Get<DataLoaderService>()?.SetVerboseDebugMode(enabled);
+                _services.Get<SettingsService>()?.UpdateDebugMode(enabled);
+
+                LogDebug($"Debug mode {(enabled ? "enabled" : "disabled")}");
+            }
+        }
+
+        private void MarkerVisibility_Changed(object sender, RoutedEventArgs e)
+        {
+            if (_mapState.CurrentMapMarkers.Count == 0) return;
+            RefreshMarkerDisplay();
+        }
+
+        private void ShowNpcMarkersCheckBox_Checked(object sender, RoutedEventArgs e) => ToggleNpcMarkers(true);
+
+        private void ShowNpcMarkersCheckBox_Unchecked(object sender, RoutedEventArgs e) => ToggleNpcMarkers(false);
+
+        private void HideDuplicateTerritoriesCheckBox_Changed(object sender, RoutedEventArgs e)
+        {
+            _mapState.HideDuplicateTerritories = HideDuplicateTerritoriesCheckBox?.IsChecked == true;
+            LogDebug($"Hide duplicates: {_mapState.HideDuplicateTerritories}");
+            ApplyTerritoryFilters();
+        }
+
+        private void AutoLoadMenuItem_Changed(object sender, RoutedEventArgs e)
+        {
+            _services.Get<SettingsService>()?.UpdateAutoLoad(AutoLoadMenuItem?.IsChecked == true);
+        }
+
+        private void PanelVisibility_Changed(object sender, RoutedEventArgs e)
+        {
+            if (sender is System.Windows.Controls.CheckBox checkBox)
+            {
+                var panelName = checkBox.Name?.Replace("Show", "").Replace("CheckBox", "") + "Panel";
+                if (FindName(panelName) is DockPanel panel)
+                {
+                    panel.Visibility = checkBox.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
+                    UpdatePanelAreaVisibility();
+                }
             }
         }
 
@@ -1922,63 +990,317 @@ namespace Amaurot
 
         private void SaveLogButton_Click(object sender, RoutedEventArgs e)
         {
-            WpfSaveFileDialog saveFileDialog = new WpfSaveFileDialog
+            var dialog = new Microsoft.Win32.SaveFileDialog
             {
                 Filter = "Log files (*.log)|*.log|Text files (*.txt)|*.txt|All files (*.*)|*.*",
                 DefaultExt = ".log",
                 FileName = $"MapEditor_Log_{DateTime.Now:yyyyMMdd_HHmmss}"
             };
 
-            if (saveFileDialog.ShowDialog() == true)
+            if (dialog.ShowDialog() == true)
             {
                 try
                 {
-                    File.WriteAllText(saveFileDialog.FileName, DebugTextBox.Text);
-                    StatusText.Text = $"Log saved to {saveFileDialog.FileName}";
+                    File.WriteAllText(dialog.FileName, DebugTextBox.Text);
+                    StatusText.Text = $"Log saved to {dialog.FileName}";
                 }
                 catch (Exception ex)
                 {
-                    WpfMessageBox.Show($"Error saving log: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                    System.Windows.MessageBox.Show($"Error saving log: {ex.Message}", "Error",
+                        MessageBoxButton.OK, MessageBoxImage.Error);
                 }
             }
         }
 
-        private void ToggleDebugMode_Click(object sender, RoutedEventArgs e)
+        private void CancelExtraction_Click(object sender, RoutedEventArgs e)
         {
-            if (sender is System.Windows.Controls.CheckBox checkBox)
+            try
             {
-                bool debugEnabled = checkBox.IsChecked == true;
+                LogDebug("User requested cancellation of operation");
+                _progressManager.Hide();
+                StatusText.Text = "Operation cancelled by user";
 
-                DebugModeManager.IsDebugModeEnabled = debugEnabled;
+                System.Windows.MessageBox.Show("Operation has been cancelled.", "Operation Cancelled",
+                    MessageBoxButton.OK, MessageBoxImage.Information);
+            }
+            catch (Exception ex)
+            {
+                LogDebug($"Error cancelling operation: {ex.Message}");
+                System.Windows.MessageBox.Show($"Error cancelling operation: {ex.Message}", "Error",
+                    MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
 
-                _mapService?.SetVerboseDebugMode(debugEnabled);
-                _dataLoaderService?.SetVerboseDebugMode(debugEnabled);
+        #endregion Event Handlers
 
-                if (_settingsService != null)
+        #region List Event Handlers
+
+        private void QuestList_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if ((FindName("QuestList") as System.Windows.Controls.ListBox)?.SelectedItem is QuestInfo quest)
+            {
+                LogDebug($"Quest selected: {quest.Name} (ID: {quest.Id})");
+            }
+        }
+
+        private async void QuestList_MouseDoubleClick(object sender, MouseButtonEventArgs e)
+        {
+            if ((FindName("QuestList") as System.Windows.Controls.ListBox)?.SelectedItem is QuestInfo quest)
+            {
+                await NavigateToQuestLocation(quest);
+            }
+        }
+
+        private void NpcList_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (sender is System.Windows.Controls.ListBox npcListBox && npcListBox.SelectedItem is EntityNpcInfo selectedNpc)
+            {
+                LogDebug($"NPC selected: {selectedNpc.NpcName} (ID: {selectedNpc.Id})");
+            }
+        }
+
+        private void BNpcList_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (sender is System.Windows.Controls.ListBox bnpcListBox && bnpcListBox.SelectedItem is BNpcInfo selectedBNpc)
+            {
+                LogDebug($"BNpc selected: {selectedBNpc.BNpcName} (ID: {selectedBNpc.BNpcNameId})");
+            }
+        }
+
+        private void FateList_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (sender is System.Windows.Controls.ListBox fateListBox && fateListBox.SelectedItem is FateInfo selectedFate)
+            {
+                LogDebug($"FATE selected: {selectedFate.Name} (ID: {selectedFate.FateId})");
+            }
+        }
+
+        private void NpcList_MouseDoubleClick(object sender, MouseButtonEventArgs e)
+        {
+            if (NpcList.SelectedItem is Amaurot.Services.Entities.NpcInfo selectedNpc)
+            {
+                var questPopup = new NpcQuestPopupWindow(selectedNpc, this);
+                questPopup.Show();
+                LogDebug($"Opened quest popup for NPC: {selectedNpc.NpcName}");
+            }
+        }
+
+        private void QuestDetailsButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is System.Windows.Controls.Button button && button.Tag is QuestInfo quest)
+            {
+                ShowQuestDetails(quest);
+            }
+        }
+
+        #endregion List Event Handlers
+
+        #region Tool Methods
+
+        private async void ExtractQuestFiles_Click(object sender, RoutedEventArgs e)
+        {
+            await RunTool("quest_parse.exe", "Quest extraction", async (toolPath) =>
+            {
+                var gamePath = _services.Get<SettingsService>()?.Settings.GameInstallationPath;
+                if (string.IsNullOrEmpty(gamePath))
                 {
-                    _settingsService.UpdateDebugMode(debugEnabled);
+                    System.Windows.MessageBox.Show("Game path not configured", "Error",
+                        MessageBoxButton.OK, MessageBoxImage.Warning);
+                    return;
                 }
 
-                LogDebug($"Debug mode {(debugEnabled ? "enabled" : "disabled")}");
+                var sqpackPath = Path.Combine(gamePath, "game", "sqpack");
+                await RunToolWithProgress(toolPath, $"\"{sqpackPath}\"", "quest extraction");
+            });
+        }
+
+        private async void RunLgbParser_Click(object sender, RoutedEventArgs e)
+        {
+            await RunTool("lgb-parser.exe", "LGB Parser", async (toolPath) =>
+            {
+                var gamePath = _services.Get<SettingsService>()?.Settings.GameInstallationPath;
+
+                var result = System.Windows.MessageBox.Show(
+                    "LGB Parser Options:\n\n" +
+                    "Yes - Parse all LGB files (batch mode)\n" +
+                    "No - List available zones\n" +
+                    "Cancel - Show help",
+                    "LGB Parser", MessageBoxButton.YesNoCancel, MessageBoxImage.Question);
+
+                var args = result switch
+                {
+                    MessageBoxResult.Yes => new[] { "--game", gamePath, "--batch" },
+                    MessageBoxResult.No => new[] { "--game", gamePath, "--list-zones" },
+                    _ => new string[0]
+                };
+
+                if (args.Length == 0)
+                {
+                    OpenToolInConsole(toolPath, args);
+                }
+                else
+                {
+                    await RunToolWithProgress(toolPath, string.Join(" ", args.Select(a => $"\"{a}\"")), "LGB parsing");
+                }
+            });
+        }
+
+        private async Task RunTool(string toolName, string displayName, Func<string, Task> runAction)
+        {
+            var toolPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Tools", toolName);
+
+            if (!File.Exists(toolPath))
+            {
+                System.Windows.MessageBox.Show($"{displayName} not found at:\n{toolPath}",
+                    $"{displayName} Not Found", MessageBoxButton.OK, MessageBoxImage.Error);
+                return;
             }
+
+            await runAction(toolPath);
+        }
+
+        private async Task RunToolWithProgress(string toolPath, string arguments, string operationName)
+        {
+            _progressManager.Show(operationName);
+
+            try
+            {
+                await Task.Run(() =>
+                {
+                    using var process = new System.Diagnostics.Process
+                    {
+                        StartInfo = new System.Diagnostics.ProcessStartInfo
+                        {
+                            FileName = toolPath,
+                            Arguments = arguments,
+                            WorkingDirectory = Path.GetDirectoryName(toolPath),
+                            UseShellExecute = false,
+                            RedirectStandardOutput = true,
+                            RedirectStandardError = true,
+                            CreateNoWindow = true
+                        }
+                    };
+
+                    process.OutputDataReceived += (s, e) =>
+                    {
+                        if (!string.IsNullOrEmpty(e.Data))
+                        {
+                            Dispatcher.InvokeAsync(() => _progressManager.UpdateStatus(e.Data));
+                        }
+                    };
+
+                    process.Start();
+                    process.BeginOutputReadLine();
+                    process.WaitForExit();
+
+                    if (process.ExitCode != 0)
+                    {
+                        throw new Exception($"Tool exited with code {process.ExitCode}");
+                    }
+                });
+
+                StatusText.Text = $"{operationName} completed successfully";
+            }
+            catch (Exception ex)
+            {
+                LogDebug($"Error running {operationName}: {ex.Message}");
+                System.Windows.MessageBox.Show($"Error: {ex.Message}", "Error",
+                    MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+            finally
+            {
+                _progressManager.Hide();
+            }
+        }
+
+        private void OpenToolInConsole(string toolPath, string[] arguments)
+        {
+            try
+            {
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = "cmd.exe",
+                    Arguments = $"/k \"\"{toolPath}\" {string.Join(" ", arguments.Select(a => $"\"{a}\""))}\"",
+                    WorkingDirectory = Path.GetDirectoryName(toolPath),
+                    UseShellExecute = true,
+                    CreateNoWindow = false
+                });
+
+                StatusText.Text = "Tool opened in console window";
+            }
+            catch (Exception ex)
+            {
+                LogDebug($"Error opening console: {ex.Message}");
+                System.Windows.MessageBox.Show($"Failed to open console: {ex.Message}", "Error",
+                    MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        private void OpenSapphireRepo_Click(object sender, RoutedEventArgs e)
+        {
+            OpenPath("Sapphire Server repository",
+                () => _services.Get<SettingsService>()?.IsValidSapphireServerPath() == true,
+                () => _services.Get<SettingsService>()?.OpenSapphireServerPath());
+        }
+
+        private void OpenSapphireBuild_Click(object sender, RoutedEventArgs e)
+        {
+            OpenPath("Sapphire Server build",
+                () => _services.Get<SettingsService>()?.IsValidSapphireBuildPath() == true,
+                () => _services.Get<SettingsService>()?.OpenSapphireBuildPath());
+        }
+
+        private void OpenPath(string pathName, Func<bool> isValid, System.Action openAction)
+        {
+            try
+            {
+                if (isValid())
+                {
+                    openAction();
+                    LogDebug($"Opened {pathName} path");
+                }
+                else
+                {
+                    System.Windows.MessageBox.Show($"{pathName} path is not configured or invalid.\n\nPlease configure it in Settings first.",
+                        $"{pathName} Not Set", MessageBoxButton.OK, MessageBoxImage.Information);
+                    OpenSettings_Click(null, null);
+                }
+            }
+            catch (Exception ex)
+            {
+                LogDebug($"Error opening {pathName}: {ex.Message}");
+                System.Windows.MessageBox.Show($"Error: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        #endregion Tool Methods
+
+        #region Helper Methods
+
+        private bool ValidateGameDirectory(string directory)
+        {
+            return _services.Get<DebugHelper>()?.ValidateGameDirectory(directory) ?? false;
+        }
+
+        public void LogDebug(string message)
+        {
+            _services.Get<DebugHelper>()?.LogDebug(message);
         }
 
         public void HandleNpcMarkerClick(uint npcId)
         {
             try
             {
-                var npcInfo = _allNpcs.FirstOrDefault(npc => npc.NpcId == npcId);
-
-                if (npcInfo != null && npcInfo.QuestCount > 0)
+                var targetNpc = _entities.Npcs.FirstOrDefault(n => n.NpcId == npcId);
+                if (targetNpc != null)
                 {
-                    var questPopup = new NpcQuestPopupWindow(npcInfo, this);
+                    var questPopup = new NpcQuestPopupWindow(targetNpc, this);
                     questPopup.Show();
-
-                    LogDebug($"Opened quest popup for NPC: {npcInfo.NpcName} ({npcInfo.QuestCount} quests)");
+                    LogDebug($"Opened quest popup from map click for NPC: {targetNpc.NpcName} (ID: {npcId})");
                 }
                 else
                 {
-                    LogDebug($"No quest data found for NPC ID: {npcId}");
+                    LogDebug($"Could not find NPC with ID: {npcId}");
                 }
             }
             catch (Exception ex)
@@ -1989,268 +1311,73 @@ namespace Amaurot
 
         public void ToggleNpcMarkers(bool visible)
         {
-            try
+            var npcMarkers = _mapState.CurrentMapMarkers.Where(m => m.Type == MarkerType.Npc).ToList();
+            foreach (var marker in npcMarkers)
             {
-                var npcMarkers = _currentMapMarkers.Where(m => m.Type == MarkerType.Npc).ToList();
-
-                foreach (var marker in npcMarkers)
-                {
-                    marker.IsVisible = visible;
-                }
-
-                RefreshMarkers();
-                LogDebug($"NPC markers {(visible ? "shown" : "hidden")}: {npcMarkers.Count} markers affected");
+                marker.IsVisible = visible;
             }
-            catch (Exception ex)
-            {
-                LogDebug($"Error toggling NPC markers: {ex.Message}");
-            }
+            RefreshMarkers();
+            LogDebug($"NPC markers {(visible ? "shown" : "hidden")}: {npcMarkers.Count} markers");
         }
 
         public void AddCustomMarker(MapMarker marker)
         {
-            try
-            {
-                _currentMapMarkers.RemoveAll(m => m.Id == marker.Id);
-                _currentMapMarkers.Add(marker);
-                RefreshMarkers();
-
-                LogDebug($"Added custom marker: {marker.PlaceName} at ({marker.X:F1}, {marker.Y:F1})");
-            }
-            catch (Exception ex)
-            {
-                LogDebug($"Error adding custom marker: {ex.Message}");
-            }
+            _mapState.CurrentMapMarkers.RemoveAll(m => m.Id == marker.Id);
+            _mapState.CurrentMapMarkers.Add(marker);
+            RefreshMarkers();
+            LogDebug($"Added custom marker: {marker.PlaceName} at ({marker.X:F1}, {marker.Y:F1})");
         }
 
-        public void LogDebug(string message)
-        {
-            _debugHelper?.LogDebug(message);
-        }
-
-        private bool ValidateGameDirectory(string directory)
-        {
-            return _debugHelper?.ValidateGameDirectory(directory) ?? false;
-        }
-
-        private void DebugFateMarkerPositions()
-        {
-            _debugHelper?.DebugFateMarkerPositions(_currentMapMarkers);
-        }
-
-        private void DiagnoseOverlayCanvas()
-        {
-            _debugHelper?.DiagnoseOverlayCanvas();
-        }
-
-        private void RedirectDebugOutput()
-        {
-            if (_debugHelper != null)
-            {
-                System.Diagnostics.Trace.Listeners.Add(new TextBoxTraceListener(_debugHelper));
-            }
-        }
-
-        private async void QuestList_MouseDoubleClick(object sender, System.Windows.Input.MouseButtonEventArgs e)
-        {
-            var questList = this.FindName("QuestList") as WpfListBox;
-            if (questList?.SelectedItem is QuestInfo selectedQuest)
-            {
-                try
-                {
-                    LogDebug($"Double-clicked quest: {selectedQuest.Name} (ID: {selectedQuest.Id})");
-
-                    if (selectedQuest.MapId > 0)
-                    {
-                        var targetTerritory = FindTerritoryByMapId(selectedQuest.MapId);
-
-                        if (targetTerritory != null)
-                        {
-                            LogDebug($"Switching to map for quest '{selectedQuest.Name}' - Territory: {targetTerritory.PlaceName} (MapId: {selectedQuest.MapId})");
-
-                            TerritoryList.SelectedItem = targetTerritory;
-
-                            StatusText.Text = $"Loading map for quest '{selectedQuest.Name}' in {targetTerritory.PlaceName}...";
-                            bool success = await LoadTerritoryMapAsync(targetTerritory);
-
-                            if (success)
-                            {
-                                StatusText.Text = $"Map loaded for quest '{selectedQuest.Name}' in {targetTerritory.PlaceName}";
-                            }
-                            else
-                            {
-                                StatusText.Text = $"Failed to load map for quest '{selectedQuest.Name}'";
-                            }
-                        }
-                        else
-                        {
-                            LogDebug($"No territory found for quest MapId: {selectedQuest.MapId}");
-                            WpfMessageBox.Show($"Could not find territory for quest '{selectedQuest.Name}'.\n\nMapId: {selectedQuest.MapId}",
-                                              "Territory Not Found", MessageBoxButton.OK, MessageBoxImage.Information);
-                        }
-                    }
-                    else if (!string.IsNullOrEmpty(selectedQuest.PlaceName))
-                    {
-                        var targetTerritory = FindTerritoryByPlaceName(selectedQuest.PlaceName);
-
-                        if (targetTerritory != null)
-                        {
-                            LogDebug($"Switching to map for quest '{selectedQuest.Name}' by PlaceName - Territory: {targetTerritory.PlaceName}");
-
-                            TerritoryList.SelectedItem = targetTerritory;
-
-                            StatusText.Text = $"Loading map for quest '{selectedQuest.Name}' in {targetTerritory.PlaceName}...";
-                            bool success = await LoadTerritoryMapAsync(targetTerritory);
-
-                            if (success)
-                            {
-                                StatusText.Text = $"Map loaded for quest '{selectedQuest.Name}' in {targetTerritory.PlaceName}";
-                            }
-                            else
-                            {
-                                StatusText.Text = $"Failed to load map for quest '{selectedQuest.Name}'";
-                            }
-                        }
-                        else
-                        {
-                            LogDebug($"No territory found for quest PlaceName: {selectedQuest.PlaceName}");
-                            WpfMessageBox.Show($"Could not find territory for quest '{selectedQuest.Name}'.\n\nLocation: {selectedQuest.PlaceName}",
-                                              "Territory Not Found", MessageBoxButton.OK, MessageBoxImage.Information);
-                        }
-                    }
-                    else
-                    {
-                        LogDebug($"Quest '{selectedQuest.Name}' has no location data (MapId: {selectedQuest.MapId}, PlaceName: '{selectedQuest.PlaceName}')");
-                        WpfMessageBox.Show($"Quest '{selectedQuest.Name}' doesn't have location data.\n\nCannot switch to map.",
-                                          "No Location Data", MessageBoxButton.OK, MessageBoxImage.Information);
-                    }
-                }
-                catch (Exception ex)
-                {
-                    LogDebug($"Error switching to quest map: {ex.Message}");
-                    WpfMessageBox.Show($"Error switching to quest map: {ex.Message}",
-                        "Error", MessageBoxButton.OK, MessageBoxImage.Error);
-                }
-            }
-        }
-
-        private TerritoryInfo? FindTerritoryByMapId(uint mapId)
-        {
-            return Territories.FirstOrDefault(t => t.MapId == mapId);
-        }
-
-        private TerritoryInfo? FindTerritoryByPlaceName(string placeName)
-        {
-            return Territories.FirstOrDefault(t =>
-                string.Equals(t.PlaceName, placeName, StringComparison.OrdinalIgnoreCase));
-        }
-
-        private void FilterNpcs()
+        private void ShowQuestDetails(Amaurot.Services.Entities.QuestInfo quest)
         {
             try
             {
-                var npcSearchBox = this.FindName("NpcSearchBox") as WpfTextBox;
-                string searchText = npcSearchBox?.Text ?? "";
-                uint currentTerritoryMapId = _currentTerritory?.MapId ?? 0;
-
-                _filteredNpcsCollection.Clear();
-
-                var npcsToShow = _allNpcs.Where(npc =>
-                {
-                    // ✅ UPDATED: Only filter by territory if a territory is actually selected
-                    bool territoryMatch = currentTerritoryMapId == 0 || npc.MapId == currentTerritoryMapId;
-
-                    bool searchMatch = string.IsNullOrEmpty(searchText) ||
-                                      npc.NpcName.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
-                                      npc.NpcId.ToString().Contains(searchText);
-
-                    return territoryMatch && searchMatch;
-                }).ToList();
-
-                foreach (var npc in npcsToShow)
-                {
-                    _filteredNpcsCollection.Add(npc);
-                }
-
-                Dispatcher.Invoke(() =>
-                {
-                    var npcCountText = this.FindName("NpcCountText") as TextBlock;
-                    if (npcCountText != null)
-                    {
-                        npcCountText.Text = $"({_filteredNpcsCollection.Count})";
-                    }
-                });
-
-                LogDebug($"Filtered NPCs: {_filteredNpcsCollection.Count} of {_allNpcs.Count} total (Territory: {_currentTerritory?.PlaceName ?? "All"}, Search: '{searchText}')");
+                var questScriptService = _services.Get<QuestScriptService>();
+                var window = new QuestDetailsWindow(quest, this, questScriptService);
+                window.Show();
+                LogDebug($"Opened quest details for: {quest.Name}");
             }
             catch (Exception ex)
             {
-                LogDebug($"Error filtering NPCs: {ex.Message}");
+                LogDebug($"Error showing quest details: {ex.Message}");
+                System.Windows.MessageBox.Show($"Error: {ex.Message}", "Error",
+                    MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
-        private void PanelVisibility_Changed(object sender, RoutedEventArgs e)
+        private async Task NavigateToQuestLocation(QuestInfo quest)
         {
-            if (sender is WpfCheckBox checkBox)
-            {
-                bool isVisible = checkBox.IsChecked == true;
-                DockPanel? targetPanel = null;
-                string panelName = "";
-
-                switch (checkBox.Name)
-                {
-                    case "ShowQuestsCheckBox":
-                        targetPanel = this.FindName("QuestsPanel") as DockPanel;
-                        panelName = "Quests";
-                        break;
-
-                    case "ShowNpcsCheckBox":
-                        targetPanel = this.FindName("NpcsPanel") as DockPanel;
-                        panelName = "NPCs";
-                        break;
-
-                    case "ShowBNpcsCheckBox":
-                        targetPanel = this.FindName("BNpcsPanel") as DockPanel;
-                        panelName = "BNpcs";
-                        break;
-
-                    case "ShowFatesCheckBox":
-                        targetPanel = this.FindName("FatesPanel") as DockPanel;
-                        panelName = "Fates";
-                        break;
-
-                    case "ShowEobjsCheckBox":
-                        targetPanel = this.FindName("EobjsPanel") as DockPanel;
-                        panelName = "Eobjs";
-                        break;
-
-                    case "ShowEventItemCheckBox":
-                        targetPanel = this.FindName("EventItemPanel") as DockPanel;
-                        panelName = "EventItem";
-                        break;
-                }
-
-                if (targetPanel != null)
-                {
-                    UpdatePanelVisibility(targetPanel, isVisible, panelName);
-                }
-
-                UpdatePanelAreaVisibility();
-            }
-        }
-
-        private void UpdatePanelVisibility(DockPanel panel, bool isVisible, string panelName)
-        {
-            if (panel == null) return;
-
             try
             {
-                panel.Visibility = isVisible ? Visibility.Visible : Visibility.Collapsed;
-                LogDebug($"Panel '{panelName}' {(isVisible ? "shown" : "hidden")}");
+                TerritoryInfo? territory = null;
+
+                if (quest.MapId > 0)
+                {
+                    territory = _entities.Territories.FirstOrDefault(t => t.MapId == quest.MapId);
+                }
+                else if (!string.IsNullOrEmpty(quest.PlaceName))
+                {
+                    territory = _entities.Territories.FirstOrDefault(t =>
+                        string.Equals(t.PlaceName, quest.PlaceName, StringComparison.OrdinalIgnoreCase));
+                }
+
+                if (territory != null)
+                {
+                    TerritoryList.SelectedItem = territory;
+                    StatusText.Text = $"Loading map for quest '{quest.Name}'...";
+                    await LoadTerritoryMapAsync(territory);
+                }
+                else
+                {
+                    System.Windows.MessageBox.Show($"Could not find territory for quest '{quest.Name}'",
+                        "Territory Not Found", MessageBoxButton.OK, MessageBoxImage.Information);
+                }
             }
             catch (Exception ex)
             {
-                LogDebug($"Error updating panel visibility for '{panelName}': {ex.Message}");
+                LogDebug($"Error navigating to quest: {ex.Message}");
+                System.Windows.MessageBox.Show($"Error: {ex.Message}", "Error",
+                    MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
@@ -2258,47 +1385,30 @@ namespace Amaurot
         {
             try
             {
-                var questsPanel = this.FindName("QuestsPanel") as DockPanel;
-                var npcsPanel = this.FindName("NpcsPanel") as DockPanel;
-                var bnpcsPanel = this.FindName("BNpcsPanel") as DockPanel;
-                var fatesPanel = this.FindName("FatesPanel") as DockPanel;
-                var eobjsPanel = this.FindName("EobjsPanel") as DockPanel;
-                var eventItemPanel = this.FindName("EventItemPanel") as DockPanel;
+                var panels = new[] { "QuestsPanel", "NpcsPanel", "BNpcsPanel", "FatesPanel", "EobjsPanel", "EventItemPanel" }
+                    .Select(name => FindName(name) as DockPanel)
+                    .Where(p => p != null);
 
-                bool anyPanelVisible =
-                    (questsPanel?.Visibility == Visibility.Visible) ||
-                    (npcsPanel?.Visibility == Visibility.Visible) ||
-                    (bnpcsPanel?.Visibility == Visibility.Visible) ||
-                    (fatesPanel?.Visibility == Visibility.Visible) ||
-                    (eobjsPanel?.Visibility == Visibility.Visible) ||
-                    (eventItemPanel?.Visibility == Visibility.Visible);
+                bool anyVisible = panels.Any(p => p.Visibility == Visibility.Visible);
 
-                // ✅ UPDATED: Don't set width here - let ReorganizePanels() handle it dynamically
-                if (PanelAreaColumn != null)
+                if (PanelAreaColumn != null && !anyVisible)
                 {
-                    if (!anyPanelVisible)
-                    {
-                        PanelAreaColumn.Width = new GridLength(0);
-                    }
-                    // Width will be set by ReorganizePanels() based on layout
+                    PanelAreaColumn.Width = new GridLength(0);
                 }
 
                 if (PanelGridArea != null)
                 {
-                    PanelGridArea.Visibility = anyPanelVisible ? Visibility.Visible : Visibility.Collapsed;
+                    PanelGridArea.Visibility = anyVisible ? Visibility.Visible : Visibility.Collapsed;
                 }
 
-                // ✅ ADD: Only reorganize if we're not in the middle of data loading
                 if (!_isLoadingData)
                 {
                     ReorganizePanels();
                 }
-
-                LogDebug($"Panel area visibility: {(anyPanelVisible ? "visible" : "hidden")}");
             }
             catch (Exception ex)
             {
-                LogDebug($"Error updating panel area visibility: {ex.Message}");
+                LogDebug($"Error updating panel visibility: {ex.Message}");
             }
         }
 
@@ -2306,33 +1416,25 @@ namespace Amaurot
         {
             try
             {
-                // ✅ UPDATED: Changed panel order for your desired layout
-                var panels = new List<(DockPanel? panel, string name, int priority)>
-        {
-            (this.FindName("QuestsPanel") as DockPanel, "Quests", 1),      // Top-left (Row 0, Col 0)
-            (this.FindName("NpcsPanel") as DockPanel, "NPCs", 2),          // Top-right (Row 0, Col 1)
-            (this.FindName("FatesPanel") as DockPanel, "Fates", 3),        // Bottom-left (Row 1, Col 0)
-            (this.FindName("BNpcsPanel") as DockPanel, "BNpcs", 4),        // Bottom-right (Row 1, Col 1)
-            (this.FindName("EobjsPanel") as DockPanel, "Eobjs", 5),        // Additional panel (Row 0, Col 2)
-            (this.FindName("EventItemPanel") as DockPanel, "EventItem", 6) // Additional panel (Row 1, Col 2)
-        };
+                var panelInfo = new[]
+                {
+                    ("QuestsPanel", 1), ("NpcsPanel", 2), ("FatesPanel", 3),
+                    ("BNpcsPanel", 4), ("EobjsPanel", 5), ("EventItemPanel", 6)
+                };
 
-                var visiblePanels = panels
-                    .Where(p => p.panel != null && p.panel.Visibility == Visibility.Visible)
+                var visiblePanels = panelInfo
+                    .Select(p => (panel: FindName(p.Item1) as DockPanel, priority: p.Item2))
+                    .Where(p => p.panel?.Visibility == Visibility.Visible)
                     .OrderBy(p => p.priority)
+                    .Select(p => p.panel)
                     .ToList();
 
-                var dynamicPanelGrid = this.FindName("DynamicPanelGrid") as Grid;
-                if (dynamicPanelGrid == null)
-                {
-                    LogDebug("DynamicPanelGrid not found, cannot reorganize panels");
+                if (FindName("DynamicPanelGrid") is not Grid grid)
                     return;
-                }
 
-                // Clear the dynamic panel grid completely
-                dynamicPanelGrid.Children.Clear();
-                dynamicPanelGrid.RowDefinitions.Clear();
-                dynamicPanelGrid.ColumnDefinitions.Clear();
+                grid.Children.Clear();
+                grid.RowDefinitions.Clear();
+                grid.ColumnDefinitions.Clear();
 
                 if (visiblePanels.Count == 0)
                 {
@@ -2341,180 +1443,188 @@ namespace Amaurot
                     return;
                 }
 
-                // ✅ NEW: Dynamic layout - 2×2 for 4 panels, 3×2 for 5+ panels
-                int columns, rows;
-                double panelAreaWidth; // ✅ ADD: Dynamic width calculation
+                int columns = visiblePanels.Count <= 4 ? 2 : 3;
+                int rows = 2;
+                double width = columns == 2 ? 500 : 750;
 
-                if (visiblePanels.Count <= 4)
-                {
-                    columns = 2;
-                    rows = 2;
-                    panelAreaWidth = 500; // Keep original width for 2×2
-                    LogDebug($"🎛️ Creating 2×2 grid layout: {visiblePanels.Count} panels -> {columns} columns x {rows} rows (width: {panelAreaWidth}px)");
-                }
-                else
-                {
-                    columns = 3;
-                    rows = 2;
-                    panelAreaWidth = 750; // ✅ NEW: Increase width for 3×2 to maintain panel size (500 * 3/2 = 750)
-                    LogDebug($"🎛️ Creating 3×2 grid layout: {visiblePanels.Count} panels -> {columns} columns x {rows} rows (width: {panelAreaWidth}px)");
-                }
-
-                // ✅ NEW: Update the panel area column width dynamically
                 if (PanelAreaColumn != null)
                 {
-                    PanelAreaColumn.Width = new GridLength(panelAreaWidth);
-                    LogDebug($"   📏 Updated PanelAreaColumn width to {panelAreaWidth}px");
+                    PanelAreaColumn.Width = new GridLength(width);
                 }
 
-                // Create column definitions
                 for (int col = 0; col < columns; col++)
                 {
-                    dynamicPanelGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-
+                    grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
                     if (col < columns - 1)
-                    {
-                        dynamicPanelGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(5) });
-                    }
+                        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(5) });
                 }
 
-                // Create row definitions
                 for (int row = 0; row < rows; row++)
                 {
-                    dynamicPanelGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
-
+                    grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
                     if (row < rows - 1)
-                    {
-                        dynamicPanelGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(5) });
-                    }
+                        grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(5) });
                 }
 
-                // Place panels in grid positions
                 int panelIndex = 0;
                 for (int row = 0; row < rows && panelIndex < visiblePanels.Count; row++)
                 {
                     for (int col = 0; col < columns && panelIndex < visiblePanels.Count; col++)
                     {
-                        var panel = visiblePanels[panelIndex].panel;
-                        if (panel == null) continue;
+                        var panel = visiblePanels[panelIndex++];
+                        if (panel.Parent is System.Windows.Controls.Panel parent)
+                            parent.Children.Remove(panel);
 
-                        // Remove panel from its current parent before adding to new parent
-                        if (panel.Parent is System.Windows.Controls.Panel parentPanel)
-                        {
-                            parentPanel.Children.Remove(panel);
-                        }
-
-                        // Set grid position (accounting for splitters)
                         Grid.SetRow(panel, row * 2);
                         Grid.SetColumn(panel, col * 2);
-
-                        // Add to the dynamic panel grid
-                        dynamicPanelGrid.Children.Add(panel);
-
-                        LogDebug($"   📍 Panel {panelIndex + 1} ({visiblePanels[panelIndex].name}) -> Row {row}, Col {col}");
-
-                        panelIndex++;
+                        grid.Children.Add(panel);
                     }
                 }
 
-                // Add horizontal splitters between rows
-                for (int row = 0; row < rows - 1; row++)
-                {
-                    var horizontalSplitter = new GridSplitter
-                    {
-                        HorizontalAlignment = System.Windows.HorizontalAlignment.Stretch,
-                        VerticalAlignment = VerticalAlignment.Stretch,
-                        Height = 5,
-                        Background = new SolidColorBrush(Colors.LightGray)
-                    };
-                    Grid.SetRow(horizontalSplitter, (row * 2) + 1);
-                    Grid.SetColumn(horizontalSplitter, 0);
-                    Grid.SetColumnSpan(horizontalSplitter, columns * 2 - 1);
-                    dynamicPanelGrid.Children.Add(horizontalSplitter);
-                }
+                AddGridSplitters(grid, rows, columns);
 
-                // Add vertical splitters between columns
-                for (int col = 0; col < columns - 1; col++)
-                {
-                    var verticalSplitter = new GridSplitter
-                    {
-                        HorizontalAlignment = System.Windows.HorizontalAlignment.Stretch,
-                        VerticalAlignment = VerticalAlignment.Stretch,
-                        Width = 5,
-                        Background = new SolidColorBrush(Colors.LightGray)
-                    };
-                    Grid.SetRow(verticalSplitter, 0);
-                    Grid.SetColumn(verticalSplitter, (col * 2) + 1);
-                    Grid.SetRowSpan(verticalSplitter, rows * 2 - 1);
-                    dynamicPanelGrid.Children.Add(verticalSplitter);
-                }
-
-                LogDebug($"✅ Reorganized {visiblePanels.Count} panels into {columns}×{rows} layout with {panelAreaWidth}px total width");
-
-                // Verification
-                Dispatcher.BeginInvoke(new System.Action(() =>
-                {
-                    LogDebug($"🔍 POST-LAYOUT VERIFICATION:");
-                    LogDebug($"   DynamicPanelGrid children count: {dynamicPanelGrid.Children.Count}");
-                    LogDebug($"   Column definitions: {dynamicPanelGrid.ColumnDefinitions.Count}");
-                    LogDebug($"   Row definitions: {dynamicPanelGrid.RowDefinitions.Count}");
-                    LogDebug($"   PanelAreaColumn width: {PanelAreaColumn?.Width.Value}px");
-
-                    foreach (UIElement child in dynamicPanelGrid.Children)
-                    {
-                        if (child is DockPanel panel)
-                        {
-                            var row = Grid.GetRow(panel);
-                            var col = Grid.GetColumn(panel);
-                            LogDebug($"   Panel '{panel.Name}' at Grid Row={row}, Col={col}");
-                        }
-                    }
-                }), DispatcherPriority.Loaded);
+                LogDebug($"Reorganized {visiblePanels.Count} panels into {columns}×{rows} grid");
             }
             catch (Exception ex)
             {
-                LogDebug($"❌ Error reorganizing panels: {ex.Message}");
-                LogDebug($"   Stack trace: {ex.StackTrace}");
+                LogDebug($"Error reorganizing panels: {ex.Message}");
+            }
+        }
+
+        private void AddGridSplitters(Grid grid, int rows, int columns)
+        {
+            for (int row = 0; row < rows - 1; row++)
+            {
+                var splitter = new GridSplitter
+                {
+                    HorizontalAlignment = System.Windows.HorizontalAlignment.Stretch,
+                    VerticalAlignment = VerticalAlignment.Stretch,
+                    Height = 5,
+                    Background = new SolidColorBrush(Colors.LightGray)
+                };
+                Grid.SetRow(splitter, (row * 2) + 1);
+                Grid.SetColumn(splitter, 0);
+                Grid.SetColumnSpan(splitter, columns * 2 - 1);
+                grid.Children.Add(splitter);
+            }
+
+            for (int col = 0; col < columns - 1; col++)
+            {
+                var splitter = new GridSplitter
+                {
+                    HorizontalAlignment = System.Windows.HorizontalAlignment.Stretch,
+                    VerticalAlignment = VerticalAlignment.Stretch,
+                    Width = 5,
+                    Background = new SolidColorBrush(Colors.LightGray)
+                };
+                Grid.SetRow(splitter, 0);
+                Grid.SetColumn(splitter, (col * 2) + 1);
+                Grid.SetRowSpan(splitter, rows * 2 - 1);
+                grid.Children.Add(splitter);
             }
         }
 
         private void InitializeDynamicPanelLayout()
         {
-            try
-            {
-                ReorganizePanels();
-                LogDebug("Dynamic panel layout initialized");
-            }
-            catch (Exception ex)
-            {
-                LogDebug($"Error initializing dynamic panel layout: {ex.Message}");
-            }
+            ReorganizePanels();
+            LogDebug("Dynamic panel layout initialized");
         }
+
+        [System.Runtime.InteropServices.DllImport("gdi32.dll")]
+        private static extern bool DeleteObject(IntPtr hObject);
+
+        #endregion Helper Methods
     }
 
-    public class TerritoryInfo
+    #region Helper Classes
+
+    public class ServiceContainer
     {
-        public uint Id { get; set; }
-        public string Name { get; set; } = string.Empty;
-        public string TerritoryNameId { get; set; } = string.Empty;
-        public uint PlaceNameId { get; set; }
-        public string PlaceName { get; set; } = string.Empty;
-        public uint MapId { get; set; }
-        public string Region { get; set; } = string.Empty;
-        public uint PlaceNameIdTerr { get; set; }
-        public uint RegionId { get; set; }
-        public string RegionName { get; set; } = string.Empty;
+        private readonly Dictionary<Type, object> _services = new();
 
-        public override string ToString()
+        public void Register<T>(T service) where T : class
         {
-            if (!string.IsNullOrEmpty(PlaceName) && !PlaceName.StartsWith("[Territory ID:"))
-            {
-                return $"{Id} - {PlaceName}";
-            }
-            else
-            {
-                return $"{Id} - Territory {Id}";
-            }
+            _services[typeof(T)] = service;
+        }
+
+        public T? Get<T>() where T : class
+        {
+            return _services.TryGetValue(typeof(T), out var service) ? service as T : null;
         }
     }
+
+    public class EntityCollectionManager
+    {
+        public ObservableCollection<TerritoryInfo> Territories { get; } = new();
+        public ObservableCollection<QuestInfo> Quests { get; } = new();
+        public ObservableCollection<BNpcInfo> BNpcs { get; } = new();
+        public ObservableCollection<FateInfo> Fates { get; } = new();
+
+        public ObservableCollection<TerritoryInfo> FilteredTerritories { get; } = new();
+        public ObservableCollection<QuestInfo> FilteredQuests { get; } = new();
+        public ObservableCollection<EntityNpcInfo> FilteredNpcs { get; } = new();
+        public ObservableCollection<BNpcInfo> FilteredBNpcs { get; } = new();
+        public ObservableCollection<FateInfo> FilteredFates { get; } = new();
+
+        public List<EntityNpcInfo> AllNpcs { get; } = new();
+
+        public ObservableCollection<EntityNpcInfo> Npcs => FilteredNpcs;
+    }
+
+    public class MapStateManager
+    {
+        private double _currentScale = 1.0;
+        public double CurrentScale => _currentScale;
+
+        public TerritoryInfo? CurrentTerritory { get; set; }
+        public SaintCoinach.Xiv.Map? CurrentMap { get; set; }
+        public List<MapMarker> CurrentMapMarkers { get; } = new();
+        public List<MapMarker> AllQuestMarkers { get; } = new();
+
+        public bool IsDragging { get; set; }
+        public bool HideDuplicateTerritories { get; set; }
+        public System.Windows.Point LastMousePosition { get; set; }
+
+        public void SetCurrentScale(double scale)
+        {
+            _currentScale = scale;
+        }
+    }
+
+    public class ProgressManager
+    {
+        private readonly MainWindow _window;
+        private CancellationTokenSource? _cancellationSource;
+
+        public ProgressManager(MainWindow window)
+        {
+            _window = window;
+        }
+
+        public void Show(string operation)
+        {
+            _window.ProgressOverlay.Visibility = Visibility.Visible;
+            _window.ProgressStatusText.Text = $"Starting {operation}...";
+            _window.QuestExtractionProgressBar.IsIndeterminate = true;
+            _window.CancelExtractionButton.IsEnabled = true;
+            _cancellationSource = new CancellationTokenSource();
+        }
+
+        public void UpdateStatus(string message)
+        {
+            _window.ProgressStatusText.Text = message;
+            _window.StatusText.Text = message;
+        }
+
+        public void Hide()
+        {
+            _window.ProgressOverlay.Visibility = Visibility.Collapsed;
+            _cancellationSource?.Dispose();
+            _cancellationSource = null;
+        }
+
+        public CancellationToken CancellationToken => _cancellationSource?.Token ?? CancellationToken.None;
+    }
+
+    #endregion Helper Classes
 }

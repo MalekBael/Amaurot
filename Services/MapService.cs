@@ -12,6 +12,8 @@ using System.Windows.Media;
 using System.Windows.Controls;
 using Amaurot.Services; // ✅ ADD: This should already be there, but make sure it includes FateLgbService
 
+using FateInfo = Amaurot.Services.Entities.FateInfo;
+
 namespace Amaurot
 {
     public class MapService

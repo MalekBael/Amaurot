@@ -1,10 +1,14 @@
-﻿using System.Windows;
-using System.Windows.Controls;
-using System.Windows.Media;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Windows.Input;
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Media;
 using Amaurot.Services;
+
+// Add proper using statements to resolve QuestInfo and QuestNpcInfo errors
+using QuestInfo = Amaurot.Services.Entities.QuestInfo;
+using QuestNpcInfo = Amaurot.Services.Entities.QuestNpcInfo;
 
 namespace Amaurot
 {
@@ -41,15 +45,14 @@ namespace Amaurot
             }
 
             // ✅ FIX: Critical properties to prevent app minimization
-            this.ShowInTaskbar = false;        // Don't show in taskbar (owned window)
-            this.Topmost = false;              // Don't force always on top
-            this.WindowState = WindowState.Normal;  // Ensure normal state
+            this.ShowInTaskbar = false;
+            this.Topmost = false;
+            this.WindowState = WindowState.Normal;
 
             _questInfo = questInfo;
             PopulateQuestDetails(questInfo);
         }
 
-        // ✅ FIX: Simple close handler
         private void CloseButton_Click(object sender, RoutedEventArgs e)
         {
             this.Close();
@@ -101,14 +104,13 @@ namespace Amaurot
 
             if (!string.IsNullOrEmpty(questInfo.QuestIdString))
             {
-                // ✅ NEW: Add quest identifier with script buttons
                 AddQuestIdentifierRowWithScriptButtons("Quest Identifier:", questInfo.QuestIdString, row++);
             }
 
             AddDetailRow("Name:", questInfo.Name, row++);
             AddDetailRow("Quest Type:", GetQuestTypeDescription(questInfo), row++);
 
-            // ✅ Start NPCs Section
+            // Start NPCs Section
             if (questInfo.StartNpcs.Any())
             {
                 AddSectionHeader("Start NPCs", row++);
@@ -243,7 +245,7 @@ namespace Amaurot
                 TextWrapping = TextWrapping.Wrap,
                 VerticalAlignment = VerticalAlignment.Center,
                 Margin = new Thickness(0, 0, 10, 0),
-                FontFamily = new System.Windows.Media.FontFamily("Consolas, Courier New, monospace"), // ✅ FIXED: Fully qualified
+                FontFamily = new System.Windows.Media.FontFamily("Consolas, Courier New, monospace"),
                 FontWeight = FontWeights.SemiBold
             };
             valuePanel.Children.Add(valueBlock);
@@ -262,9 +264,9 @@ namespace Amaurot
                         {
                             Content = "Open in VSCode",
                             Padding = new Thickness(8, 4, 8, 4),
-                            Background = new SolidColorBrush(System.Windows.Media.Color.FromRgb(0, 120, 215)), // ✅ FIXED: Fully qualified
+                            Background = new SolidColorBrush(System.Windows.Media.Color.FromRgb(0, 120, 215)),
                             Foreground = new SolidColorBrush(Colors.White),
-                            BorderBrush = new SolidColorBrush(System.Windows.Media.Color.FromRgb(0, 90, 158)), // ✅ FIXED: Fully qualified
+                            BorderBrush = new SolidColorBrush(System.Windows.Media.Color.FromRgb(0, 90, 158)),
                             FontSize = 11,
                             VerticalAlignment = VerticalAlignment.Center,
                             Cursor = System.Windows.Input.Cursors.Hand,
@@ -281,9 +283,9 @@ namespace Amaurot
                         {
                             Content = "Open in Visual Studio",
                             Padding = new Thickness(8, 4, 8, 4),
-                            Background = new SolidColorBrush(System.Windows.Media.Color.FromRgb(104, 33, 122)), // ✅ FIXED: Fully qualified
+                            Background = new SolidColorBrush(System.Windows.Media.Color.FromRgb(104, 33, 122)),
                             Foreground = new SolidColorBrush(Colors.White),
-                            BorderBrush = new SolidColorBrush(System.Windows.Media.Color.FromRgb(84, 23, 102)), // ✅ FIXED: Fully qualified
+                            BorderBrush = new SolidColorBrush(System.Windows.Media.Color.FromRgb(84, 23, 102)),
                             FontSize = 11,
                             VerticalAlignment = VerticalAlignment.Center,
                             Cursor = System.Windows.Input.Cursors.Hand,
@@ -352,7 +354,7 @@ namespace Amaurot
 
             if (!success)
             {
-                System.Windows.MessageBox.Show($"Failed to open {scriptInfo.QuestIdString}.cpp in Visual Studio Code.\n\n" + // ✅ FIXED: Fully qualified
+                System.Windows.MessageBox.Show($"Failed to open {scriptInfo.QuestIdString}.cpp in Visual Studio Code.\n\n" +
                                "Please ensure Visual Studio Code is installed and accessible via the 'code' command.",
                                "Error Opening Script", MessageBoxButton.OK, MessageBoxImage.Warning);
             }
@@ -370,7 +372,7 @@ namespace Amaurot
 
             if (!success)
             {
-                System.Windows.MessageBox.Show($"Failed to open {scriptInfo.QuestIdString}.cpp in Visual Studio.\n\n" + // ✅ FIXED: Fully qualified
+                System.Windows.MessageBox.Show($"Failed to open {scriptInfo.QuestIdString}.cpp in Visual Studio.\n\n" +
                                "Please ensure Visual Studio is installed and accessible.",
                                "Error Opening Script", MessageBoxButton.OK, MessageBoxImage.Warning);
             }
@@ -394,7 +396,7 @@ namespace Amaurot
 
             var valuePanel = new StackPanel
             {
-                Orientation = System.Windows.Controls.Orientation.Horizontal, // ✅ Explicit namespace
+                Orientation = System.Windows.Controls.Orientation.Horizontal,
                 Margin = new Thickness(0, 3, 0, 3)
             };
 
@@ -407,7 +409,7 @@ namespace Amaurot
             };
             valuePanel.Children.Add(valueBlock);
 
-            var showButton = new System.Windows.Controls.Button // ✅ Explicit namespace
+            var showButton = new System.Windows.Controls.Button
             {
                 Content = buttonText,
                 Padding = new Thickness(8, 4, 8, 4),
@@ -430,33 +432,18 @@ namespace Amaurot
         {
             try
             {
-                System.Diagnostics.Debug.WriteLine($"=== ShowQuestGiverOnMap_Click Debug ===");
-                System.Diagnostics.Debug.WriteLine($"Quest: {_questInfo.Name} (ID: {_questInfo.Id})");
-                System.Diagnostics.Debug.WriteLine($"NPC Name: {questGiver.NpcName}");
-                System.Diagnostics.Debug.WriteLine($"NPC ID: {questGiver.NpcId}");
-                System.Diagnostics.Debug.WriteLine($"MapId: {questGiver.MapId}");
-                System.Diagnostics.Debug.WriteLine($"Territory: {questGiver.TerritoryName} (ID: {questGiver.TerritoryId})");
-                System.Diagnostics.Debug.WriteLine($"Coordinates: ({questGiver.MapX:F1}, {questGiver.MapY:F1}, {questGiver.MapZ:F1})");
-                System.Diagnostics.Debug.WriteLine($"==============================");
-
                 // Get the main window
                 var mainWindow = System.Windows.Application.Current.MainWindow as MainWindow;
                 if (mainWindow == null)
                 {
                     var message = "Could not access main window for map navigation";
-                    System.Diagnostics.Debug.WriteLine($"ERROR: {message}");
                     System.Windows.MessageBox.Show(message, "Error", MessageBoxButton.OK, MessageBoxImage.Error);
                     return;
                 }
 
-                System.Diagnostics.Debug.WriteLine($"Found main window: {mainWindow.GetType().Name}");
-
                 // Enhanced coordinate validation
                 bool hasValidMapId = questGiver.MapId > 0;
                 bool hasValidCoordinates = questGiver.MapX != 0 || questGiver.MapY != 0;
-
-                System.Diagnostics.Debug.WriteLine($"Valid MapId: {hasValidMapId} (MapId: {questGiver.MapId})");
-                System.Diagnostics.Debug.WriteLine($"Valid Coordinates: {hasValidCoordinates} (Coords: {questGiver.MapX:F1}, {questGiver.MapY:F1})");
 
                 if (!hasValidMapId)
                 {
@@ -469,7 +456,6 @@ namespace Amaurot
                                  $"• Coordinates: ({questGiver.MapX:F1}, {questGiver.MapY:F1})\n\n" +
                                  $"This indicates the LGB parser didn't find location data for this quest.";
 
-                    System.Diagnostics.Debug.WriteLine($"ERROR: {message}");
                     System.Windows.MessageBox.Show(message, "Debug: No Valid Map Data", MessageBoxButton.OK, MessageBoxImage.Warning);
                     return;
                 }
@@ -484,14 +470,10 @@ namespace Amaurot
                                  $"• Coordinates: ({questGiver.MapX:F1}, {questGiver.MapY:F1}) (INVALID - both are 0)\n\n" +
                                  $"This indicates coordinate conversion failed.";
 
-                    System.Diagnostics.Debug.WriteLine($"WARNING: {message}");
                     System.Windows.MessageBox.Show(message, "Debug: Invalid Coordinates", MessageBoxButton.OK, MessageBoxImage.Warning);
                 }
 
                 // Find the territory for this quest giver
-                System.Diagnostics.Debug.WriteLine($"Searching for territory with MapId: {questGiver.MapId}");
-                System.Diagnostics.Debug.WriteLine($"Available territories count: {mainWindow.Territories?.Count ?? 0}");
-
                 var targetTerritory = mainWindow.Territories?.FirstOrDefault(t => t.MapId == questGiver.MapId);
                 if (targetTerritory == null)
                 {
@@ -504,19 +486,14 @@ namespace Amaurot
                                  $"• Sample Map IDs: {string.Join(", ", availableMapIds)}\n\n" +
                                  $"This indicates a mismatch between the quest data and territory data.";
 
-                    System.Diagnostics.Debug.WriteLine($"ERROR: {message}");
                     System.Windows.MessageBox.Show(message, "Debug: Territory Not Found", MessageBoxButton.OK, MessageBoxImage.Error);
                     return;
                 }
 
-                System.Diagnostics.Debug.WriteLine($"Found target territory: {targetTerritory.PlaceName} (ID: {targetTerritory.Id}, MapId: {targetTerritory.MapId})");
-
                 // Switch to the territory
-                System.Diagnostics.Debug.WriteLine($"Switching to territory: {targetTerritory.PlaceName}");
                 mainWindow.TerritoryList.SelectedItem = targetTerritory;
 
                 // Create and add quest marker for this quest giver
-                System.Diagnostics.Debug.WriteLine($"Creating quest marker...");
                 AddQuestGiverMarkerToMap(questGiver, mainWindow);
 
                 var successMessage = $"Map Updated Successfully!\n\n" +
@@ -526,7 +503,6 @@ namespace Amaurot
                                    $"• Coordinates: ({questGiver.MapX:F1}, {questGiver.MapY:F1})\n" +
                                    $"• Marker ID: {1000000 + questGiver.NpcId}";
 
-                System.Diagnostics.Debug.WriteLine($"SUCCESS: {successMessage}");
                 System.Windows.MessageBox.Show(successMessage, "Debug: Map Navigation Successful", MessageBoxButton.OK, MessageBoxImage.Information);
             }
             catch (System.Exception ex)
@@ -536,9 +512,6 @@ namespace Amaurot
                                   $"• Message: {ex.Message}\n" +
                                   $"• Quest: {_questInfo?.Name ?? "Unknown"}\n" +
                                   $"• Quest Giver: {questGiver?.NpcName ?? "Unknown"}";
-
-                System.Diagnostics.Debug.WriteLine($"ERROR: {errorMessage}");
-                System.Diagnostics.Debug.WriteLine($"Stack trace: {ex.StackTrace}");
 
                 System.Windows.MessageBox.Show(errorMessage, "Debug: Error in Show on Map", MessageBoxButton.OK, MessageBoxImage.Error);
             }
@@ -559,18 +532,18 @@ namespace Amaurot
                     X = questGiver.MapX,
                     Y = questGiver.MapY,
                     Z = questGiver.MapZ,
-                    IconId = 61411, // ✅ Using the specified quest icon ID
-                    IconPath = "ui/icon/061000/061411.tex", // ✅ Using the specified path
+                    IconId = 61411,
+                    IconPath = "ui/icon/061000/061411.tex",
                     Type = MarkerType.Quest,
                     IsVisible = true
                 };
 
                 // Add to current map markers using AddCustomMarker (the method that exists)
-                mainWindow.AddCustomMarker(questMarker); // ✅ Fixed to use existing method
+                mainWindow.AddCustomMarker(questMarker);
             }
             catch (System.Exception ex)
             {
-                System.Windows.MessageBox.Show($"Error adding quest marker: {ex.Message}", // ✅ Explicit namespace
+                System.Windows.MessageBox.Show($"Error adding quest marker: {ex.Message}",
                     "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }

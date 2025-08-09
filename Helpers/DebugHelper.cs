@@ -8,6 +8,7 @@ using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using WpfPanel = System.Windows.Controls.Panel;
+using FateInfo = Amaurot.Services.Entities.FateInfo;
 
 namespace Amaurot
 {

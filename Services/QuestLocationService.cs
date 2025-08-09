@@ -8,6 +8,10 @@ using System.Data;
 using System.Data.SQLite;
 using System.IO;
 
+// ✅ FIX: Use entity types consistently
+using QuestInfo = Amaurot.Services.Entities.QuestInfo;
+using QuestNpcInfo = Amaurot.Services.Entities.QuestNpcInfo;
+
 namespace Amaurot.Services
 {
     /// <summary>
@@ -943,7 +947,7 @@ namespace Amaurot.Services
             }
         }
 
-        public void UpdateQuestLocations(IEnumerable<Amaurot.QuestInfo> quests)
+        public void UpdateQuestLocations(IEnumerable<QuestInfo> quests) // ✅ FIX: Use entity QuestInfo
         {
             int updatedCount = 0;
 
@@ -955,11 +959,11 @@ namespace Amaurot.Services
                     {
                         quest.MapId = locationData.MapId;
                         quest.TerritoryId = locationData.TerritoryId;
-                        quest.X = locationData.MapX;
-                        quest.Y = locationData.MapY;
-                        quest.Z = locationData.MapZ;
+                        quest.MapX = locationData.MapX; // ✅ FIX: Use MapX instead of X
+                        quest.MapY = locationData.MapY; // ✅ FIX: Use MapY instead of Y
+                        quest.MapZ = locationData.MapZ; // ✅ FIX: Use MapZ instead of Z
 
-                        var questGiver = new Amaurot.QuestNpcInfo
+                        var questGiver = new QuestNpcInfo // ✅ FIX: Use entity QuestNpcInfo
                         {
                             NpcId = locationData.ObjectId,
                             NpcName = GetNpcNameFromId(locationData.ObjectId),

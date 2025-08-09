@@ -5,6 +5,9 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using Amaurot.Services;
+using NpcInfo = Amaurot.Services.Entities.NpcInfo;
+using NpcQuestInfo = Amaurot.Services.Entities.NpcQuestInfo;
+using QuestInfo = Amaurot.Services.Entities.QuestInfo;
 using WpfMessageBox = System.Windows.MessageBox;
 
 namespace Amaurot
@@ -21,6 +24,7 @@ namespace Amaurot
             _npcInfo = npcInfo;
             _mainWindow = mainWindow;
 
+            // ✅ FIX: Get QuestScriptService from the MainWindow's service container
             _questScriptService = GetQuestScriptServiceFromMainWindow();
 
             InitializeWindow();
@@ -31,13 +35,42 @@ namespace Amaurot
         {
             try
             {
-                var fieldInfo = typeof(MainWindow).GetField("_questScriptService",
+                // ✅ FIX: Access the service container instead of looking for a field
+                var servicesField = typeof(MainWindow).GetField("_services",
                     System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-                return fieldInfo?.GetValue(_mainWindow) as QuestScriptService;
+
+                if (servicesField?.GetValue(_mainWindow) is not object servicesContainer)
+                {
+                    _mainWindow.LogDebug("Could not get services container from MainWindow");
+                    return null;
+                }
+
+                // Get the service container's Get method
+                var getMethod = servicesContainer.GetType().GetMethod("Get");
+                if (getMethod == null)
+                {
+                    _mainWindow.LogDebug("Could not find Get method on services container");
+                    return null;
+                }
+
+                // Make it generic for QuestScriptService
+                var genericGetMethod = getMethod.MakeGenericMethod(typeof(QuestScriptService));
+                var questScriptService = genericGetMethod.Invoke(servicesContainer, null) as QuestScriptService;
+
+                if (questScriptService != null)
+                {
+                    _mainWindow.LogDebug("Successfully retrieved QuestScriptService from MainWindow");
+                }
+                else
+                {
+                    _mainWindow.LogDebug("QuestScriptService not found in MainWindow services");
+                }
+
+                return questScriptService;
             }
             catch (Exception ex)
             {
-                _mainWindow.LogDebug($"Could not get QuestScriptService: {ex.Message}");
+                _mainWindow.LogDebug($"Error getting QuestScriptService: {ex.Message}");
                 return null;
             }
         }
@@ -64,19 +97,20 @@ namespace Amaurot
                     }
                     else
                     {
-                        WpfMessageBox.Show($"Could not find full quest details for quest ID {npcQuestInfo.QuestId}",
+                        System.Windows.MessageBox.Show($"Could not find full quest details for quest ID {npcQuestInfo.QuestId}",
                             "Quest Not Found", MessageBoxButton.OK, MessageBoxImage.Warning);
                     }
                 }
                 catch (Exception ex)
                 {
                     _mainWindow.LogDebug($"Error opening quest details: {ex.Message}");
-                    WpfMessageBox.Show($"Error opening quest details: {ex.Message}",
+                    System.Windows.MessageBox.Show($"Error opening quest details: {ex.Message}",
                         "Error", MessageBoxButton.OK, MessageBoxImage.Error);
                 }
             }
         }
 
+        // Rest of the methods remain the same...
         private void OpenScriptInVSCode(QuestScriptInfo scriptInfo)
         {
             if (_questScriptService == null || string.IsNullOrEmpty(scriptInfo.ScriptPath))

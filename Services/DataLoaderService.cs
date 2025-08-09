@@ -8,6 +8,13 @@ using System.Linq;
 using System.Threading.Tasks;
 using System.Windows;
 
+using TerritoryInfo = Amaurot.Services.Entities.TerritoryInfo;
+using QuestInfo = Amaurot.Services.Entities.QuestInfo;
+using BNpcInfo = Amaurot.Services.Entities.BNpcInfo;
+using FateInfo = Amaurot.Services.Entities.FateInfo;
+using EventInfo = Amaurot.Services.Entities.EventInfo;
+using QuestNpcInfo = Amaurot.Services.Entities.QuestNpcInfo;
+
 namespace Amaurot.Services
 {
     public class DataLoaderService
@@ -183,13 +190,12 @@ namespace Amaurot.Services
                 {
                     try
                     {
-                        // Check if this Level entry references our NPC (Object field = NPC ID)
-                        var objectValue = level[6]; // Object field at index 6
+                        var objectValue = level[6];
                         if (objectValue != null && Convert.ToUInt32(objectValue) == npcId)
                         {
-                            float worldX = Convert.ToSingle(level[0]); // X at index 0
-                            float worldY = Convert.ToSingle(level[1]); // Y at index 1
-                            float worldZ = Convert.ToSingle(level[2]); // Z at index 2
+                            float worldX = Convert.ToSingle(level[0]);
+                            float worldY = Convert.ToSingle(level[1]);
+                            float worldZ = Convert.ToSingle(level[2]);
 
                             var territoryValue = level[9];
                             var mapValue = level[8];
@@ -201,7 +207,6 @@ namespace Amaurot.Services
                                 uint mapId = (uint)map.Key;
                                 string territoryName = territory.PlaceName?.Name?.ToString() ?? $"Territory_{territoryId}";
 
-                                // Convert world coordinates to map coordinates
                                 var mapCoords = ConvertWorldToMapCoordinates(worldX, worldY, worldZ, mapId);
 
                                 return new QuestNpcInfo
@@ -504,18 +509,10 @@ namespace Amaurot.Services
                         _logDebug($"    Error getting map properties: {ex.Message}");
                     }
 
-                    // REVERSE the MapRenderer coordinate conversion to get the raw marker coordinates
-                    // MapRenderer does: gameX = (41.0 / c) * (normalizedX) + 1.0
-                    // Where: normalizedX = (marker.X + offsetX) / 2048.0
-                    // And: c = sizeFactor / 100.0
-
                     double c = sizeFactor / 100.0;
 
-                    // From MapRenderer: gameCoord = (41.0 / c) * ((rawCoord + offset) / 2048.0) + 1.0
-                    // Solving for rawCoord: rawCoord = ((gameCoord - 1.0) * c * 2048.0 / 41.0) - offset
-
                     double rawMarkerX = worldX * sizeFactor / 100.0;
-                    double rawMarkerY = worldZ * sizeFactor / 100.0; // Note: Y in map = Z in world
+                    double rawMarkerY = worldZ * sizeFactor / 100.0;
 
                     double normalizedX = (rawMarkerX + offsetX) / 2048.0;
                     double normalizedY = (rawMarkerY + offsetY) / 2048.0;
@@ -760,7 +757,11 @@ namespace Amaurot.Services
                                     IconId = (uint)Math.Max(0, fateRow.AsInt32("Icon")),
                                     X = 0,
                                     Y = 0,
-                                    Z = 0
+                                    Z = 0,
+                                    MapX = 0,
+                                    MapY = 0,
+                                    MapZ = 0,
+                                    MapId = 0
                                 };
 
                                 tempFates.Add(fateInfo);
@@ -925,13 +926,147 @@ namespace Amaurot.Services
 
                 await _questLocationService.ExtractQuestLocationsAsync();
 
-                _questLocationService.UpdateQuestLocations(quests);
+                int updatedQuests = 0;
+                int questsWithLocationData = 0;
 
-                _logDebug("🎯 Quest location extraction completed using Libra Eorzea");
+                foreach (var quest in quests)
+                {
+                    try
+                    {
+                        var locationData = _questLocationService.GetQuestLocationData(quest.Id);
+                        if (locationData != null)
+                        {
+                            questsWithLocationData++;
+
+                            quest.MapId = locationData.MapId;
+                            quest.TerritoryId = locationData.TerritoryId;
+                            quest.MapX = locationData.MapX;
+                            quest.MapY = locationData.MapY;
+                            quest.MapZ = locationData.MapZ;
+
+                            if (string.IsNullOrEmpty(quest.PlaceName))
+                            {
+                                var territory = FindTerritoryById(locationData.TerritoryId);
+                                if (territory != null)
+                                {
+                                    quest.PlaceName = territory.PlaceName;
+                                    quest.PlaceNameId = territory.PlaceNameId;
+                                }
+                            }
+
+                            var questGiver = new QuestNpcInfo
+                            {
+                                NpcId = locationData.ObjectId,
+                                NpcName = locationData.NpcName ?? GetNpcNameFromId(locationData.ObjectId),
+                                TerritoryId = locationData.TerritoryId,
+                                TerritoryName = ExtractTerritoryFromObjectName(locationData.ObjectName),
+                                MapId = locationData.MapId,
+                                MapX = locationData.MapX,
+                                MapY = locationData.MapY,
+                                MapZ = locationData.MapZ,
+                                WorldX = locationData.WorldX,
+                                WorldY = locationData.WorldY,
+                                WorldZ = locationData.WorldZ,
+                                Role = "Quest Giver"
+                            };
+
+                            if (!quest.StartNpcs.Any(npc => npc.NpcId == questGiver.NpcId))
+                            {
+                                quest.StartNpcs.Clear();
+                                quest.StartNpcs.Add(questGiver);
+                            }
+
+                            updatedQuests++;
+
+                            if (updatedQuests <= 10)
+                            {
+                                _logDebug($"  ✅ Updated quest {quest.Id} '{quest.Name}' with location: {quest.PlaceName} (Map: {quest.MapId}, Coords: {quest.MapX:F1}, {quest.MapY:F1})");
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logDebug($"Error updating quest {quest.Id} with location data: {ex.Message}");
+                    }
+                }
+
+                _logDebug($"🎯 Quest location update complete!");
+                _logDebug($"📊 Found location data for {questsWithLocationData} out of {quests.Count} quests");
+                _logDebug($"📊 Successfully updated {updatedQuests} quest entities with location data");
+
+                if (questsWithLocationData < quests.Count)
+                {
+                    _logDebug($"ℹ️ {quests.Count - questsWithLocationData} quests have no location data in Libra database (this is normal for some quest types)");
+                }
             }
             catch (Exception ex)
             {
                 _logDebug($"❌ Error in quest location extraction: {ex.Message}");
+            }
+        }
+
+        private TerritoryInfo? FindTerritoryById(uint territoryId)
+        {
+            try
+            {
+                if (_realm == null) return null;
+
+                var territorySheet = _realm.GameData.GetSheet<SaintCoinach.Xiv.TerritoryType>();
+                var territory = territorySheet.FirstOrDefault(t => t.Key == territoryId);
+
+                if (territory != null)
+                {
+                    return new TerritoryInfo
+                    {
+                        Id = (uint)territory.Key,
+                        PlaceName = territory.PlaceName?.Name?.ToString() ?? "",
+                        PlaceNameId = (uint)(territory.PlaceName?.Key ?? 0)
+                    };
+                }
+            }
+            catch (Exception ex)
+            {
+                _logDebug($"Error finding territory {territoryId}: {ex.Message}");
+            }
+
+            return null;
+        }
+
+        private string GetNpcNameFromId(uint npcId)
+        {
+            try
+            {
+                if (_realm == null) return $"NPC_{npcId}";
+
+                var enpcSheet = _realm.GameData.GetSheet<SaintCoinach.Xiv.ENpcResident>();
+                var npcData = enpcSheet.FirstOrDefault(npc => npc.Key == npcId);
+
+                return npcData?.Singular?.ToString() ?? $"NPC_{npcId}";
+            }
+            catch (Exception ex)
+            {
+                _logDebug($"Error getting NPC name for {npcId}: {ex.Message}");
+                return $"NPC_{npcId}";
+            }
+        }
+
+        private string ExtractTerritoryFromObjectName(string objectName)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(objectName)) return "Unknown Territory";
+
+                var parts = objectName.Replace("NPC_", "").Split('_');
+                if (parts.Length > 0)
+                {
+                    return parts[0];
+                }
+
+                return objectName;
+            }
+            catch
+            {
+                return "Unknown Territory";
             }
         }
 
@@ -976,7 +1111,7 @@ namespace Amaurot.Services
                             NpcId = npcId,
                             NpcName = npcName,
                             TerritoryId = questLocationData.TerritoryId,
-                            TerritoryName = questLocationData.ObjectName.Replace("NPC_", "").Replace($"_{questLocationData.TerritoryId}", ""), // Clean up territory name
+                            TerritoryName = questLocationData.ObjectName.Replace("NPC_", "").Replace($"_{questLocationData.TerritoryId}", ""),
                             MapId = questLocationData.MapId,
                             MapX = questLocationData.MapX,
                             MapY = questLocationData.MapY,

@@ -1,5 +1,14 @@
-﻿using System.Collections.ObjectModel;
-using System.Windows.Controls;
+﻿using System;
+using System.Collections.ObjectModel;
+using System.Windows;
+using System.Windows.Controls; // ✅ ADD: Missing using for TextBlock
+
+// Add using statements for entity types
+using TerritoryInfo = Amaurot.Services.Entities.TerritoryInfo;
+using QuestInfo = Amaurot.Services.Entities.QuestInfo;
+using BNpcInfo = Amaurot.Services.Entities.BNpcInfo;
+using FateInfo = Amaurot.Services.Entities.FateInfo;
+using NpcInfo = Amaurot.Services.Entities.NpcInfo; // ✅ ADD: Missing using for NpcInfo
 
 namespace Amaurot.Services
 {
