@@ -201,12 +201,13 @@ namespace Amaurot.Services
         }
 
         // ✅ OPTIMIZED: Fast FATE processing with cached lookups
+        // ✅ FIXED: Proper FATE name extraction from Fate sheet using direct indexer access
         private MapMarker? ProcessLgbFate(FateLgbMarker lgbFate, Map map)
         {
             // Fast cache lookup instead of linear search
             _fateSheetCache.TryGetValue(lgbFate.InstanceId, out var fateRow);
 
-            string fateName = $"FATE_{lgbFate.LayerName}";
+            string fateName = $"FATE_{lgbFate.LayerName}"; // Fallback name
             uint fateId = lgbFate.InstanceId;
             uint iconId = 60093;
             uint level = 1;
@@ -215,35 +216,56 @@ namespace Amaurot.Services
             {
                 try
                 {
+                    // ✅ FIXED: Use direct indexer access instead of reflection to avoid ambiguous match
+                    // Cast to dynamic to access the indexer directly
+                    dynamic dynamicRow = fateRow;
+
                     // Get FATE name from index 24
-                    var nameValue = fateRow.GetType().GetProperty("Item")?.GetValue(fateRow, new object[] { 24 });
+                    var nameValue = dynamicRow[24];
                     if (nameValue != null)
                     {
-                        fateName = nameValue.ToString() ?? fateName;
+                        var nameString = nameValue.ToString();
+                        if (!string.IsNullOrEmpty(nameString) && nameString != "")
+                        {
+                            fateName = nameString;
+                            _logDebug($"🔗 Found FATE name: '{fateName}' for InstanceId {lgbFate.InstanceId}");
+                        }
                     }
 
-                    // Get FATE ID
+                    // ✅ FIXED: Get FATE ID (Key/RowId) - this is the actual FATE ID, not InstanceId
                     var keyProperty = fateRow.GetType().GetProperty("Key");
                     if (keyProperty != null)
                     {
-                        fateId = (uint)(int)keyProperty.GetValue(fateRow);
+                        var keyValue = keyProperty.GetValue(fateRow);
+                        if (keyValue != null)
+                        {
+                            fateId = (uint)(int)keyValue;
+                            _logDebug($"🔗 Found FATE ID: {fateId} for InstanceId {lgbFate.InstanceId}");
+                        }
                     }
 
-                    // Get level from index 2
-                    var levelValue = fateRow.GetType().GetProperty("Item")?.GetValue(fateRow, new object[] { 2 });
+                    // ✅ FIXED: Get level from index 2 (ClassJobLevel) using direct indexer
+                    var levelValue = dynamicRow[2];
                     if (levelValue != null)
                     {
                         level = (uint)Math.Max(1, Convert.ToInt32(levelValue));
                     }
 
-                    // Get icon from index 3
-                    var iconValue = fateRow.GetType().GetProperty("Item")?.GetValue(fateRow, new object[] { 3 });
+                    // ✅ FIXED: Get icon from index 3 using direct indexer
+                    var iconValue = dynamicRow[3];
                     if (iconValue != null)
                     {
                         iconId = (uint)Math.Max(60093, Convert.ToInt32(iconValue));
                     }
                 }
-                catch { }
+                catch (Exception ex)
+                {
+                    _logDebug($"⚠️ Error extracting FATE data for InstanceId {lgbFate.InstanceId}: {ex.Message}");
+                }
+            }
+            else
+            {
+                _logDebug($"⚠️ No Fate sheet entry found for InstanceId {lgbFate.InstanceId}");
             }
 
             // ✅ OPTIMIZED: Simplified coordinate conversion

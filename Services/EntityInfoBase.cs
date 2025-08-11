@@ -11,9 +11,18 @@ namespace Amaurot.Services.Entities
         public double MapY { get; set; }
         public double MapZ { get; set; }
 
+        public List<string> Tags { get; set; } = [];
+        public List<string> Categories { get; set; } = [];
+        public List<uint> RelatedIds { get; set; } = [];
+
         public abstract string DisplayName { get; }
 
         public override string ToString() => DisplayName;
+
+        public List<string> GetSearchableFields()
+        {
+            return [Name, DisplayName, Id.ToString()];
+        }
     }
 
     public class TerritoryInfo : EntityInfoBase
@@ -68,7 +77,7 @@ namespace Amaurot.Services.Entities
         public int QuestCount { get; set; }
         public List<NpcQuestInfo> Quests { get; set; } = new();
 
-        public override string DisplayName => $"{NpcName} ({QuestCount} quest{(QuestCount != 1 ? "s" : "")})";
+        public override string DisplayName => $"{NpcName} - {NpcId}";
     }
 
     public class BNpcInfo : EntityInfoBase
@@ -95,13 +104,12 @@ namespace Amaurot.Services.Entities
         public string TerritoryName { get; set; } = string.Empty;
         public uint IconId { get; set; }
 
-        // Add the X, Y, Z properties that DataLoaderService expects
         public double X { get; set; }
 
         public double Y { get; set; }
         public double Z { get; set; }
 
-        public override string DisplayName => Name;
+        public override string DisplayName => $"{Id} {Name}";
     }
 
     public class EventInfo : EntityInfoBase
@@ -115,7 +123,24 @@ namespace Amaurot.Services.Entities
         public override string DisplayName => Name;
     }
 
-    // Supporting classes
+    public class InstanceContentInfo : EntityInfoBase
+    {
+        public uint InstanceContentId => Id;
+        public string InstanceName { get; set; } = string.Empty;
+        public uint InstanceContentTypeId { get; set; }
+        public string InstanceContentTypeName { get; set; } = string.Empty;
+        public uint ContentFinderConditionId { get; set; }
+        public uint SortKey { get; set; }
+        public uint TimeLimit { get; set; }
+        public uint NewPlayerBonusExp { get; set; }
+        public uint NewPlayerBonusGil { get; set; }
+        public uint InstanceClearGil { get; set; }
+        public uint LevelRequired { get; set; }
+        public bool IsRepeatable { get; set; }
+
+        public override string DisplayName => $"{Id} - {InstanceName}";
+    }
+
     public class NpcQuestInfo
     {
         public uint QuestId { get; set; }
@@ -148,7 +173,6 @@ namespace Amaurot.Services.Entities
         public double MapY { get; set; }
         public double MapZ { get; set; }
 
-        // Add the missing properties that DataLoaderService expects
         public float WorldX { get; set; }
 
         public float WorldY { get; set; }

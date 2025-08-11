@@ -14,6 +14,7 @@ using BNpcInfo = Amaurot.Services.Entities.BNpcInfo;
 using FateInfo = Amaurot.Services.Entities.FateInfo;
 using EventInfo = Amaurot.Services.Entities.EventInfo;
 using QuestNpcInfo = Amaurot.Services.Entities.QuestNpcInfo;
+using InstanceContentInfo = Amaurot.Services.Entities.InstanceContentInfo;
 
 namespace Amaurot.Services
 {
@@ -166,7 +167,7 @@ namespace Amaurot.Services
             });
         }
 
-        private QuestNpcInfo? ExtractNpcFromRow(SaintCoinach.Ex.Relational.IRelationalRow npcRow, string role, uint questId)
+        private QuestNpcInfo? ExtractNpcFromRow(SaintCoinach.Ex.Relational.IRelationalRow npcRow, string role, uint _)
         {
             try
             {
@@ -377,8 +378,6 @@ namespace Amaurot.Services
                 }
             }
 
-            bool locationFound = false;
-
             try
             {
                 var placeNameObj = quest.PlaceName;
@@ -412,8 +411,6 @@ namespace Amaurot.Services
                                 _logDebug($"  MapId lookup result: {questInfo.MapId}");
                             }
                         }
-
-                        locationFound = true;
                     }
                 }
             }
@@ -499,9 +496,20 @@ namespace Amaurot.Services
 
                         if (indexer != null)
                         {
-                            sizeFactor = (float)Convert.ChangeType(indexer.GetValue(map, new object[] { "SizeFactor" }), typeof(float));
-                            offsetX = (float)Convert.ChangeType(indexer.GetValue(map, new object[] { "OffsetX" }), typeof(float));
-                            offsetY = (float)Convert.ChangeType(indexer.GetValue(map, new object[] { "OffsetY" }), typeof(float));
+                            if (indexer.GetValue(map, ["SizeFactor"]) is var sizeFactorValue && sizeFactorValue != null)
+                            {
+                                sizeFactor = (float)Convert.ChangeType(sizeFactorValue, typeof(float));
+                            }
+
+                            if (indexer.GetValue(map, ["OffsetX"]) is var offsetXValue && offsetXValue != null)
+                            {
+                                offsetX = (float)Convert.ChangeType(offsetXValue, typeof(float));
+                            }
+
+                            if (indexer.GetValue(map, ["OffsetY"]) is var offsetYValue && offsetYValue != null)
+                            {
+                                offsetY = (float)Convert.ChangeType(offsetYValue, typeof(float));
+                            }
                         }
                     }
                     catch (Exception ex)
@@ -516,15 +524,8 @@ namespace Amaurot.Services
 
                     double normalizedX = (rawMarkerX + offsetX) / 2048.0;
                     double normalizedY = (rawMarkerY + offsetY) / 2048.0;
-                    double gameX = (41.0 / c) * (normalizedX) + 1.0;
-                    double gameY = (41.0 / c) * (normalizedY) + 1.0;
-
-                    _logDebug($"    COORDINATE CONVERSION DEBUG:");
-                    _logDebug($"      World: ({worldX:F1}, {worldY:F1}, {worldZ:F1})");
-                    _logDebug($"      Map {mapId}: SizeFactor={sizeFactor}, OffsetX={offsetX}, OffsetY={offsetY}");
-                    _logDebug($"      Raw Marker: ({rawMarkerX:F1}, {rawMarkerY:F1})");
-                    _logDebug($"      Normalized: ({normalizedX:F3}, {normalizedY:F3})");
-                    _logDebug($"      Game Coordinates: ({gameX:F1}, {gameY:F1}) - should be (11.7, 13.5) for Mother Miounne");
+                    double gameX = (41.0 / c) * normalizedX + 1.0;
+                    double gameY = (41.0 / c) * normalizedY + 1.0;
 
                     return (gameX, gameY, worldY);
                 }
@@ -622,12 +623,11 @@ namespace Amaurot.Services
 
         private static string? FindCsvFile(string filename)
         {
-            var paths = new[]
-            {
+            string[] paths = [
                 Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Libs", filename),
                 Path.Combine(Directory.GetCurrentDirectory(), "Libs", filename),
                 Path.Combine(Environment.CurrentDirectory, "Libs", filename)
-            };
+            ];
 
             return paths.FirstOrDefault(File.Exists);
         }
@@ -742,7 +742,7 @@ namespace Amaurot.Services
                             try
                             {
                                 string fateName = fateRow.AsString("Name") ?? "";
-                                if (string.IsNullOrWhiteSpace(fateName)) continue;
+                                if (string.IsNullOrWhiteSpace(fateName)) continue;        
 
                                 var fateInfo = new FateInfo
                                 {
@@ -1122,7 +1122,7 @@ namespace Amaurot.Services
                             Role = "Quest Giver"
                         };
 
-                        _logDebug($"    ✅ Created Quest Giver from location service data: {questGiver.NpcName} at {questGiver.TerritoryName} ({questGiver.MapX:F1}, {questGiver.MapY:F1})");
+                         _logDebug($"    ✅ Created Quest Giver from location service data: {questGiver.NpcName} at {questGiver.TerritoryName} ({questGiver.MapX:F1}, {questGiver.MapY:F1})");
                         return questGiver;
                     }
                     else
@@ -1160,6 +1160,180 @@ namespace Amaurot.Services
                 _logDebug($"    Error in research method for NPC {npcId}: {ex.Message}");
                 return null;
             }
+        }
+
+        public async Task<List<InstanceContentInfo>> LoadInstanceContentsAsync()
+        {
+            var instanceContents = new List<InstanceContentInfo>();
+
+            try
+            {
+                _logDebug("🏛️ Loading Instance Content from Saint Coinach...");
+
+                if (_realm?.GameData == null)
+                {
+                    _logDebug("❌ Realm or GameData is null - cannot load Instance Content");
+                    return instanceContents;
+                }
+
+                await Task.Run(() =>
+                {
+                    var instanceContentSheet = _realm.GameData.GetSheet<SaintCoinach.Xiv.InstanceContent>();
+                    var contentFinderSheet = _realm.GameData.GetSheet<SaintCoinach.Xiv.ContentFinderCondition>();
+
+                    _logDebug($"📊 Found {instanceContentSheet.Count} Instance Content entries");
+
+                    foreach (var instance in instanceContentSheet)
+                    {
+                        try
+                        {
+                            var instanceName = "";
+                            try
+                            {
+                                var nameValue = instance[4];
+                                instanceName = nameValue?.ToString()?.Trim() ?? "";
+                            }
+                            catch (Exception ex)
+                            {
+                                _logDebug($"Could not access index 4 for instance {instance.Key}: {ex.Message}");
+                            }
+                            
+                            if (string.IsNullOrEmpty(instanceName) || instanceName == "0")
+                            {
+                                continue;
+                            }
+
+                            uint instanceContentTypeId = 0;
+                            string instanceContentTypeName = "Instance Content";
+                            uint contentFinderConditionId = 0;
+                            uint sortKey = 0;
+                            uint timeLimit = 0;
+                            uint newPlayerBonusExp = 0;
+                            uint newPlayerBonusGil = 0;
+                            uint instanceClearGil = 0;
+                            uint levelRequired = 0;
+
+                            try
+                            {
+                                var clearGilValue = instance["InstanceClearGil"];
+                                if (clearGilValue != null && uint.TryParse(clearGilValue.ToString(), out uint parsedClearGil))
+                                {
+                                    instanceClearGil = parsedClearGil > 10000 ? parsedClearGil / 100 : parsedClearGil;
+                                }
+                            }
+                            catch { }
+
+                            try
+                            {
+                                var contentFinderValue = instance["ContentFinderCondition"];
+                                if (contentFinderValue != null && uint.TryParse(contentFinderValue.ToString(), out uint parsedContentFinder))
+                                {
+                                    contentFinderConditionId = parsedContentFinder;
+                                    
+                                    try
+                                    {
+                                        var contentFinderEntry = contentFinderSheet.FirstOrDefault(c => c.Key == parsedContentFinder);
+                                        if (contentFinderEntry != null)       
+                                        {
+                                            var classJobLevelRequired = contentFinderEntry["ClassJobLevelRequired"];
+                                            if (classJobLevelRequired != null && uint.TryParse(classJobLevelRequired.ToString(), out uint level))
+                                            {
+                                                levelRequired = level;
+                                            }
+                                        }
+                                    }
+                                    catch (Exception ex)
+                                    {
+                                        _logDebug($"Could not get level from ContentFinderCondition {parsedContentFinder}: {ex.Message}");
+                                    }
+                                }
+                            }
+                            catch { }
+
+                            try
+                            {
+                                var sortKeyValue = instance["SortKey"];
+                                if (sortKeyValue != null && uint.TryParse(sortKeyValue.ToString(), out uint parsedSortKey))
+                                {
+                                    sortKey = parsedSortKey;
+                                }
+                            }
+                            catch { }
+
+                            try
+                            {
+                                var timeLimitValue = instance["TimeLimit{min}"];
+                                if (timeLimitValue != null && uint.TryParse(timeLimitValue.ToString(), out uint parsedTimeLimit))
+                                {
+                                    timeLimit = parsedTimeLimit;
+                                }
+                            }
+                            catch { }
+
+                            try
+                            {
+                                var newPlayerExpValue = instance["NewPlayerBonusExp"];
+                                if (newPlayerExpValue != null && uint.TryParse(newPlayerExpValue.ToString(), out uint parsedExp))
+                                {
+                                    newPlayerBonusExp = parsedExp;
+                                }
+                            }
+                            catch { }
+
+                            try
+                            {
+                                var newPlayerGilValue = instance["NewPlayerBonusGil"];
+                                if (newPlayerGilValue != null && uint.TryParse(newPlayerGilValue.ToString(), out uint parsedGil))
+                                {
+                                    newPlayerBonusGil = parsedGil;
+                                }
+                            }
+                            catch { }
+
+                            var instanceInfo = new InstanceContentInfo
+                            {
+                                Id = (uint)instance.Key,
+                                Name = instanceName,
+                                InstanceName = instanceName,
+                                InstanceContentTypeId = instanceContentTypeId,
+                                InstanceContentTypeName = instanceContentTypeName,
+                                ContentFinderConditionId = contentFinderConditionId,
+                                SortKey = sortKey,
+                                TimeLimit = timeLimit,
+                                NewPlayerBonusExp = newPlayerBonusExp,
+                                NewPlayerBonusGil = newPlayerBonusGil,
+                                InstanceClearGil = instanceClearGil,
+                                LevelRequired = levelRequired,      
+                                IsRepeatable = true
+                            };
+
+                            instanceContents.Add(instanceInfo);
+                            
+                            if (instanceContents.Count <= 5)
+                            {
+                                _logDebug($"  📋 Loaded: {instanceInfo.DisplayName} (Level: {levelRequired}, Gil: {instanceClearGil})");
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            _logDebug($"❌ Error processing Instance Content {instance.Key}: {ex.Message}");
+                        }
+                    }
+                });
+
+                instanceContents = instanceContents
+                    .Where(i => !string.IsNullOrEmpty(i.InstanceName))
+                    .OrderBy(i => i.Id)
+                    .ToList();
+
+                _logDebug($"🏛️ Loaded {instanceContents.Count} Instance Content entries (sorted by Row ID)");
+            }
+            catch (Exception ex)
+            {
+                _logDebug($"❌ Error loading Instance Content: {ex.Message}");
+            }
+
+            return instanceContents;
         }
     }
 }

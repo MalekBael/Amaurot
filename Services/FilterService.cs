@@ -8,7 +8,6 @@ using System.Windows.Threading;
 using Amaurot.Services.Entities;
 using WpfApplication = System.Windows.Application;
 
-// Add proper using statements for entity types
 using TerritoryInfo = Amaurot.Services.Entities.TerritoryInfo;
 using QuestInfo = Amaurot.Services.Entities.QuestInfo;
 using BNpcInfo = Amaurot.Services.Entities.BNpcInfo;
@@ -17,30 +16,54 @@ using EventInfo = Amaurot.Services.Entities.EventInfo;
 
 namespace Amaurot.Services
 {
-    /// <summary>
-    /// Unified filter service that combines generic and specific filtering capabilities
-    /// </summary>
-    public class FilterService
+    public class FilterService(Action<string> logDebug) : IDisposable    
     {
-        private readonly Action<string> _logDebug;
+        private readonly Action<string> _logDebug = logDebug;
         private DispatcherTimer? _searchDebounceTimer;
+        private bool _disposed = false;
 
-        public FilterService(Action<string> logDebug)
+        public void Dispose()
         {
-            _logDebug = logDebug;
+            Dispose(true);
+            GC.SuppressFinalize(this);
+        }
+
+        protected virtual void Dispose(bool disposing)
+        {
+            if (!_disposed)
+            {
+                if (disposing)
+                {
+                    try
+                    {
+                        _searchDebounceTimer?.Stop();
+                        _searchDebounceTimer = null;
+                        _logDebug?.Invoke("FilterService: Timer disposed");
+                    }
+                    catch (Exception ex)
+                    {
+                        _logDebug?.Invoke($"FilterService disposal error: {ex.Message}");
+                    }
+                }
+                _disposed = true;
+            }
+        }
+
+        ~FilterService()
+        {
+            Dispose(false);
         }
 
         #region Generic Filtering Methods
 
-        /// <summary>
-        /// Generic filter method for entities inheriting from EntityInfoBase
-        /// </summary>
         public void FilterEntities<T>(
             string searchText,
             IEnumerable<T> source,
             ObservableCollection<T> target,
             Func<T, string, bool>? customFilter = null) where T : EntityInfoBase
         {
+            if (_disposed) return;
+
             target.Clear();
 
             var filtered = string.IsNullOrEmpty(searchText)
@@ -57,9 +80,6 @@ namespace Amaurot.Services
             _logDebug($"Filtered {typeof(T).Name}: {target.Count} items");
         }
 
-        /// <summary>
-        /// Generic filter method with territory filtering capability
-        /// </summary>
         public void FilterEntitiesWithTerritoryFilter<T>(
             string searchText,
             IEnumerable<T> source,
@@ -67,17 +87,17 @@ namespace Amaurot.Services
             uint? currentTerritoryMapId = null,
             Func<T, string, bool>? customFilter = null) where T : EntityInfoBase
         {
+            if (_disposed) return;
+
             target.Clear();
 
             var filtered = source.AsEnumerable();
 
-            // Apply territory filter if specified
             if (currentTerritoryMapId.HasValue && currentTerritoryMapId.Value > 0)
             {
                 filtered = filtered.Where(entity => entity.MapId == currentTerritoryMapId.Value);
             }
 
-            // Apply search filter
             if (!string.IsNullOrEmpty(searchText))
             {
                 filtered = filtered.Where(entity =>
@@ -93,15 +113,14 @@ namespace Amaurot.Services
             _logDebug($"Filtered {typeof(T).Name}: {target.Count} items (Territory: {currentTerritoryMapId?.ToString() ?? "All"})");
         }
 
-        /// <summary>
-        /// Non-generic filter method for collections that don't inherit from EntityInfoBase
-        /// </summary>
         public void FilterCollection<T>(
             string searchText,
             IEnumerable<T> source,
             ObservableCollection<T> target,
             Func<T, string, bool> predicate)
         {
+            if (_disposed) return;
+
             target.Clear();
 
             var filtered = string.IsNullOrEmpty(searchText)
@@ -120,63 +139,48 @@ namespace Amaurot.Services
 
         #region Type-Specific Filtering Methods (Legacy Support)
 
-        /// <summary>
-        /// Filter quests using original SearchFilterService logic
-        /// </summary>
         public void FilterQuests(string searchText,
             ObservableCollection<QuestInfo> sourceQuests,
             ObservableCollection<QuestInfo> filteredQuests)
         {
             FilterEntities(searchText, sourceQuests, filteredQuests, (quest, text) =>
-                quest.Name.ToLower().Contains(text.ToLower()) ||
-                quest.Id.ToString().Contains(text) ||
-                quest.JournalGenre.ToLower().Contains(text.ToLower()));
+                quest.Name.Contains(text, StringComparison.OrdinalIgnoreCase) ||
+                quest.Id.ToString().Contains(text, StringComparison.OrdinalIgnoreCase) ||
+                quest.JournalGenre.Contains(text, StringComparison.OrdinalIgnoreCase));
         }
 
-        /// <summary>
-        /// Filter BNpcs using original SearchFilterService logic
-        /// </summary>
         public void FilterBNpcs(string searchText,
             ObservableCollection<BNpcInfo> sourceBNpcs,
             ObservableCollection<BNpcInfo> filteredBNpcs)
         {
             FilterEntities(searchText, sourceBNpcs, filteredBNpcs, (bnpc, text) =>
-                bnpc.BNpcName.ToLower().Contains(text.ToLower()) ||
-                bnpc.BNpcBaseId.ToString().Contains(text) ||
-                bnpc.TribeName.ToLower().Contains(text.ToLower()));
+                bnpc.BNpcName.Contains(text, StringComparison.OrdinalIgnoreCase) ||
+                bnpc.BNpcBaseId.ToString().Contains(text, StringComparison.OrdinalIgnoreCase) ||
+                bnpc.TribeName.Contains(text, StringComparison.OrdinalIgnoreCase));
         }
 
-        /// <summary>
-        /// Filter events using original SearchFilterService logic
-        /// </summary>
         public void FilterEvents(string searchText,
             ObservableCollection<EventInfo> sourceEvents,
             ObservableCollection<EventInfo> filteredEvents)
         {
             FilterEntities(searchText, sourceEvents, filteredEvents, (evt, text) =>
-                evt.Name.ToLower().Contains(text.ToLower()) ||
-                evt.EventId.ToString().Contains(text));
+                evt.Name.Contains(text, StringComparison.OrdinalIgnoreCase) ||
+                evt.EventId.ToString().Contains(text, StringComparison.OrdinalIgnoreCase));
         }
 
-        /// <summary>
-        /// Filter fates using original SearchFilterService logic
-        /// </summary>
         public void FilterFates(string searchText,
             ObservableCollection<FateInfo> sourceFates,
             ObservableCollection<FateInfo> filteredFates)
         {
             FilterEntities(searchText, sourceFates, filteredFates, (fate, text) =>
-                fate.Name.ToLower().Contains(text.ToLower()) ||
-                fate.FateId.ToString().Contains(text));
+                fate.Name.Contains(text, StringComparison.OrdinalIgnoreCase) ||
+                fate.FateId.ToString().Contains(text, StringComparison.OrdinalIgnoreCase));
         }
 
         #endregion Type-Specific Filtering Methods (Legacy Support)
 
         #region Territory Filtering with Debounce (Advanced)
 
-        /// <summary>
-        /// Filter territories with debounce and async processing (original SearchFilterService logic)
-        /// </summary>
         public void FilterTerritoriesWithDebounce(string searchText,
             ObservableCollection<TerritoryInfo> sourceTerritories,
             ObservableCollection<TerritoryInfo> filteredTerritories,
@@ -184,6 +188,8 @@ namespace Amaurot.Services
             bool debugLoggingEnabled,
             Action applyFilterCallback)
         {
+            if (_disposed) return;
+
             _searchDebounceTimer?.Stop();
             _searchDebounceTimer = new DispatcherTimer
             {
@@ -192,10 +198,13 @@ namespace Amaurot.Services
 
             _searchDebounceTimer.Tick += (s, args) =>
             {
-                _searchDebounceTimer.Stop();
-                ApplyTerritoryFilters(searchText, sourceTerritories, filteredTerritories,
-                    hideDuplicates, debugLoggingEnabled);
-                applyFilterCallback?.Invoke();
+                if (!_disposed)
+                {
+                    _searchDebounceTimer.Stop();
+                    ApplyTerritoryFilters(searchText, sourceTerritories, filteredTerritories,
+                        hideDuplicates, debugLoggingEnabled);
+                    applyFilterCallback?.Invoke();
+                }
             };
 
             _searchDebounceTimer.Start();
@@ -207,6 +216,8 @@ namespace Amaurot.Services
             bool hideDuplicates,
             bool debugLoggingEnabled)
         {
+            if (_disposed) return;
+
             if (debugLoggingEnabled)
             {
                 _logDebug($"=== ApplyTerritoryFilters START ===");
@@ -216,15 +227,17 @@ namespace Amaurot.Services
 
             Task.Run(() =>
             {
+                if (_disposed) return;
+
                 var filteredTerritoriesTemp = sourceTerritories.AsEnumerable();
 
                 if (!string.IsNullOrEmpty(searchText))
                 {
                     filteredTerritoriesTemp = filteredTerritoriesTemp.Where(territory =>
-                        territory.PlaceName.ToLower().Contains(searchText.ToLower()) ||
-                        territory.Id.ToString().Contains(searchText) ||
-                        territory.Region.ToLower().Contains(searchText.ToLower()) ||
-                        territory.TerritoryNameId.ToLower().Contains(searchText.ToLower()));
+                        territory.PlaceName.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
+                        territory.Id.ToString().Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
+                        territory.Region.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
+                        territory.TerritoryNameId.Contains(searchText, StringComparison.OrdinalIgnoreCase));
                 }
 
                 if (hideDuplicates)
@@ -236,15 +249,14 @@ namespace Amaurot.Services
                     {
                         string placeName = territory.PlaceName ?? territory.Name ?? "";
 
-                        if (placeName.StartsWith("[Territory ID:") || string.IsNullOrEmpty(placeName))
+                        if (placeName.StartsWith("[Territory ID:", StringComparison.OrdinalIgnoreCase) || string.IsNullOrEmpty(placeName))
                         {
                             territoriesToKeep.Add(territory);
                             continue;
                         }
 
-                        if (!seenPlaceNames.Contains(placeName))
+                        if (seenPlaceNames.Add(placeName))
                         {
-                            seenPlaceNames.Add(placeName);
                             territoriesToKeep.Add(territory);
                         }
                     }
@@ -254,16 +266,29 @@ namespace Amaurot.Services
 
                 var finalResults = filteredTerritoriesTemp.ToList();
 
-                WpfApplication.Current.Dispatcher.Invoke(() =>
+                try
                 {
-                    filteredTerritories.Clear();
-                    foreach (var territory in finalResults)
+                    if (!_disposed && WpfApplication.Current != null)
                     {
-                        filteredTerritories.Add(territory);
+                        WpfApplication.Current.Dispatcher.Invoke(() =>
+                        {
+                            if (!_disposed)
+                            {
+                                filteredTerritories.Clear();
+                                foreach (var territory in finalResults)
+                                {
+                                    filteredTerritories.Add(territory);
+                                }
+                            }
+                        });
                     }
-                });
+                }
+                catch (Exception ex)
+                {
+                    _logDebug?.Invoke($"Error updating UI in ApplyTerritoryFilters: {ex.Message}");
+                }
 
-                if (debugLoggingEnabled)
+                if (debugLoggingEnabled && !_disposed)
                 {
                     _logDebug($"Filtered territories count: {finalResults.Count}");
                     _logDebug($"=== ApplyTerritoryFilters END ===");
@@ -275,33 +300,52 @@ namespace Amaurot.Services
 
         #region Private Helper Methods
 
-        /// <summary>
-        /// Default filter logic for entities inheriting from EntityInfoBase
-        /// </summary>
-        private bool DefaultFilter<T>(T entity, string searchText) where T : EntityInfoBase
+        private static bool DefaultFilter<T>(T entity, string searchText) where T : EntityInfoBase
         {
             return entity.Name.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
-                   entity.Id.ToString().Contains(searchText) ||
+                   entity.Id.ToString().Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
                    entity.DisplayName.Contains(searchText, StringComparison.OrdinalIgnoreCase);
         }
 
         #endregion Private Helper Methods
+
+        #region Instance Content Filtering
+
+        public void FilterInstanceContents(string searchText, ObservableCollection<InstanceContentInfo> source, ObservableCollection<InstanceContentInfo> target)
+        {
+            if (_disposed) return;
+
+            try
+            {
+                var filtered = string.IsNullOrEmpty(searchText)
+                    ? [.. source]
+                    : source.Where(instance =>
+                        instance.InstanceName.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
+                        instance.Id.ToString().Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
+                        instance.InstanceContentTypeName.Contains(searchText, StringComparison.OrdinalIgnoreCase)
+                    ).ToList();
+
+                target.Clear();
+                foreach (var instance in filtered)
+                {
+                    target.Add(instance);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logDebug?.Invoke($"Error filtering instance contents: {ex.Message}");
+            }
+        }
+
+        #endregion Instance Content Filtering
     }
 
     #region Legacy Classes (for backward compatibility)
 
-    /// <summary>
-    /// Legacy generic filter service - redirects to FilterService
-    /// </summary>
     [Obsolete("Use FilterService instead")]
-    public class GenericFilterService<T> where T : EntityInfoBase
+    public class GenericFilterService<T>(Action<string> logDebug) where T : EntityInfoBase
     {
-        private readonly FilterService _filterService;
-
-        public GenericFilterService(Action<string> logDebug)
-        {
-            _filterService = new FilterService(logDebug);
-        }
+        private readonly FilterService _filterService = new(logDebug);
 
         public void FilterEntities(
             string searchText,
@@ -323,18 +367,10 @@ namespace Amaurot.Services
         }
     }
 
-    /// <summary>
-    /// Legacy search filter service - redirects to FilterService
-    /// </summary>
     [Obsolete("Use FilterService instead")]
-    public class SearchFilterService
+    public class SearchFilterService(Action<string> logDebug)
     {
-        private readonly FilterService _filterService;
-
-        public SearchFilterService(Action<string> logDebug)
-        {
-            _filterService = new FilterService(logDebug);
-        }
+        private readonly FilterService _filterService = new(logDebug);
 
         public void FilterQuests(string searchText,
             ObservableCollection<QuestInfo> sourceQuests,

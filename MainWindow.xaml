@@ -76,6 +76,8 @@
                 <CheckBox x:Name="ShowFatesCheckBox" Content="Fates" IsChecked="True"
                   Margin="5,0" Checked="PanelVisibility_Changed" Unchecked="PanelVisibility_Changed" />
                 <!-- ✅ CHANGED: Default to False for 2×2 layout -->
+                <CheckBox x:Name="ShowInstanceContentCheckBox" Content="Instance Content" IsChecked="True"
+                  Margin="5,0" Checked="PanelVisibility_Changed" Unchecked="PanelVisibility_Changed" />
                 <CheckBox x:Name="ShowEobjsCheckBox" Content="Eobjs" IsChecked="False"
                   Margin="5,0" Checked="PanelVisibility_Changed" Unchecked="PanelVisibility_Changed" />
                 <CheckBox x:Name="ShowEventItemCheckBox" Content="EventItem" IsChecked="False"
@@ -299,7 +301,7 @@
                                         Click="QuestDetailsButton_Click"
                                         Tag="{Binding}">
                                     <Button.Content>
-                                        <TextBlock Text="⚙" FontSize="12" Foreground="Gray" />
+                                        <TextBlock Text="⛭" FontSize="12" Foreground="Gray" />
                                     </Button.Content>
                                     <Button.Style>
                                         <Style TargetType="Button">
@@ -330,7 +332,7 @@
                          Text="" TextChanged="NpcSearchBox_TextChanged"
                          Background="White" BorderThickness="1" BorderBrush="Gray"
                          ToolTip="Search NPCs by name or ID" />
-                <!-- ✅ FIXED: Added MaxHeight and proper scrolling -->
+                <!-- ✅ UPDATED: Modified template to show quest count on separate line -->
                 <ListBox Name="NpcList"
                          ItemsSource="{Binding FilteredNpcs}"
                          SelectionChanged="NpcList_SelectionChanged"
@@ -453,6 +455,66 @@
                                 <TextBlock Text="Sample Leve 1" FontWeight="SemiBold" />
                                 <TextBlock Text="Type: Battlecraft" FontSize="10" Foreground="Gray" />
                             </StackPanel>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+            </DockPanel>
+
+            <!-- InstanceContent Panel -->
+            <DockPanel x:Name="InstanceContentPanel" Visibility="Visible" Margin="2">
+                <Border DockPanel.Dock="Top" Background="LightBlue" Padding="5" Margin="0,0,0,2">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="Instance Content" FontWeight="Bold" VerticalAlignment="Center" />
+                        <TextBlock x:Name="InstanceContentCountText" Text="(0)" Margin="5,0,0,0" Foreground="Gray" VerticalAlignment="Center" />
+                    </StackPanel>
+                </Border>
+                <TextBox DockPanel.Dock="Top" x:Name="InstanceContentSearchBox" Margin="2"
+                         Text="" TextChanged="InstanceContentSearchBox_TextChanged"
+                         Background="White" BorderThickness="1" BorderBrush="Gray"
+                         ToolTip="Search instance content by name or ID" />
+                <ListBox Name="InstanceContentList"
+                         ItemsSource="{Binding FilteredInstanceContents}"
+                         SelectionChanged="InstanceContentList_SelectionChanged"
+                         Margin="2"
+                         ScrollViewer.VerticalScrollBarVisibility="Auto"
+                         ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate>
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+
+                                <!-- Instance Content Name -->
+                                <TextBlock Grid.Column="0" Text="{Binding}" ToolTip="{Binding InstanceName}"
+                                           VerticalAlignment="Center" Margin="0,2" />
+
+                                <!-- Cogwheel Icon for Instance Details -->
+                                <Button Grid.Column="1"
+                                        Width="20" Height="20"
+                                        Margin="5,0,0,0"
+                                        Background="Transparent"
+                                        BorderThickness="0"
+                                        VerticalAlignment="Center"
+                                        ToolTip="View instance content details"
+                                        Click="InstanceContentDetailsButton_Click"
+                                        Tag="{Binding}">
+                                    <Button.Content>
+                                        <TextBlock Text="⛭" FontSize="12" Foreground="Gray" />
+                                    </Button.Content>
+                                    <Button.Style>
+                                        <Style TargetType="Button">
+                                            <Setter Property="Cursor" Value="Hand" />
+                                            <Style.Triggers>
+                                                <Trigger Property="IsMouseOver" Value="True">
+                                                    <Setter Property="Background" Value="LightGray" />
+                                                </Trigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Button.Style>
+                                </Button>
+                            </Grid>
                         </DataTemplate>
                     </ListBox.ItemTemplate>
                 </ListBox>

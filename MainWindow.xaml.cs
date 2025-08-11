@@ -21,9 +21,14 @@ using QuestInfo = Amaurot.Services.Entities.QuestInfo;
 using EntityNpcInfo = Amaurot.Services.Entities.NpcInfo;
 using BNpcInfo = Amaurot.Services.Entities.BNpcInfo;
 using FateInfo = Amaurot.Services.Entities.FateInfo;
+using InstanceContentInfo = Amaurot.Services.Entities.InstanceContentInfo;
 using ServiceNpcInfo = Amaurot.Services.NpcInfo;
 using ServiceNpcQuestInfo = Amaurot.Services.NpcQuestInfo;
 using EntityNpcQuestInfo = Amaurot.Services.Entities.NpcQuestInfo;
+using WpfTextBox = System.Windows.Controls.TextBox;
+using WpfCheckBox = System.Windows.Controls.CheckBox;
+using WpfImage = System.Windows.Controls.Image;
+using WpfMenuItem = System.Windows.Controls.MenuItem;
 
 namespace Amaurot
 {
@@ -39,6 +44,7 @@ namespace Amaurot
         private ARealmReversed? _realm;
         private bool _isLoadingData;
         private DispatcherTimer? _searchDebounceTimer;
+        private FilterService? _filterService;
 
         #endregion Fields
 
@@ -53,6 +59,7 @@ namespace Amaurot
         public ObservableCollection<QuestInfo> FilteredQuests => _entities.FilteredQuests;
         public ObservableCollection<BNpcInfo> FilteredBNpcs => _entities.FilteredBNpcs;
         public ObservableCollection<FateInfo> FilteredFates => _entities.FilteredFates;
+        public ObservableCollection<InstanceContentInfo> FilteredInstanceContents => _entities.FilteredInstanceContents;
         public double CurrentScale => _mapState.CurrentScale;
 
         #endregion Properties
@@ -64,6 +71,48 @@ namespace Amaurot
             _progressManager = new ProgressManager(this);
             InitializeServices();
             Loaded += OnWindowLoaded;
+
+            this.Closing += MainWindow_Closing;
+        }
+
+        private void MainWindow_Closing(object? sender, System.ComponentModel.CancelEventArgs e)
+        {
+            try
+            {
+                LogDebug("Application closing - disposing resources...");
+
+                _filterService?.Dispose();
+
+                if (_searchDebounceTimer != null)
+                {
+                    _searchDebounceTimer.Stop();
+                    _searchDebounceTimer = null;
+                }
+
+                LogDebug("Forcing application exit...");
+                System.Windows.Application.Current.Shutdown();
+            }
+            catch (Exception ex)
+            {
+                LogDebug($"Error during shutdown: {ex.Message}");
+                System.Environment.Exit(0);
+            }
+        }
+
+        private void Exit_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                LogDebug("Exit requested - disposing resources...");
+
+                _filterService?.Dispose();
+
+                System.Windows.Application.Current.Shutdown();
+            }
+            catch
+            {
+                System.Environment.Exit(0);
+            }
         }
 
         #region Initialization
@@ -76,7 +125,10 @@ namespace Amaurot
                 _services.Register(new DebugHelper(this));
                 _services.Register(new MapRenderer(_realm));
                 _services.Register(new UIUpdateService());
-                _services.Register(new FilterService(LogDebug));  // ✅ Changed from SearchFilterService
+
+                _filterService = new FilterService(LogDebug);
+                _services.Register(_filterService);
+
                 _services.Register(new MapInteractionService(LogDebug));
 
                 LogDebug("Services initialized successfully");
@@ -97,8 +149,13 @@ namespace Amaurot
             _services.Register(new MapService(_realm, LogDebug));
             _services.Register(new NpcService(_realm, LogDebug));
             _services.Register(new QuestScriptService(_services.Get<SettingsService>()!, LogDebug));
+            _services.Register(new InstanceScriptService(_services.Get<SettingsService>()!, LogDebug));  // ✅ ADD: Register InstanceScriptService
 
-            _services.Get<MapRenderer>()?.UpdateRealm(_realm);
+            var mapRenderer = _services.Get<MapRenderer>();
+            if (mapRenderer != null && _realm != null)
+            {
+                mapRenderer.UpdateRealm(_realm);
+            }
             LogDebug("Realm-dependent services initialized");
         }
 
@@ -120,17 +177,21 @@ namespace Amaurot
             var renderer = _services.Get<MapRenderer>();
             if (renderer != null)
             {
-                renderer.SetOverlayCanvas(OverlayCanvas);
+                if (FindName("OverlayCanvas") is Canvas overlayCanvas)
+                {
+                    renderer.SetOverlayCanvas(overlayCanvas);
+                }
                 renderer.SetMainWindow(this);
             }
 
-            if (OverlayCanvas != null)
+            if (FindName("OverlayCanvas") is Canvas overlayCanvas2)
             {
-                OverlayCanvas.IsHitTestVisible = true;
-                OverlayCanvas.Background = null;
+                overlayCanvas2.IsHitTestVisible = true;
+                overlayCanvas2.Background = null;
             }
 
-            if (MapImageControl.Source is BitmapSource bitmapSource)
+            if (FindName("MapImageControl") is WpfImage mapImageControl &&
+                mapImageControl.Source is BitmapSource bitmapSource)
             {
                 CalculateAndApplyInitialScale(bitmapSource);
             }
@@ -138,10 +199,16 @@ namespace Amaurot
             UpdatePanelAreaVisibility();
             InitializeDynamicPanelLayout();
 
-            if (ShowNpcMarkersCheckBox != null)
+            if (FindName("ShowNpcMarkersCheckBox") is WpfCheckBox showNpcMarkersCheckBox)
             {
-                ShowNpcMarkersCheckBox.IsChecked = true;
+                showNpcMarkersCheckBox.IsChecked = true;
             }
+        }
+
+        private void InitializeDynamicPanelLayout()
+        {
+            ReorganizePanels();
+            LogDebug("Dynamic panel layout initialized");
         }
 
         private void ApplySavedSettings()
@@ -149,21 +216,21 @@ namespace Amaurot
             var settings = _services.Get<SettingsService>()?.Settings;
             if (settings == null) return;
 
-            if (DebugModeCheckBox != null)
+            if (FindName("DebugModeCheckBox") is WpfCheckBox debugModeCheckBox)
             {
-                DebugModeCheckBox.IsChecked = settings.DebugMode;
+                debugModeCheckBox.IsChecked = settings.DebugMode;
                 DebugModeManager.IsDebugModeEnabled = settings.DebugMode;
             }
 
-            if (HideDuplicateTerritoriesCheckBox != null)
+            if (FindName("HideDuplicateTerritoriesCheckBox") is WpfCheckBox hideDuplicateTerritoriesCheckBox)
             {
-                HideDuplicateTerritoriesCheckBox.IsChecked = settings.HideDuplicateTerritories;
+                hideDuplicateTerritoriesCheckBox.IsChecked = settings.HideDuplicateTerritories;
                 _mapState.HideDuplicateTerritories = settings.HideDuplicateTerritories;
             }
 
-            if (AutoLoadMenuItem != null)
+            if (FindName("AutoLoadMenuItem") is WpfMenuItem autoLoadMenuItem)
             {
-                AutoLoadMenuItem.IsChecked = settings.AutoLoadGameData;
+                autoLoadMenuItem.IsChecked = settings.AutoLoadGameData;
             }
 
             LogDebug($"Settings applied - Auto-load: {settings.AutoLoadGameData}, Debug: {settings.DebugMode}");
@@ -232,7 +299,11 @@ namespace Amaurot
                 _realm = new ARealmReversed(gameDirectory, SaintCoinach.Ex.Language.English);
             });
 
-            _services.Get<MapRenderer>()?.UpdateRealm(_realm);
+            var mapRenderer = _services.Get<MapRenderer>();
+            if (mapRenderer != null && _realm != null)
+            {
+                mapRenderer.UpdateRealm(_realm);
+            }
             LogDebug($"Realm initialized: {_realm != null}");
         }
 
@@ -264,6 +335,12 @@ namespace Amaurot
                 _entities.Fates,
                 _entities.FilteredFates,
                 "Loading fates...");
+
+            await LoadEntityData<InstanceContentInfo>(
+                () => dataLoader.LoadInstanceContentsAsync(),
+                _entities.InstanceContents,
+                _entities.FilteredInstanceContents,
+                "Loading instance content...");
 
             await LoadNpcsAsync();
 
@@ -678,7 +755,11 @@ namespace Amaurot
                 var coordinates = mapService?.ConvertMapToGameCoordinates(
                     clickPoint, new System.Windows.Point(0, 0), _mapState.CurrentScale, imageSize, _mapState.CurrentMap);
 
-                _services.Get<MapRenderer>()?.ShowCoordinateInfo(coordinates, clickPoint);
+                var mapRenderer = _services.Get<MapRenderer>();
+                if (mapRenderer != null && coordinates != null)
+                {
+                    mapRenderer.ShowCoordinateInfo(coordinates, clickPoint);
+                }
                 e.Handled = true;
             }
         }
@@ -686,55 +767,6 @@ namespace Amaurot
         #endregion Map Interaction
 
         #region Search and Filtering
-
-        private void TerritorySearchBox_TextChanged(object sender, TextChangedEventArgs e)
-        {
-            DebouncedSearch(() => ApplyTerritoryFilters());
-        }
-
-        private void QuestSearchBox_TextChanged(object sender, TextChangedEventArgs e)
-        {
-            var searchText = (FindName("QuestSearchBox") as System.Windows.Controls.TextBox)?.Text ?? "";
-            _services.Get<FilterService>()?.FilterQuests(searchText, _entities.Quests, _entities.FilteredQuests);  // ✅ Changed from SearchFilterService
-            UpdateEntityCount<QuestInfo>();
-        }
-
-        private void NpcSearchBox_TextChanged(object sender, TextChangedEventArgs e)
-        {
-            DebouncedSearch(() => FilterNpcs());
-        }
-
-        private void BNpcSearchBox_TextChanged(object sender, TextChangedEventArgs e)
-        {
-            var searchText = (FindName("BNpcSearchBox") as System.Windows.Controls.TextBox)?.Text ?? "";
-
-            var filterService = _services.Get<FilterService>();  // ✅ Changed from GenericFilterService<BNpcInfo>
-            filterService?.FilterBNpcs(searchText, _entities.BNpcs, _entities.FilteredBNpcs);  // ✅ Use the type-specific method
-
-            UpdateEntityCount<BNpcInfo>();
-        }
-
-        private void FateSearchBox_TextChanged(object sender, TextChangedEventArgs e)
-        {
-            var searchText = (FindName("FateSearchBox") as System.Windows.Controls.TextBox)?.Text ?? "";
-
-            var filterService = _services.Get<FilterService>();  // ✅ Changed from GenericFilterService<FateInfo>
-            filterService?.FilterFates(searchText, _entities.Fates, _entities.FilteredFates);  // ✅ Use the type-specific method
-
-            UpdateEntityCount<FateInfo>();
-        }
-
-        private void EobjSearchBox_TextChanged(object sender, TextChangedEventArgs e)
-        {
-            var searchText = (FindName("EobjSearchBox") as System.Windows.Controls.TextBox)?.Text ?? "";
-            LogDebug($"Eobj search: '{searchText}' (feature not yet implemented)");
-        }
-
-        private void EventItemSearchBox_TextChanged(object sender, TextChangedEventArgs e)
-        {
-            var searchText = (FindName("EventItemSearchBox") as System.Windows.Controls.TextBox)?.Text ?? "";
-            LogDebug($"EventItem search: '{searchText}' (feature not yet implemented)");
-        }
 
         private void DebouncedSearch(System.Action searchAction)
         {
@@ -751,9 +783,15 @@ namespace Amaurot
             _searchDebounceTimer.Start();
         }
 
+        private void TerritorySearchBox_TextChanged(object sender, TextChangedEventArgs e)
+        {
+            DebouncedSearch(() => ApplyTerritoryFilters());
+        }
+
         private void ApplyTerritoryFilters()
         {
-            var searchText = TerritorySearchBox?.Text ?? "";
+            var territorySearchBox = FindName("TerritorySearchBox") as WpfTextBox;
+            var searchText = territorySearchBox?.Text ?? "";
 
             Task.Run(() =>
             {
@@ -793,14 +831,73 @@ namespace Amaurot
             });
         }
 
+        private void QuestSearchBox_TextChanged(object sender, TextChangedEventArgs e)
+        {
+            var questSearchBox = FindName("QuestSearchBox") as WpfTextBox;
+            var searchText = questSearchBox?.Text ?? "";
+            _services.Get<FilterService>()?.FilterQuests(searchText, _entities.Quests, _entities.FilteredQuests);
+            UpdateEntityCount<QuestInfo>();
+        }
+
+        private void NpcSearchBox_TextChanged(object sender, TextChangedEventArgs e)
+        {
+            DebouncedSearch(() => FilterNpcs());
+        }
+
+        private void BNpcSearchBox_TextChanged(object sender, TextChangedEventArgs e)
+        {
+            var bnpcSearchBox = FindName("BNpcSearchBox") as WpfTextBox;
+            var searchText = bnpcSearchBox?.Text ?? "";
+
+            var filterService = _services.Get<FilterService>();
+            filterService?.FilterBNpcs(searchText, _entities.BNpcs, _entities.FilteredBNpcs);
+
+            UpdateEntityCount<BNpcInfo>();
+        }
+
+        private void FateSearchBox_TextChanged(object sender, TextChangedEventArgs e)
+        {
+            var fateSearchBox = FindName("FateSearchBox") as WpfTextBox;
+            var searchText = fateSearchBox?.Text ?? "";
+
+            var filterService = _services.Get<FilterService>();
+            filterService?.FilterFates(searchText, _entities.Fates, _entities.FilteredFates);
+
+            UpdateEntityCount<FateInfo>();
+        }
+
+        private void EobjSearchBox_TextChanged(object sender, TextChangedEventArgs e)
+        {
+            var eobjSearchBox = FindName("EobjSearchBox") as WpfTextBox;
+            var searchText = eobjSearchBox?.Text ?? "";
+            LogDebug($"Eobj search: '{searchText}' (feature not yet implemented)");
+        }
+
+        private void EventItemSearchBox_TextChanged(object sender, TextChangedEventArgs e)
+        {
+            var eventItemSearchBox = FindName("EventItemSearchBox") as WpfTextBox;
+            var searchText = eventItemSearchBox?.Text ?? "";
+            LogDebug($"EventItem search: '{searchText}' (feature not yet implemented)");
+        }
+
+        private void InstanceContentSearchBox_TextChanged(object sender, TextChangedEventArgs e)
+        {
+            var instanceContentSearchBox = FindName("InstanceContentSearchBox") as WpfTextBox;
+            var searchText = instanceContentSearchBox?.Text ?? "";
+            var filterService = _services.Get<FilterService>();
+            filterService?.FilterInstanceContents(searchText, _entities.InstanceContents, _entities.FilteredInstanceContents);
+            UpdateEntityCount<InstanceContentInfo>();
+        }
+
         private void FilterNpcs()
         {
             try
             {
-                var searchText = (FindName("NpcSearchBox") as System.Windows.Controls.TextBox)?.Text ?? "";
+                var npcSearchBox = FindName("NpcSearchBox") as WpfTextBox;
+                var searchText = npcSearchBox?.Text ?? "";
                 var currentMapId = _mapState.CurrentTerritory?.MapId;
 
-                var filterService = _services.Get<FilterService>();  // ✅ Changed from GenericFilterService<EntityNpcInfo>
+                var filterService = _services.Get<FilterService>();
                 filterService?.FilterEntitiesWithTerritoryFilter(
                     searchText,
                     _entities.AllNpcs,
@@ -830,6 +927,7 @@ namespace Amaurot
                 "NpcInfo" => _entities.FilteredNpcs.Count,
                 nameof(BNpcInfo) => _entities.FilteredBNpcs.Count,
                 nameof(FateInfo) => _entities.FilteredFates.Count,
+                nameof(InstanceContentInfo) => _entities.FilteredInstanceContents.Count,
                 _ => 0
             };
 
@@ -840,6 +938,7 @@ namespace Amaurot
                 "NpcInfo" => "NpcCountText",
                 nameof(BNpcInfo) => "BNpcCountText",
                 nameof(FateInfo) => "FateCountText",
+                nameof(InstanceContentInfo) => "InstanceContentCountText",
                 _ => null
             };
 
@@ -901,16 +1000,6 @@ namespace Amaurot
             RefreshMarkerDisplay();
         }
 
-        #endregion UI Updates
-
-        #region Event Handlers
-
-        private void Exit_Click(object sender, RoutedEventArgs e)
-        {
-            LogDebug("Application exit requested");
-            System.Windows.Application.Current.Shutdown();
-        }
-
         private void OpenSettings_Click(object sender, RoutedEventArgs e)
         {
             try
@@ -935,7 +1024,7 @@ namespace Amaurot
 
         private void ToggleDebugMode_Click(object sender, RoutedEventArgs e)
         {
-            if (sender is System.Windows.Controls.CheckBox checkBox)
+            if (sender is WpfCheckBox checkBox)
             {
                 bool enabled = checkBox.IsChecked == true;
                 DebugModeManager.IsDebugModeEnabled = enabled;
@@ -972,7 +1061,7 @@ namespace Amaurot
 
         private void PanelVisibility_Changed(object sender, RoutedEventArgs e)
         {
-            if (sender is System.Windows.Controls.CheckBox checkBox)
+            if (sender is WpfCheckBox checkBox)
             {
                 var panelName = checkBox.Name?.Replace("Show", "").Replace("CheckBox", "") + "Panel";
                 if (FindName(panelName) is DockPanel panel)
@@ -1031,7 +1120,7 @@ namespace Amaurot
             }
         }
 
-        #endregion Event Handlers
+        #endregion UI Updates
 
         #region List Event Handlers
 
@@ -1093,6 +1182,22 @@ namespace Amaurot
             }
         }
 
+        private void InstanceContentList_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (sender is System.Windows.Controls.ListBox instanceContentListBox && instanceContentListBox.SelectedItem is InstanceContentInfo selectedInstance)
+            {
+                LogDebug($"Instance Content selected: {selectedInstance.InstanceName} (ID: {selectedInstance.Id})");
+            }
+        }
+
+        private void InstanceContentDetailsButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is System.Windows.Controls.Button button && button.Tag is InstanceContentInfo instanceContent)
+            {
+                ShowInstanceContentDetails(instanceContent);
+            }
+        }
+
         #endregion List Event Handlers
 
         #region Tool Methods
@@ -1118,7 +1223,7 @@ namespace Amaurot
         {
             await RunTool("lgb-parser.exe", "LGB Parser", async (toolPath) =>
             {
-                var gamePath = _services.Get<SettingsService>()?.Settings.GameInstallationPath;
+                var gamePath = _services.Get<SettingsService>()?.Settings.GameInstallationPath ?? "";
 
                 var result = System.Windows.MessageBox.Show(
                     "LGB Parser Options:\n\n" +
@@ -1127,11 +1232,11 @@ namespace Amaurot
                     "Cancel - Show help",
                     "LGB Parser", MessageBoxButton.YesNoCancel, MessageBoxImage.Question);
 
-                var args = result switch
+                string[] args = result switch
                 {
-                    MessageBoxResult.Yes => new[] { "--game", gamePath, "--batch" },
-                    MessageBoxResult.No => new[] { "--game", gamePath, "--list-zones" },
-                    _ => new string[0]
+                    MessageBoxResult.Yes => ["--game", gamePath, "--batch"],
+                    MessageBoxResult.No => ["--game", gamePath, "--list-zones"],
+                    _ => Array.Empty<string>()
                 };
 
                 if (args.Length == 0)
@@ -1250,20 +1355,20 @@ namespace Amaurot
                 () => _services.Get<SettingsService>()?.OpenSapphireBuildPath());
         }
 
-        private void OpenPath(string pathName, Func<bool> isValid, System.Action openAction)
+        private void OpenPath(string pathName, Func<bool> isValid, System.Action? openAction)
         {
             try
             {
                 if (isValid())
                 {
-                    openAction();
+                    openAction?.Invoke();
                     LogDebug($"Opened {pathName} path");
                 }
                 else
                 {
                     System.Windows.MessageBox.Show($"{pathName} path is not configured or invalid.\n\nPlease configure it in Settings first.",
                         $"{pathName} Not Set", MessageBoxButton.OK, MessageBoxImage.Information);
-                    OpenSettings_Click(null, null);
+                    OpenSettings_Click(null!, new RoutedEventArgs());
                 }
             }
             catch (Exception ex)
@@ -1345,6 +1450,23 @@ namespace Amaurot
             }
         }
 
+        private void ShowInstanceContentDetails(InstanceContentInfo instanceContent)
+        {
+            try
+            {
+                var instanceScriptService = _services.Get<InstanceScriptService>();  // ✅ CHANGE: Get InstanceScriptService
+                var window = new InstanceContentDetailsWindow(instanceContent, this, instanceScriptService);  // ✅ CHANGE: Pass InstanceScriptService
+                window.Show();
+                LogDebug($"Opened instance content details for: {instanceContent.InstanceName}");
+            }
+            catch (Exception ex)
+            {
+                LogDebug($"Error showing instance content details: {ex.Message}");
+                System.Windows.MessageBox.Show($"Error: {ex.Message}", "Error",
+                    MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
         private async Task NavigateToQuestLocation(QuestInfo quest)
         {
             try
@@ -1381,24 +1503,31 @@ namespace Amaurot
             }
         }
 
+        private static readonly string[] PanelNames = ["QuestsPanel", "NpcsPanel", "BNpcsPanel", "FatesPanel", "InstanceContentPanel", "EobjsPanel", "EventItemPanel"];
+        private static readonly (string Panel, int Priority)[] PanelInfo = [
+            ("QuestsPanel", 1), ("NpcsPanel", 2), ("FatesPanel", 3),
+            ("BNpcsPanel", 4), ("InstanceContentPanel", 5), ("EobjsPanel", 6), ("EventItemPanel", 7)
+        ];
+
         private void UpdatePanelAreaVisibility()
         {
             try
             {
-                var panels = new[] { "QuestsPanel", "NpcsPanel", "BNpcsPanel", "FatesPanel", "EobjsPanel", "EventItemPanel" }
+                var panels = PanelNames
                     .Select(name => FindName(name) as DockPanel)
-                    .Where(p => p != null);
+                    .Where(p => p != null)
+                    .Cast<DockPanel>();
 
                 bool anyVisible = panels.Any(p => p.Visibility == Visibility.Visible);
 
-                if (PanelAreaColumn != null && !anyVisible)
+                if (FindName("PanelAreaColumn") is ColumnDefinition panelAreaColumn && !anyVisible)
                 {
-                    PanelAreaColumn.Width = new GridLength(0);
+                    panelAreaColumn.Width = new GridLength(0);
                 }
 
-                if (PanelGridArea != null)
+                if (FindName("PanelGridArea") is UIElement panelGridArea)
                 {
-                    PanelGridArea.Visibility = anyVisible ? Visibility.Visible : Visibility.Collapsed;
+                    panelGridArea.Visibility = anyVisible ? Visibility.Visible : Visibility.Collapsed;
                 }
 
                 if (!_isLoadingData)
@@ -1416,17 +1545,11 @@ namespace Amaurot
         {
             try
             {
-                var panelInfo = new[]
-                {
-                    ("QuestsPanel", 1), ("NpcsPanel", 2), ("FatesPanel", 3),
-                    ("BNpcsPanel", 4), ("EobjsPanel", 5), ("EventItemPanel", 6)
-                };
-
-                var visiblePanels = panelInfo
-                    .Select(p => (panel: FindName(p.Item1) as DockPanel, priority: p.Item2))
+                var visiblePanels = PanelInfo
+                    .Select(p => (panel: FindName(p.Panel) as DockPanel, priority: p.Priority))
                     .Where(p => p.panel?.Visibility == Visibility.Visible)
                     .OrderBy(p => p.priority)
-                    .Select(p => p.panel)
+                    .Select(p => p.panel!)
                     .ToList();
 
                 if (FindName("DynamicPanelGrid") is not Grid grid)
@@ -1438,8 +1561,10 @@ namespace Amaurot
 
                 if (visiblePanels.Count == 0)
                 {
-                    if (PanelAreaColumn != null)
-                        PanelAreaColumn.Width = new GridLength(0);
+                    if (FindName("PanelAreaColumn") is ColumnDefinition panelAreaColumn)
+                    {
+                        panelAreaColumn.Width = new GridLength(0);
+                    }
                     return;
                 }
 
@@ -1447,9 +1572,9 @@ namespace Amaurot
                 int rows = 2;
                 double width = columns == 2 ? 500 : 750;
 
-                if (PanelAreaColumn != null)
+                if (FindName("PanelAreaColumn") is ColumnDefinition panelAreaColumn2)
                 {
-                    PanelAreaColumn.Width = new GridLength(width);
+                    panelAreaColumn2.Width = new GridLength(width);
                 }
 
                 for (int col = 0; col < columns; col++)
@@ -1474,7 +1599,6 @@ namespace Amaurot
                         var panel = visiblePanels[panelIndex++];
                         if (panel.Parent is System.Windows.Controls.Panel parent)
                             parent.Children.Remove(panel);
-
                         Grid.SetRow(panel, row * 2);
                         Grid.SetColumn(panel, col * 2);
                         grid.Children.Add(panel);
@@ -1491,7 +1615,7 @@ namespace Amaurot
             }
         }
 
-        private void AddGridSplitters(Grid grid, int rows, int columns)
+        private static void AddGridSplitters(Grid grid, int rows, int columns)
         {
             for (int row = 0; row < rows - 1; row++)
             {
@@ -1524,19 +1648,15 @@ namespace Amaurot
             }
         }
 
-        private void InitializeDynamicPanelLayout()
-        {
-            ReorganizePanels();
-            LogDebug("Dynamic panel layout initialized");
-        }
-
-        [System.Runtime.InteropServices.DllImport("gdi32.dll")]
-        private static extern bool DeleteObject(IntPtr hObject);
+        /*Garbage Collection*/
+        [System.Runtime.InteropServices.DllImport("gdi32.dll", SetLastError = true)]
+        private static extern bool DeleteObject(System.IntPtr hObject);
 
         #endregion Helper Methods
-    }
 
-    #region Helper Classes
+    }     
+
+    #region Helper Classes - ONLY ONE DEFINITION
 
     public class ServiceContainer
     {
@@ -1559,12 +1679,14 @@ namespace Amaurot
         public ObservableCollection<QuestInfo> Quests { get; } = new();
         public ObservableCollection<BNpcInfo> BNpcs { get; } = new();
         public ObservableCollection<FateInfo> Fates { get; } = new();
+        public ObservableCollection<InstanceContentInfo> InstanceContents { get; } = new();
 
         public ObservableCollection<TerritoryInfo> FilteredTerritories { get; } = new();
         public ObservableCollection<QuestInfo> FilteredQuests { get; } = new();
         public ObservableCollection<EntityNpcInfo> FilteredNpcs { get; } = new();
         public ObservableCollection<BNpcInfo> FilteredBNpcs { get; } = new();
         public ObservableCollection<FateInfo> FilteredFates { get; } = new();
+        public ObservableCollection<InstanceContentInfo> FilteredInstanceContents { get; } = new();
 
         public List<EntityNpcInfo> AllNpcs { get; } = new();
 
@@ -1627,4 +1749,5 @@ namespace Amaurot
     }
 
     #endregion Helper Classes
+
 }

@@ -141,6 +141,9 @@
 	  <None Update="Libs\Definitions\game.ver">
 	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
 	  </None>
+	  <None Update="Libs\Definitions\InstanceContent.json">
+	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+	  </None>
 	  <None Update="Libs\Definitions\JournalGenre.json">
 	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
 	  </None>

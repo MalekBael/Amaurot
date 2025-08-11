@@ -24,7 +24,6 @@ namespace Amaurot
             _npcInfo = npcInfo;
             _mainWindow = mainWindow;
 
-            // ✅ FIX: Get QuestScriptService from the MainWindow's service container
             _questScriptService = GetQuestScriptServiceFromMainWindow();
 
             InitializeWindow();
@@ -35,7 +34,6 @@ namespace Amaurot
         {
             try
             {
-                // ✅ FIX: Access the service container instead of looking for a field
                 var servicesField = typeof(MainWindow).GetField("_services",
                     System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
 
@@ -45,7 +43,6 @@ namespace Amaurot
                     return null;
                 }
 
-                // Get the service container's Get method
                 var getMethod = servicesContainer.GetType().GetMethod("Get");
                 if (getMethod == null)
                 {
@@ -53,7 +50,6 @@ namespace Amaurot
                     return null;
                 }
 
-                // Make it generic for QuestScriptService
                 var genericGetMethod = getMethod.MakeGenericMethod(typeof(QuestScriptService));
                 var questScriptService = genericGetMethod.Invoke(servicesContainer, null) as QuestScriptService;
 
@@ -75,9 +71,34 @@ namespace Amaurot
             }
         }
 
+        private void InitializeWindow()
+        {
+            this.Title = $"Quests - {_npcInfo.NpcName}";
+            this.Width = 650;
+            this.Height = 450;
+            this.WindowStartupLocation = WindowStartupLocation.CenterOwner;
+            // ✅ FIX: Don't set Owner to prevent minimization issues
+            // this.Owner = _mainWindow;
+            this.ShowInTaskbar = false;
+            
+            // ✅ FIX: Position window manually relative to main window
+            if (_mainWindow != null)
+            {
+                this.Left = _mainWindow.Left + (_mainWindow.Width - this.Width) / 2;
+                this.Top = _mainWindow.Top + (_mainWindow.Height - this.Height) / 2;
+            }
+        }
+
         private void CloseButton_Click(object sender, RoutedEventArgs e)
         {
+            // ✅ FIX: Simple close without owner manipulation
             this.Close();
+        }
+
+        protected override void OnClosing(System.ComponentModel.CancelEventArgs e)
+        {
+            // ✅ FIX: Ensure clean closing without affecting parent
+            base.OnClosing(e);
         }
 
         private void OpenQuestDetails_Click(object sender, RoutedEventArgs e)
@@ -110,56 +131,34 @@ namespace Amaurot
             }
         }
 
-        // Rest of the methods remain the same...
-        private void OpenScriptInVSCode(QuestScriptInfo scriptInfo)
+        private void OpenScript(QuestScriptInfo scriptInfo, bool useVSCode)
         {
             if (_questScriptService == null || string.IsNullOrEmpty(scriptInfo.ScriptPath))
                 return;
 
-            bool success = _questScriptService.OpenInVSCode(scriptInfo.ScriptPath);
+            bool success = useVSCode 
+                ? _questScriptService.OpenInVSCode(scriptInfo.ScriptPath)
+                : _questScriptService.OpenInVisualStudio(scriptInfo.ScriptPath);
 
             if (!success)
             {
-                WpfMessageBox.Show($"Failed to open {scriptInfo.QuestIdString}.cpp in Visual Studio Code.\n\n" +
-                               "Please ensure Visual Studio Code is installed and accessible via the 'code' command.",
+                string editorName = useVSCode ? "Visual Studio Code" : "Visual Studio";
+                string commandHint = useVSCode 
+                    ? "Please ensure Visual Studio Code is installed and accessible via the 'code' command."
+                    : "Please ensure Visual Studio is installed and accessible.";
+
+                WpfMessageBox.Show($"Failed to open {scriptInfo.QuestIdString}.cpp in {editorName}.\n\n{commandHint}",
                                "Error Opening Script", MessageBoxButton.OK, MessageBoxImage.Warning);
             }
             else
             {
-                _mainWindow.LogDebug($"Opened {scriptInfo.QuestIdString}.cpp in VS Code");
+                string editorShortName = useVSCode ? "VS Code" : "Visual Studio";
+                _mainWindow.LogDebug($"Opened {scriptInfo.QuestIdString}.cpp in {editorShortName}");
             }
         }
 
-        private void OpenScriptInVisualStudio(QuestScriptInfo scriptInfo)
-        {
-            if (_questScriptService == null || string.IsNullOrEmpty(scriptInfo.ScriptPath))
-                return;
-
-            bool success = _questScriptService.OpenInVisualStudio(scriptInfo.ScriptPath);
-
-            if (!success)
-            {
-                WpfMessageBox.Show($"Failed to open {scriptInfo.QuestIdString}.cpp in Visual Studio.\n\n" +
-                               "Please ensure Visual Studio is installed and accessible.",
-                               "Error Opening Script", MessageBoxButton.OK, MessageBoxImage.Warning);
-            }
-            else
-            {
-                _mainWindow.LogDebug($"Opened {scriptInfo.QuestIdString}.cpp in Visual Studio");
-            }
-        }
-
-        private void InitializeWindow()
-        {
-            this.Title = $"Quests - {_npcInfo.NpcName}";
-            this.Width = 650;
-            this.Height = 450;
-            this.WindowStartupLocation = WindowStartupLocation.CenterOwner;
-            this.Owner = _mainWindow;
-            this.ShowInTaskbar = false;
-        }
-
-        private async void NavigateToQuest(NpcQuestInfo questInfo)
+        // ✅ FIX: Remove async since no await is used
+        private void NavigateToQuest(NpcQuestInfo questInfo)
         {
             try
             {
@@ -207,9 +206,6 @@ namespace Amaurot
             }
         }
 
-        /// <summary>
-        /// ✅ NEW: Creates individual quest list item with integrated script buttons
-        /// </summary>
         private ListBoxItem CreateQuestListItem(NpcQuestInfo npcQuestInfo)
         {
             var listItem = new ListBoxItem
@@ -219,12 +215,11 @@ namespace Amaurot
             };
 
             var mainGrid = new Grid();
-            mainGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(50) }); // Level
-            mainGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) }); // Details
-            mainGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(100) }); // Rewards
-            mainGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(100) }); // Script buttons
+            mainGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(50) });  
+            mainGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });  
+            mainGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(100) });  
+            mainGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(160) });             
 
-            // Level badge
             var levelBorder = new Border
             {
                 Background = new SolidColorBrush(Colors.DarkBlue),
@@ -245,7 +240,6 @@ namespace Amaurot
             Grid.SetColumn(levelBorder, 0);
             mainGrid.Children.Add(levelBorder);
 
-            // Quest details panel
             var detailsPanel = new StackPanel
             {
                 Margin = new Thickness(10, 5, 10, 5)
@@ -312,7 +306,6 @@ namespace Amaurot
             Grid.SetColumn(detailsPanel, 1);
             mainGrid.Children.Add(detailsPanel);
 
-            // ✅ UPDATED: Rewards panel with gray text colors
             var rewardsPanel = new StackPanel
             {
                 VerticalAlignment = VerticalAlignment.Center,
@@ -325,7 +318,7 @@ namespace Amaurot
                 {
                     Text = $"{npcQuestInfo.ExpReward:N0} EXP",
                     FontSize = 11,
-                    Foreground = new SolidColorBrush(Colors.Gray), // ✅ CHANGED: From Green to Gray
+                    Foreground = new SolidColorBrush(Colors.Gray),       
                     HorizontalAlignment = System.Windows.HorizontalAlignment.Right
                 });
             }
@@ -336,7 +329,7 @@ namespace Amaurot
                 {
                     Text = $"{npcQuestInfo.GilReward:N0} Gil",
                     FontSize = 11,
-                    Foreground = new SolidColorBrush(Colors.Gray), // ✅ CHANGED: From Gold to Gray
+                    Foreground = new SolidColorBrush(Colors.Gray),       
                     HorizontalAlignment = System.Windows.HorizontalAlignment.Right
                 });
             }
@@ -344,7 +337,6 @@ namespace Amaurot
             Grid.SetColumn(rewardsPanel, 2);
             mainGrid.Children.Add(rewardsPanel);
 
-            // ✅ UPDATED: Script editing buttons with consistent alignment
             var scriptButtonsPanel = CreateScriptEditingButtons(npcQuestInfo);
             scriptButtonsPanel.VerticalAlignment = VerticalAlignment.Center;
             Grid.SetColumn(scriptButtonsPanel, 3);
@@ -352,26 +344,21 @@ namespace Amaurot
 
             listItem.Content = mainGrid;
 
-            // Handle double-click for navigation
             listItem.MouseDoubleClick += (s, e) => NavigateToQuest(npcQuestInfo);
 
             return listItem;
         }
 
-        /// <summary>
-        /// ✅ UPDATED: Creates script editing buttons with consistent alignment
-        /// </summary>
         private StackPanel CreateScriptEditingButtons(NpcQuestInfo npcQuestInfo)
         {
-            var buttonPanel = new StackPanel
+            var mainPanel = new StackPanel
             {
-                Orientation = System.Windows.Controls.Orientation.Vertical, // ✅ CHANGED: Vertical for better alignment
-                Margin = new Thickness(5, 0, 5, 0), // ✅ UPDATED: Consistent margins
+                Orientation = System.Windows.Controls.Orientation.Vertical,
+                Margin = new Thickness(5, 0, 5, 0),
                 VerticalAlignment = VerticalAlignment.Center,
                 HorizontalAlignment = System.Windows.HorizontalAlignment.Center
             };
 
-            // Try to get the full quest info to access QuestIdString
             var fullQuestInfo = _mainWindow.Quests?.FirstOrDefault(q => q.Id == npcQuestInfo.QuestId);
 
             if (fullQuestInfo != null && !string.IsNullOrEmpty(fullQuestInfo.QuestIdString) && _questScriptService != null)
@@ -380,93 +367,92 @@ namespace Amaurot
 
                 if (scriptInfo.Exists)
                 {
-                    // ✅ UPDATED: VSCode button with consistent sizing
+                    var buttonPanel = new StackPanel
+                    {
+                        Orientation = System.Windows.Controls.Orientation.Horizontal,
+                        HorizontalAlignment = System.Windows.HorizontalAlignment.Center
+                    };
+
                     if (scriptInfo.CanOpenInVSCode)
                     {
                         var vscodeButton = new System.Windows.Controls.Button
                         {
-                            Content = "VSCode",
-                            Width = 60, // ✅ ADDED: Fixed width for alignment
-                            Height = 22, // ✅ ADDED: Fixed height for alignment
-                            Padding = new Thickness(4, 2, 4, 2),
+                            Content = "VSCode",         
+                            Padding = new Thickness(8, 4, 8, 4),         
                             Background = new SolidColorBrush(System.Windows.Media.Color.FromRgb(0, 120, 215)),
                             Foreground = new SolidColorBrush(Colors.White),
                             BorderBrush = new SolidColorBrush(System.Windows.Media.Color.FromRgb(0, 90, 158)),
-                            FontSize = 10,
-                            Margin = new Thickness(0, 1, 0, 1), // ✅ UPDATED: Consistent vertical spacing
+                            FontSize = 11,          
+                            VerticalAlignment = VerticalAlignment.Center,
+                            Margin = new Thickness(0, 0, 5, 0),         
                             ToolTip = $"Open {fullQuestInfo.QuestIdString}.cpp in VS Code",
-                            Cursor = System.Windows.Input.Cursors.Hand,
-                            HorizontalAlignment = System.Windows.HorizontalAlignment.Stretch // ✅ ADDED: Stretch for alignment
+                            Cursor = System.Windows.Input.Cursors.Hand
                         };
-                        vscodeButton.Click += (s, e) => OpenScriptInVSCode(scriptInfo);
+                        vscodeButton.Click += (s, e) => OpenScript(scriptInfo, useVSCode: true);
                         buttonPanel.Children.Add(vscodeButton);
                     }
 
-                    // ✅ UPDATED: Visual Studio button with consistent sizing
                     if (scriptInfo.CanOpenInVisualStudio)
                     {
                         var vsButton = new System.Windows.Controls.Button
                         {
-                            Content = "VS 2022",
-                            Width = 60, // ✅ ADDED: Fixed width for alignment
-                            Height = 22, // ✅ ADDED: Fixed height for alignment
-                            Padding = new Thickness(4, 2, 4, 2),
+                            Content = "Visual Studio",         
+                            Padding = new Thickness(8, 4, 8, 4),         
                             Background = new SolidColorBrush(System.Windows.Media.Color.FromRgb(104, 33, 122)),
                             Foreground = new SolidColorBrush(Colors.White),
                             BorderBrush = new SolidColorBrush(System.Windows.Media.Color.FromRgb(84, 23, 102)),
-                            FontSize = 10,
-                            Margin = new Thickness(0, 1, 0, 1), // ✅ UPDATED: Consistent vertical spacing
+                            FontSize = 11,          
+                            VerticalAlignment = VerticalAlignment.Center,
+                            Margin = new Thickness(0, 0, 5, 0),         
                             ToolTip = $"Open {fullQuestInfo.QuestIdString}.cpp in Visual Studio",
-                            Cursor = System.Windows.Input.Cursors.Hand,
-                            HorizontalAlignment = System.Windows.HorizontalAlignment.Stretch // ✅ ADDED: Stretch for alignment
+                            Cursor = System.Windows.Input.Cursors.Hand
                         };
-                        vsButton.Click += (s, e) => OpenScriptInVisualStudio(scriptInfo);
+                        vsButton.Click += (s, e) => OpenScript(scriptInfo, useVSCode: false);
                         buttonPanel.Children.Add(vsButton);
                     }
 
-                    // ✅ UPDATED: Script status indicator with consistent alignment
+                    mainPanel.Children.Add(buttonPanel);
+
                     var statusIcon = new TextBlock
                     {
-                        Text = "⚙",
-                        FontSize = 12, // ✅ INCREASED: Slightly larger for visibility
+                        Text = "✓ Script found",          
+                        FontSize = 10,
                         Foreground = new SolidColorBrush(Colors.Green),
-                        HorizontalAlignment = System.Windows.HorizontalAlignment.Center, // ✅ ADDED: Center alignment
-                        Margin = new Thickness(0, 2, 0, 0),
+                        HorizontalAlignment = System.Windows.HorizontalAlignment.Center,
+                        Margin = new Thickness(0, 5, 0, 0),       
                         ToolTip = $"Script found: {fullQuestInfo.QuestIdString}.cpp"
                     };
-                    buttonPanel.Children.Add(statusIcon);
+                    mainPanel.Children.Add(statusIcon);
                 }
                 else
                 {
-                    // ✅ UPDATED: Script not found indicator with consistent alignment
                     var statusIcon = new TextBlock
                     {
-                        Text = "⚙",
-                        FontSize = 12,
+                        Text = "✗ Script not found",          
+                        FontSize = 10,
                         Foreground = new SolidColorBrush(Colors.Gray),
                         HorizontalAlignment = System.Windows.HorizontalAlignment.Center,
-                        Margin = new Thickness(0, 2, 0, 0),
+                        Margin = new Thickness(0, 5, 0, 0),
                         ToolTip = $"Script not found: {fullQuestInfo.QuestIdString}.cpp"
                     };
-                    buttonPanel.Children.Add(statusIcon);
+                    mainPanel.Children.Add(statusIcon);
                 }
             }
             else
             {
-                // ✅ NEW: Add placeholder when no script info available to maintain consistent spacing
                 var placeholderIcon = new TextBlock
                 {
-                    Text = "—",
-                    FontSize = 12,
-                    Foreground = new SolidColorBrush(Colors.LightGray),
+                    Text = "⚠ Sapphire path not configured",          
+                    FontSize = 10,
+                    Foreground = new SolidColorBrush(Colors.Orange),
                     HorizontalAlignment = System.Windows.HorizontalAlignment.Center,
-                    Margin = new Thickness(0, 2, 0, 0),
-                    ToolTip = "No script information available"
+                    Margin = new Thickness(0, 5, 0, 0),
+                    ToolTip = "Configure Sapphire Server path in Settings to enable script editing"
                 };
-                buttonPanel.Children.Add(placeholderIcon);
+                mainPanel.Children.Add(placeholderIcon);
             }
 
-            return buttonPanel;
+            return mainPanel;
         }
     }
 }

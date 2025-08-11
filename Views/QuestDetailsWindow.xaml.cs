@@ -23,7 +23,9 @@ namespace Amaurot
 
             _questScriptService = questScriptService;
 
-            // ✅ FIX: Proper window ownership to prevent app minimization
+            // ✅ FIX: Don't set Owner to prevent minimization issues
+            // Comment out the owner setting logic
+            /*
             if (owner != null)
             {
                 this.Owner = owner;
@@ -43,6 +45,16 @@ namespace Amaurot
                     this.WindowStartupLocation = WindowStartupLocation.CenterScreen;
                 }
             }
+            */
+
+            // ✅ FIX: Manual positioning without owner relationship
+            this.WindowStartupLocation = WindowStartupLocation.CenterScreen;
+            if (owner != null)
+            {
+                // Position relative to owner without setting Owner property
+                this.Left = owner.Left + (owner.Width - this.Width) / 2;
+                this.Top = owner.Top + (owner.Height - this.Height) / 2;
+            }
 
             // ✅ FIX: Critical properties to prevent app minimization
             this.ShowInTaskbar = false;
@@ -55,6 +67,7 @@ namespace Amaurot
 
         private void CloseButton_Click(object sender, RoutedEventArgs e)
         {
+            // ✅ FIX: Simple close without owner manipulation
             this.Close();
         }
 
@@ -273,7 +286,7 @@ namespace Amaurot
                             Margin = new Thickness(0, 0, 5, 0),
                             ToolTip = $"Open {questIdString}.cpp in Visual Studio Code"
                         };
-                        vscodeButton.Click += (s, e) => OpenScriptInVSCode(scriptInfo);
+                        vscodeButton.Click += (s, e) => OpenScript(scriptInfo, useVSCode: true);
                         valuePanel.Children.Add(vscodeButton);
                     }
 
@@ -292,7 +305,7 @@ namespace Amaurot
                             Margin = new Thickness(0, 0, 5, 0),
                             ToolTip = $"Open {questIdString}.cpp in Visual Studio"
                         };
-                        vsButton.Click += (s, e) => OpenScriptInVisualStudio(scriptInfo);
+                        vsButton.Click += (s, e) => OpenScript(scriptInfo, useVSCode: false);
                         valuePanel.Children.Add(vsButton);
                     }
 
@@ -345,35 +358,23 @@ namespace Amaurot
         /// <summary>
         /// ✅ NEW: Opens quest script in Visual Studio Code
         /// </summary>
-        private void OpenScriptInVSCode(QuestScriptInfo scriptInfo)
+        private void OpenScript(QuestScriptInfo scriptInfo, bool useVSCode)
         {
             if (_questScriptService == null || string.IsNullOrEmpty(scriptInfo.ScriptPath))
                 return;
 
-            bool success = _questScriptService.OpenInVSCode(scriptInfo.ScriptPath);
+            bool success = useVSCode 
+                ? _questScriptService.OpenInVSCode(scriptInfo.ScriptPath)
+                : _questScriptService.OpenInVisualStudio(scriptInfo.ScriptPath);
 
             if (!success)
             {
-                System.Windows.MessageBox.Show($"Failed to open {scriptInfo.QuestIdString}.cpp in Visual Studio Code.\n\n" +
-                               "Please ensure Visual Studio Code is installed and accessible via the 'code' command.",
-                               "Error Opening Script", MessageBoxButton.OK, MessageBoxImage.Warning);
-            }
-        }
+                string editorName = useVSCode ? "Visual Studio Code" : "Visual Studio";
+                string commandHint = useVSCode 
+                    ? "Please ensure Visual Studio Code is installed and accessible via the 'code' command."
+                    : "Please ensure Visual Studio is installed and accessible.";
 
-        /// <summary>
-        /// ✅ NEW: Opens quest script in Visual Studio
-        /// </summary>
-        private void OpenScriptInVisualStudio(QuestScriptInfo scriptInfo)
-        {
-            if (_questScriptService == null || string.IsNullOrEmpty(scriptInfo.ScriptPath))
-                return;
-
-            bool success = _questScriptService.OpenInVisualStudio(scriptInfo.ScriptPath);
-
-            if (!success)
-            {
-                System.Windows.MessageBox.Show($"Failed to open {scriptInfo.QuestIdString}.cpp in Visual Studio.\n\n" +
-                               "Please ensure Visual Studio is installed and accessible.",
+                System.Windows.MessageBox.Show($"Failed to open {scriptInfo.QuestIdString}.cpp in {editorName}.\n\n{commandHint}",
                                "Error Opening Script", MessageBoxButton.OK, MessageBoxImage.Warning);
             }
         }
