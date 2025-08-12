@@ -15,7 +15,7 @@ jobs:
     runs-on: windows-latest  
     
     env:
-      Solution_Name: Amaurot.sln
+      Solution_Name: "map editor.sln"
       Project_Path: Amaurot.csproj
       
     steps:
