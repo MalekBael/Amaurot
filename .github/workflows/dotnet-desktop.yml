@@ -1,0 +1,66 @@
+name: WPF .NET Desktop Build
+
+on:
+  push:
+    branches: [ "master", "main" ]
+  pull_request:
+    branches: [ "master", "main" ]
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        configuration: [Debug, Release]
+
+    runs-on: windows-latest  
+    
+    env:
+      Solution_Name: Amaurot.sln
+      Project_Path: Amaurot.csproj
+      
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Install .NET 8
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: 8.0.x
+
+    - name: Restore dependencies
+      run: dotnet restore ${{ env.Solution_Name }}
+
+    - name: Build application
+      run: dotnet build ${{ env.Solution_Name }} --configuration ${{ matrix.configuration }} --no-restore
+
+    - name: Execute unit tests
+      run: dotnet test ${{ env.Solution_Name }} --configuration ${{ matrix.configuration }} --no-build --verbosity normal
+      continue-on-error: true
+
+    # Publish for Windows only
+    - name: Publish application
+      run: dotnet publish ${{ env.Project_Path }} --configuration ${{ matrix.configuration }} --runtime win-x64 --self-contained true --output ./publish/win-x64
+
+    - name: Create default settings file
+      run: |
+        @"
+        {
+          "GameInstallationPath": "",
+          "AutoLoadGameData": false,
+          "DebugMode": false,
+          "HideDuplicateTerritories": false,
+          "SapphireServerPath": "",
+          "SapphireBuildPath": ""
+        }
+        "@ | Out-File -FilePath "./publish/win-x64/settings.json" -Encoding UTF8
+
+    - name: Create distribution archive
+      run: Compress-Archive -Path "./publish/win-x64/*" -DestinationPath "ffxiv-map-editor-windows-${{ matrix.configuration }}.zip"
+
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: FFXIV-Map-Editor-Windows-${{ matrix.configuration }}
+        path: ffxiv-map-editor-windows-${{ matrix.configuration }}.zip
