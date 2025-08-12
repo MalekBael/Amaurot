@@ -3,6 +3,7 @@ using System.IO;
 using System.Text.Json;
 using System.Diagnostics;
 using System.Linq;
+using System.Runtime.InteropServices;
 
 namespace Amaurot.Services
 {
@@ -18,11 +19,8 @@ namespace Amaurot.Services
 
     public class SettingsService
     {
-        private static readonly string SettingsFilePath = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-            "FFXIVMapEditor",
-            "settings.json");
-
+        // ✅ ENHANCED: Cross-platform settings location
+        private static readonly string SettingsFilePath = GetCrossPlatformSettingsPath();
         private static readonly string SettingsDirectory = Path.GetDirectoryName(SettingsFilePath)!;
 
         private static readonly JsonSerializerOptions SerializerOptions = new()
@@ -31,7 +29,6 @@ namespace Amaurot.Services
         };
 
         private static readonly string[] GamePathIndicators = ["game", "boot"];
-
         private static readonly string[] SapphireRepoIndicators = ["src", "scripts", "CMakeLists.txt", "README.md"];
         private static readonly string[] SapphireBuildIndicators = ["compiledscripts", "config", "tools"];
 
@@ -47,10 +44,123 @@ namespace Amaurot.Services
             LoadSettings();
         }
 
+        // ✅ ADD: Cross-platform settings path logic
+        private static string GetCrossPlatformSettingsPath()
+        {
+            try
+            {
+                // First priority: Application root directory (cross-platform)
+                string appDirectory = GetApplicationDirectory();
+                string appRootSettings = Path.Combine(appDirectory, "settings.json");
+                
+                // If we can write to the app directory, use it
+                if (CanWriteToDirectory(appDirectory))
+                {
+                    return appRootSettings;
+                }
+                
+                // Second priority: User's home directory (cross-platform)
+                string userDirectory = GetUserDirectory();
+                string userSettings = Path.Combine(userDirectory, ".ffxiv-map-editor", "settings.json");
+                
+                // If we can write to user directory, use it
+                if (CanWriteToDirectory(Path.GetDirectoryName(userSettings)!))
+                {
+                    return userSettings;
+                }
+                
+                // Final fallback: Temp directory (should always work)
+                string tempSettings = Path.Combine(Path.GetTempPath(), "ffxiv-map-editor", "settings.json");
+                return tempSettings;
+            }
+            catch (Exception)
+            {
+                // Ultimate fallback: current directory
+                return Path.Combine(Directory.GetCurrentDirectory(), "settings.json");
+            }
+        }
+
+        private static string GetApplicationDirectory()
+        {
+            try
+            {
+                // Get the directory where the executable is located
+                string? executablePath = Environment.ProcessPath;
+                if (!string.IsNullOrEmpty(executablePath))
+                {
+                    return Path.GetDirectoryName(executablePath) ?? Directory.GetCurrentDirectory();
+                }
+                
+                // Fallback to current directory
+                return Directory.GetCurrentDirectory();
+            }
+            catch
+            {
+                return Directory.GetCurrentDirectory();
+            }
+        }
+
+        private static string GetUserDirectory()
+        {
+            try
+            {
+                // Cross-platform user directory detection
+                if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+                {
+                    // Windows: Use USERPROFILE or fallback to ApplicationData
+                    return Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+                }
+                else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux) || RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+                {
+                    // Linux/macOS: Use HOME environment variable
+                    string? homeDir = Environment.GetEnvironmentVariable("HOME");
+                    return !string.IsNullOrEmpty(homeDir) ? homeDir : "/tmp";
+                }
+                else
+                {
+                    // Unknown platform: use current directory
+                    return Directory.GetCurrentDirectory();
+                }
+            }
+            catch
+            {
+                return Directory.GetCurrentDirectory();
+            }
+        }
+
+        private static bool CanWriteToDirectory(string directoryPath)
+        {
+            try
+            {
+                // Ensure directory exists
+                if (!Directory.Exists(directoryPath))
+                {
+                    Directory.CreateDirectory(directoryPath);
+                }
+                
+                // Test write permissions by creating a temporary file
+                string testFile = Path.Combine(directoryPath, $".write_test_{Guid.NewGuid():N}.tmp");
+                File.WriteAllText(testFile, "test");
+                File.Delete(testFile);
+                
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
         public void LoadSettings()
         {
             try
             {
+                // ✅ ENHANCED: Try to migrate from old location if new location doesn't exist
+                if (!File.Exists(SettingsFilePath))
+                {
+                    TryMigrateFromLegacyLocation();
+                }
+                
                 if (File.Exists(SettingsFilePath))
                 {
                     string json = File.ReadAllText(SettingsFilePath);
@@ -74,6 +184,45 @@ namespace Amaurot.Services
             _settings = new AppSettings();
         }
 
+        // ✅ ADD: Migration from legacy Windows AppData location
+        private void TryMigrateFromLegacyLocation()
+        {
+            try
+            {
+                if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+                {
+                    return; // Only attempt migration on Windows
+                }
+                
+                string legacyPath = Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                    "FFXIVMapEditor",
+                    "settings.json");
+                
+                if (File.Exists(legacyPath))
+                {
+                    _logDebug?.Invoke($"Migrating settings from legacy location: {legacyPath}");
+                    
+                    // Ensure new directory exists
+                    if (!Directory.Exists(SettingsDirectory))
+                    {
+                        Directory.CreateDirectory(SettingsDirectory);
+                    }
+                    
+                    // Copy the file
+                    File.Copy(legacyPath, SettingsFilePath, overwrite: false);
+                    _logDebug?.Invoke($"Settings migrated to: {SettingsFilePath}");
+                    
+                    // Optionally remove old file (commented out for safety)
+                    // File.Delete(legacyPath);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logDebug?.Invoke($"Error migrating settings: {ex.Message}");
+            }
+        }
+
         public void SaveSettings()
         {
             try
@@ -83,7 +232,6 @@ namespace Amaurot.Services
                     Directory.CreateDirectory(SettingsDirectory);
                 }
 
-                // ✅ Use cached JsonSerializerOptions
                 string json = JsonSerializer.Serialize(_settings, SerializerOptions);
                 File.WriteAllText(SettingsFilePath, json);
 
@@ -95,6 +243,13 @@ namespace Amaurot.Services
             }
         }
 
+        // ✅ ADD: Method to get current settings location for debugging
+        public string GetSettingsLocation()
+        {
+            return SettingsFilePath;
+        }
+
+        // ✅ EXISTING: All other methods remain the same
         public void UpdateGamePath(string path)
         {
             _settings.GameInstallationPath = path;
@@ -131,7 +286,6 @@ namespace Amaurot.Services
             SaveSettings();
         }
 
-        // ✅ Make static since it doesn't use instance data
         private static bool IsValidPath(string path, string[] indicators, int requiredCount = 2)
         {
             if (string.IsNullOrEmpty(path) || !Directory.Exists(path))
@@ -141,7 +295,6 @@ namespace Amaurot.Services
                 Directory.Exists(Path.Combine(path, indicator)) || File.Exists(Path.Combine(path, indicator))) >= requiredCount;
         }
 
-        // ✅ Use static readonly arrays instead of creating new arrays each time
         public bool IsValidGamePath() => IsValidPath(_settings.GameInstallationPath, GamePathIndicators);
 
         public bool IsValidSapphireServerPath() => IsValidPath(_settings.SapphireServerPath, SapphireRepoIndicators);

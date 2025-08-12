@@ -1,7 +1,7 @@
 <Window x:Class="Amaurot.InstanceContentDetailsWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Instance Content Details" Height="600" Width="800"
+        Title="Instance Content Details" Height="600" Width="600"
         WindowStartupLocation="CenterOwner"
         ResizeMode="CanResize"
         ShowInTaskbar="False"

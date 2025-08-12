@@ -964,10 +964,12 @@ namespace Amaurot
             double imageWidth = bitmapSource.PixelWidth;
             double imageHeight = bitmapSource.PixelHeight;
 
-            _mapState.SetCurrentScale(1.0);
+            // ✅ CHANGE: Use a different default scale instead of 1.0
+            double defaultScale = 0.39; // - try 0.5 for 50% or 1.25 for 125%
+            _mapState.SetCurrentScale(defaultScale);
 
-            double centeredX = (canvasWidth - imageWidth) / 2;
-            double centeredY = (canvasHeight - imageHeight) / 2;
+            double centeredX = (canvasWidth - imageWidth * defaultScale) / 2;
+            double centeredY = (canvasHeight - imageHeight * defaultScale) / 2;
 
             MapImageControl.Width = imageWidth;
             MapImageControl.Height = imageHeight;
@@ -977,12 +979,12 @@ namespace Amaurot
             MapImageControl.Visibility = Visibility.Visible;
 
             var transformGroup = new TransformGroup();
-            transformGroup.Children.Add(new ScaleTransform(_mapState.CurrentScale, _mapState.CurrentScale));
+            transformGroup.Children.Add(new ScaleTransform(defaultScale, defaultScale));
             transformGroup.Children.Add(new TranslateTransform(centeredX, centeredY));
             MapImageControl.RenderTransform = transformGroup;
             MapImageControl.RenderTransformOrigin = new System.Windows.Point(0, 0);
 
-            LogDebug($"Map scaled to {_mapState.CurrentScale:F2} at ({centeredX:F1}, {centeredY:F1})");
+            LogDebug($"Map scaled to {defaultScale:F2} at ({centeredX:F1}, {centeredY:F1})");
         }
 
         private void SyncOverlayWithMap()
