@@ -89,6 +89,10 @@
 	  <None Remove="notes\Coinach CS\Libra\FCReputation.cs.txt" />
 	  <None Remove="Resources\planevent.lgb.json" />
 	</ItemGroup>
+
+	<ItemGroup>
+	  <None Include="map editor.sln" />
+	</ItemGroup>
 	<ItemGroup>
 	  <Content Update="Libs\Definitions\EObj.json" Link="Definitions\EObj.json" />
 	  <Content Update="Libs\Definitions\Map.json">
