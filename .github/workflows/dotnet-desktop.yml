@@ -12,8 +12,8 @@ jobs:
       matrix:
         configuration: [Debug, Release]
 
-    runs-on: windows-latest  
-    
+    runs-on: windows-latest
+
     env:
       Solution_Name: "map editor.sln"
       Project_Path: Amaurot.csproj
@@ -30,18 +30,17 @@ jobs:
         dotnet-version: 8.0.x
 
     - name: Restore dependencies
-      run: dotnet restore ${{ env.Solution_Name }}
+      run: dotnet restore "$env:Solution_Name"
 
     - name: Build application
-      run: dotnet build ${{ env.Solution_Name }} --configuration ${{ matrix.configuration }} --no-restore
+      run: dotnet build "$env:Solution_Name" --configuration ${{ matrix.configuration }} --no-restore
 
     - name: Execute unit tests
-      run: dotnet test ${{ env.Solution_Name }} --configuration ${{ matrix.configuration }} --no-build --verbosity normal
+      run: dotnet test "$env:Solution_Name" --configuration ${{ matrix.configuration }} --no-build --verbosity normal
       continue-on-error: true
 
-    # Publish for Windows only
     - name: Publish application
-      run: dotnet publish ${{ env.Project_Path }} --configuration ${{ matrix.configuration }} --runtime win-x64 --self-contained true --output ./publish/win-x64
+      run: dotnet publish "$env:Project_Path" --configuration ${{ matrix.configuration }} --runtime win-x64 --self-contained true --output ./publish/win-x64
 
     - name: Create default settings file
       run: |
@@ -56,6 +55,27 @@ jobs:
         }
         "@ | Out-File -FilePath "./publish/win-x64/settings.json" -Encoding UTF8
 
+    - name: Create README
+      run: |
+        @"
+        # FFXIV Map Editor
+
+        ## Portable Settings
+        This application uses a portable settings.json file in the same directory as the executable.
+        
+        ## Features
+        - Cross-platform settings storage (no more AppData dependency)
+        - VSCode URI scheme integration for script editing
+        
+        ## Usage
+        1. Run Amaurot.exe
+        2. Settings will be saved to settings.json in this directory
+        3. Copy the entire folder to make it portable
+        
+        ## VSCode Integration
+        The "Open in VSCode" buttons use the vscode://file/ URI scheme which works across platforms.
+        "@ | Out-File -FilePath "./publish/win-x64/README.md" -Encoding UTF8
+
     - name: Create distribution archive
       run: Compress-Archive -Path "./publish/win-x64/*" -DestinationPath "ffxiv-map-editor-windows-${{ matrix.configuration }}.zip"
 
@@ -64,3 +84,31 @@ jobs:
       with:
         name: FFXIV-Map-Editor-Windows-${{ matrix.configuration }}
         path: ffxiv-map-editor-windows-${{ matrix.configuration }}.zip
+        retention-days: 30
+
+  release:
+    needs: build
+    runs-on: windows-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    
+    steps:
+    - name: Download artifacts
+      uses: actions/download-artifact@v4
+      
+    - name: Create Release
+      uses: softprops/action-gh-release@v1
+      with:
+        files: |
+          **/ffxiv-map-editor-*.zip
+        body: |
+          ## FFXIV Map Editor Release
+          
+          ### Installation
+          1. Download the ZIP file
+          2. Extract to any folder
+          3. Run Amaurot.exe
+          4. Settings will be saved as settings.json in the same folder
+        draft: false
+        prerelease: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
