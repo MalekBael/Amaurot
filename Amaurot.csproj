@@ -176,5 +176,8 @@
 	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
 	  </None>
 	</ItemGroup>
+	<ItemGroup>
+	  <Folder Include="Tools\" />
+	</ItemGroup>
 
 </Project>

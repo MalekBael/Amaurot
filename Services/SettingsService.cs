@@ -19,7 +19,6 @@ namespace Amaurot.Services
 
     public class SettingsService
     {
-        // ✅ ENHANCED: Cross-platform settings location
         private static readonly string SettingsFilePath = GetCrossPlatformSettingsPath();
         private static readonly string SettingsDirectory = Path.GetDirectoryName(SettingsFilePath)!;
 
@@ -44,38 +43,31 @@ namespace Amaurot.Services
             LoadSettings();
         }
 
-        // ✅ ADD: Cross-platform settings path logic
         private static string GetCrossPlatformSettingsPath()
         {
             try
             {
-                // First priority: Application root directory (cross-platform)
                 string appDirectory = GetApplicationDirectory();
                 string appRootSettings = Path.Combine(appDirectory, "settings.json");
                 
-                // If we can write to the app directory, use it
                 if (CanWriteToDirectory(appDirectory))
                 {
                     return appRootSettings;
                 }
                 
-                // Second priority: User's home directory (cross-platform)
                 string userDirectory = GetUserDirectory();
                 string userSettings = Path.Combine(userDirectory, ".ffxiv-map-editor", "settings.json");
                 
-                // If we can write to user directory, use it
                 if (CanWriteToDirectory(Path.GetDirectoryName(userSettings)!))
                 {
                     return userSettings;
                 }
                 
-                // Final fallback: Temp directory (should always work)
                 string tempSettings = Path.Combine(Path.GetTempPath(), "ffxiv-map-editor", "settings.json");
                 return tempSettings;
             }
             catch (Exception)
             {
-                // Ultimate fallback: current directory
                 return Path.Combine(Directory.GetCurrentDirectory(), "settings.json");
             }
         }
@@ -84,14 +76,12 @@ namespace Amaurot.Services
         {
             try
             {
-                // Get the directory where the executable is located
                 string? executablePath = Environment.ProcessPath;
                 if (!string.IsNullOrEmpty(executablePath))
                 {
                     return Path.GetDirectoryName(executablePath) ?? Directory.GetCurrentDirectory();
                 }
                 
-                // Fallback to current directory
                 return Directory.GetCurrentDirectory();
             }
             catch
@@ -104,21 +94,17 @@ namespace Amaurot.Services
         {
             try
             {
-                // Cross-platform user directory detection
                 if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
                 {
-                    // Windows: Use USERPROFILE or fallback to ApplicationData
                     return Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
                 }
                 else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux) || RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
                 {
-                    // Linux/macOS: Use HOME environment variable
                     string? homeDir = Environment.GetEnvironmentVariable("HOME");
                     return !string.IsNullOrEmpty(homeDir) ? homeDir : "/tmp";
                 }
                 else
                 {
-                    // Unknown platform: use current directory
                     return Directory.GetCurrentDirectory();
                 }
             }
@@ -132,13 +118,11 @@ namespace Amaurot.Services
         {
             try
             {
-                // Ensure directory exists
                 if (!Directory.Exists(directoryPath))
                 {
                     Directory.CreateDirectory(directoryPath);
                 }
                 
-                // Test write permissions by creating a temporary file
                 string testFile = Path.Combine(directoryPath, $".write_test_{Guid.NewGuid():N}.tmp");
                 File.WriteAllText(testFile, "test");
                 File.Delete(testFile);
@@ -155,7 +139,6 @@ namespace Amaurot.Services
         {
             try
             {
-                // ✅ ENHANCED: Try to migrate from old location if new location doesn't exist
                 if (!File.Exists(SettingsFilePath))
                 {
                     TryMigrateFromLegacyLocation();
@@ -184,14 +167,13 @@ namespace Amaurot.Services
             _settings = new AppSettings();
         }
 
-        // ✅ ADD: Migration from legacy Windows AppData location
         private void TryMigrateFromLegacyLocation()
         {
             try
             {
                 if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
                 {
-                    return; // Only attempt migration on Windows
+                    return;      
                 }
                 
                 string legacyPath = Path.Combine(
@@ -203,18 +185,14 @@ namespace Amaurot.Services
                 {
                     _logDebug?.Invoke($"Migrating settings from legacy location: {legacyPath}");
                     
-                    // Ensure new directory exists
                     if (!Directory.Exists(SettingsDirectory))
                     {
                         Directory.CreateDirectory(SettingsDirectory);
                     }
                     
-                    // Copy the file
                     File.Copy(legacyPath, SettingsFilePath, overwrite: false);
                     _logDebug?.Invoke($"Settings migrated to: {SettingsFilePath}");
                     
-                    // Optionally remove old file (commented out for safety)
-                    // File.Delete(legacyPath);
                 }
             }
             catch (Exception ex)
@@ -243,13 +221,11 @@ namespace Amaurot.Services
             }
         }
 
-        // ✅ ADD: Method to get current settings location for debugging
         public string GetSettingsLocation()
         {
             return SettingsFilePath;
         }
 
-        // ✅ EXISTING: All other methods remain the same
         public void UpdateGamePath(string path)
         {
             _settings.GameInstallationPath = path;
