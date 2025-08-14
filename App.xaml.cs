@@ -1,4 +1,6 @@
 ﻿using System.Windows;
+using System.Windows.Interop;
+using System.Windows.Media;
 
 namespace Amaurot
 {
@@ -9,19 +11,23 @@ namespace Amaurot
     {
         protected override void OnExit(ExitEventArgs e)
         {
-            // Force all timers and resources to be disposed
             try
             {
-                // Stop all running processes
                 System.Diagnostics.Process.GetCurrentProcess().Kill();
             }
             catch
             {
-                // If kill fails, try Environment.Exit
                 System.Environment.Exit(0);
             }
 
             base.OnExit(e);
+        }
+
+        protected override void OnStartup(StartupEventArgs e)
+        {
+            RenderOptions.ProcessRenderMode = RenderMode.SoftwareOnly;
+
+            base.OnStartup(e);
         }
     }
 }

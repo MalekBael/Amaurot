@@ -63,6 +63,11 @@ namespace Amaurot
 
         public MainWindow()
         {
+            RenderOptions.SetBitmapScalingMode(this, BitmapScalingMode.LowQuality);
+            RenderOptions.SetClearTypeHint(this, ClearTypeHint.Enabled);
+            TextOptions.SetTextFormattingMode(this, TextFormattingMode.Display);
+            TextOptions.SetTextRenderingMode(this, TextRenderingMode.Auto);
+
             InitializeComponent();
             DataContext = this;
             _progressManager = new ProgressManager(this);
@@ -232,17 +237,21 @@ namespace Amaurot
 
         private async void LoadGameData_Click(object sender, RoutedEventArgs e)
         {
-            var dialog = new System.Windows.Forms.FolderBrowserDialog
+            var dialog = new Microsoft.Win32.OpenFileDialog
             {
-                Description = "Select FFXIV game installation folder",
-                UseDescriptionForTitle = true,
-                SelectedPath = _services.Get<SettingsService>()?.Settings.GameInstallationPath ?? ""
+                Title = "Select FFXIV game installation folder",
+                InitialDirectory = _services.Get<SettingsService>()?.Settings.GameInstallationPath ?? Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
+                ValidateNames = false,
+                CheckFileExists = false,
+                CheckPathExists = true,
+                FileName = "Select Folder"
             };
 
-            if (dialog.ShowDialog() == System.Windows.Forms.DialogResult.OK)
+            if (dialog.ShowDialog() == true)
             {
-                _services.Get<SettingsService>()?.UpdateGamePath(dialog.SelectedPath);
-                await LoadFFXIVDataAsync(dialog.SelectedPath);
+                var selectedPath = System.IO.Path.GetDirectoryName(dialog.FileName) ?? dialog.FileName;
+                _services.Get<SettingsService>()?.UpdateGamePath(selectedPath);
+                await LoadFFXIVDataAsync(selectedPath);
             }
         }
 
@@ -546,41 +555,55 @@ namespace Amaurot
         {
             return await Task.Run(() =>
             {
-                var image = map.MediumImage;
-                if (image == null)
+                try
                 {
-                    LogDebug($"Failed to load map image for Map ID: {map.Key}");
+                    var image = map.MediumImage;
+                    if (image == null)
+                    {
+                        LogDebug($"Failed to load map image for Map ID: {map.Key}");
+                    }
+                    return image;
                 }
-                return image;
+                catch (Exception ex)
+                {
+                    LogDebug($"Exception loading map image for Map ID: {map.Key}, Error: {ex.Message}");
+                    return null;
+                }
             });
         }
 
         private async Task DisplayMap(System.Drawing.Image mapImage, TerritoryInfo territory)
         {
+            if (mapImage == null)
+            {
+                LogDebug("Map image is null, cannot display");
+                return;
+            }
+
             using var bitmap = new System.Drawing.Bitmap(mapImage);
-            var handle = bitmap.GetHbitmap();
 
-            try
+            using var memoryStream = new MemoryStream();
+            bitmap.Save(memoryStream, System.Drawing.Imaging.ImageFormat.Png);
+            memoryStream.Position = 0;
+
+            var bitmapSource = new BitmapImage();
+            bitmapSource.BeginInit();
+            bitmapSource.CacheOption = BitmapCacheOption.OnLoad;
+            bitmapSource.StreamSource = memoryStream;
+            bitmapSource.EndInit();
+            bitmapSource.Freeze();        
+
+            MapImageControl.Source = bitmapSource;
+
+            if (!MapCanvas.Children.Contains(MapImageControl))
             {
-                var bitmapSource = System.Windows.Interop.Imaging.CreateBitmapSourceFromHBitmap(
-                    handle, IntPtr.Zero, Int32Rect.Empty, BitmapSizeOptions.FromEmptyOptions());
-
-                MapImageControl.Source = bitmapSource;
-
-                if (!MapCanvas.Children.Contains(MapImageControl))
-                {
-                    MapCanvas.Children.Insert(0, MapImageControl);
-                }
-
-                CalculateAndApplyInitialScale(bitmapSource);
-                MapPlaceholderText.Visibility = Visibility.Collapsed;
-
-                await LoadMapMarkers(territory);
+                MapCanvas.Children.Insert(0, MapImageControl);
             }
-            finally
-            {
-                DeleteObject(handle);
-            }
+
+            CalculateAndApplyInitialScale(bitmapSource);
+            MapPlaceholderText.Visibility = Visibility.Collapsed;
+
+            await LoadMapMarkers(territory);
         }
 
         private async Task LoadMapMarkers(TerritoryInfo territory)
@@ -1510,7 +1533,6 @@ namespace Amaurot
             new("BNpcsPanel", "ShowBNpcsCheckBox", 4),
             new("InstanceContentPanel", "ShowInstanceContentCheckBox", 5),
             new("EobjsPanel", "ShowEobjsCheckBox", 6),
-            new("EventItemPanel", "ShowEventItemCheckBox", 7)
         ];
 
         private record PanelConfig(string PanelName, string CheckBoxName, int Priority);
@@ -1653,9 +1675,6 @@ namespace Amaurot
                 grid.Children.Add(splitter);
             }
         }
-
-        [System.Runtime.InteropServices.DllImport("gdi32.dll", SetLastError = true)]
-        private static extern bool DeleteObject(System.IntPtr hObject);
 
         #endregion Helper Methods
     }
