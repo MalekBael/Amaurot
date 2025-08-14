@@ -17,7 +17,6 @@ namespace Amaurot.Services
         private readonly Action<string> _logDebug;
         private readonly Dictionary<uint, List<FateLgbMarker>> _territoryFateCache = new();
 
-        // ✅ NEW: Cache for Fate sheet lookup to avoid repeated linear searches
         private readonly Dictionary<uint, object?> _fateSheetCache = new();
 
         private bool _fateSheetCacheInitialized = false;
@@ -27,7 +26,6 @@ namespace Amaurot.Services
             _realm = realm;
             _logDebug = logDebug;
 
-            // ✅ SIMPLIFIED: Initialize Lumina GameData for direct LGB access
             if (_realm?.GameData != null)
             {
                 try
@@ -36,7 +34,6 @@ namespace Amaurot.Services
 
                     string? coinachPath = null;
 
-                    // Try to get the Directory property from Saint Coinach's GameData
                     var gameDataType = _realm.GameData.GetType();
                     var directoryProperty = gameDataType.GetProperty("Directory", BindingFlags.Public | BindingFlags.Instance);
 
@@ -49,7 +46,6 @@ namespace Amaurot.Services
                         }
                     }
 
-                    // Fallback to hardcoded path if needed
                     if (string.IsNullOrEmpty(coinachPath))
                     {
                         var knownPath = @"D:\Final Fantasy XIV - Sapphire\3.35\FINAL FANTASY XIV - A Realm Reborn";
@@ -76,13 +72,11 @@ namespace Amaurot.Services
             }
         }
 
-        // ✅ NEW: Async method for non-blocking FATE loading
         public async Task<List<MapMarker>> LoadFateMarkersFromLgbAsync(uint mapId)
         {
             return await Task.Run(() => LoadFateMarkersFromLgb(mapId));
         }
 
-        // ✅ OPTIMIZED: Reduced logging, faster processing
         public List<MapMarker> LoadFateMarkersFromLgb(uint mapId)
         {
             var markers = new List<MapMarker>();
@@ -94,7 +88,6 @@ namespace Amaurot.Services
 
             try
             {
-                // Get territory ID from map
                 var mapSheet = _realm.GameData.GetSheet<Map>();
                 var map = mapSheet[(int)mapId];
                 if (map == null) return markers;
@@ -104,14 +97,12 @@ namespace Amaurot.Services
 
                 _logDebug($"🎯 Loading FATE markers for territory {territoryId} (folder: {territoryFolderName})");
 
-                // ✅ OPTIMIZED: Fast cache check first
                 if (_territoryFateCache.TryGetValue(territoryId, out var cachedFates))
                 {
                     _logDebug($"📋 Using cached {cachedFates.Count} FATE markers for territory {territoryId}");
                     return ProcessCachedFateMarkers(cachedFates, map);
                 }
 
-                // Load FATE data from LGB
                 var lgbFates = LoadLgbFateDataFromLumina(territoryFolderName, territoryId);
                 if (lgbFates.Count == 0)
                 {
@@ -119,13 +110,11 @@ namespace Amaurot.Services
                     return markers;
                 }
 
-                // ✅ OPTIMIZED: Initialize Fate sheet cache once
                 if (!_fateSheetCacheInitialized)
                 {
                     InitializeFateSheetCache();
                 }
 
-                // Process FATE markers efficiently
                 foreach (var lgbFate in lgbFates)
                 {
                     try
@@ -152,7 +141,6 @@ namespace Amaurot.Services
             return markers;
         }
 
-        // ✅ NEW: Fast processing of cached FATE markers
         private List<MapMarker> ProcessCachedFateMarkers(List<FateLgbMarker> cachedFates, Map map)
         {
             var markers = new List<MapMarker>();
@@ -169,7 +157,6 @@ namespace Amaurot.Services
             return markers;
         }
 
-        // ✅ NEW: Initialize Fate sheet cache for fast lookups
         private void InitializeFateSheetCache()
         {
             try
@@ -181,7 +168,7 @@ namespace Amaurot.Services
                     {
                         try
                         {
-                            var instanceIdValue = fateRow[1]; // Index 1 = InstanceId
+                            var instanceIdValue = fateRow[1];     
                             if (instanceIdValue != null)
                             {
                                 var instanceId = Convert.ToUInt32(instanceIdValue);
@@ -200,14 +187,11 @@ namespace Amaurot.Services
             }
         }
 
-        // ✅ OPTIMIZED: Fast FATE processing with cached lookups
-        // ✅ FIXED: Proper FATE name extraction from Fate sheet using direct indexer access
         private MapMarker? ProcessLgbFate(FateLgbMarker lgbFate, Map map)
         {
-            // Fast cache lookup instead of linear search
             _fateSheetCache.TryGetValue(lgbFate.InstanceId, out var fateRow);
 
-            string fateName = $"FATE_{lgbFate.LayerName}"; // Fallback name
+            string fateName = $"FATE_{lgbFate.LayerName}";   
             uint fateId = lgbFate.InstanceId;
             uint iconId = 60093;
             uint level = 1;
@@ -216,11 +200,8 @@ namespace Amaurot.Services
             {
                 try
                 {
-                    // ✅ FIXED: Use direct indexer access instead of reflection to avoid ambiguous match
-                    // Cast to dynamic to access the indexer directly
                     dynamic dynamicRow = fateRow;
 
-                    // Get FATE name from index 24
                     var nameValue = dynamicRow[24];
                     if (nameValue != null)
                     {
@@ -232,7 +213,6 @@ namespace Amaurot.Services
                         }
                     }
 
-                    // ✅ FIXED: Get FATE ID (Key/RowId) - this is the actual FATE ID, not InstanceId
                     var keyProperty = fateRow.GetType().GetProperty("Key");
                     if (keyProperty != null)
                     {
@@ -244,14 +224,12 @@ namespace Amaurot.Services
                         }
                     }
 
-                    // ✅ FIXED: Get level from index 2 (ClassJobLevel) using direct indexer
                     var levelValue = dynamicRow[2];
                     if (levelValue != null)
                     {
                         level = (uint)Math.Max(1, Convert.ToInt32(levelValue));
                     }
 
-                    // ✅ FIXED: Get icon from index 3 using direct indexer
                     var iconValue = dynamicRow[3];
                     if (iconValue != null)
                     {
@@ -268,16 +246,13 @@ namespace Amaurot.Services
                 _logDebug($"⚠️ No Fate sheet entry found for InstanceId {lgbFate.InstanceId}");
             }
 
-            // ✅ OPTIMIZED: Simplified coordinate conversion
             return ConvertLgbToMapMarkerFast(lgbFate, map, fateId, fateName, iconId, level);
         }
 
-        // ✅ OPTIMIZED: Fast coordinate conversion without extensive logging
         private MapMarker? ConvertLgbToMapMarkerFast(FateLgbMarker lgbFate, Map map, uint fateId, string fateName, uint iconId, uint level)
         {
             try
             {
-                // Get map properties
                 float sizeFactor = 200.0f;
                 float offsetX = 0;
                 float offsetY = 0;
@@ -300,7 +275,6 @@ namespace Amaurot.Services
                 }
                 catch { }
 
-                // Fast coordinate conversion
                 double c = sizeFactor / 100.0;
                 double gameX = (lgbFate.X + 1024.0) / 50.0 + 1.0;
                 double gameY = (lgbFate.Z + 1024.0) / 50.0 + 1.5;
@@ -330,7 +304,6 @@ namespace Amaurot.Services
             }
         }
 
-        // ✅ OPTIMIZED: Streamlined LGB loading with minimal logging
         private List<FateLgbMarker> LoadLgbFateDataFromLumina(string territoryFolderName, uint territoryId)
         {
             var fates = new List<FateLgbMarker>();
@@ -339,13 +312,11 @@ namespace Amaurot.Services
 
             try
             {
-                // Check cache first
                 if (_territoryFateCache.TryGetValue(territoryId, out var cachedMarkers))
                 {
                     return cachedMarkers;
                 }
 
-                // Try to load LGB file
                 var possiblePaths = new[]
                 {
                     $"bg/ffxiv/roc_r1/fld/{territoryFolderName}/level/planevent.lgb",
@@ -374,7 +345,6 @@ namespace Amaurot.Services
 
                 if (lgbFile == null) return fates;
 
-                // Fast processing of FATE layers
                 foreach (var layer in lgbFile.Layers)
                 {
                     if (layer.Name.StartsWith("FATE_", StringComparison.OrdinalIgnoreCase))
@@ -399,7 +369,6 @@ namespace Amaurot.Services
                     }
                 }
 
-                // Cache the results
                 _territoryFateCache[territoryId] = fates;
                 _logDebug($"📊 Cached {fates.Count} FATE markers for territory {territoryId}");
             }
@@ -411,7 +380,6 @@ namespace Amaurot.Services
             return fates;
         }
 
-        // ✅ CORRECTED: Territory mapping
         private string GetTerritoryFolderName(uint territoryId)
         {
             var territoryFolderMap = new Dictionary<uint, string>
@@ -422,8 +390,8 @@ namespace Amaurot.Services
                 { 145, "w1f3" }, { 146, "w1f4" }, { 147, "w1f5" },
                 { 132, "f1t1" }, { 133, "f1t2" }, { 148, "f1f1" }, { 152, "f1f2" },
                 { 153, "f1f3" }, { 154, "f1f4" },
-                { 155, "r1f1" }, // Coerthas Central Highlands
-                { 156, "l1f1" }, // ✅ FIXED: Mor Dhona
+                { 155, "r1f1" },    
+                { 156, "l1f1" },     
             };
 
             return territoryFolderMap.TryGetValue(territoryId, out var folderName)
@@ -431,7 +399,6 @@ namespace Amaurot.Services
                 : $"unknown_{territoryId}";
         }
 
-        // ✅ SIMPLIFIED: Other methods with minimal changes
         private List<FateLgbMarker> LoadLgbFateDataFromExternalFile(string territoryName) => new();
 
         private List<FateLgbMarker> LoadLgbFateDataFromEmbeddedResource(string territoryName) => new();
@@ -462,7 +429,6 @@ namespace Amaurot.Services
         }
     }
 
-    // ✅ KEEP: Data classes unchanged
     public class FateLgbMarker
     {
         public uint InstanceId { get; set; }
@@ -474,7 +440,6 @@ namespace Amaurot.Services
         public string Source { get; set; } = string.Empty;
     }
 
-    // ✅ KEEP: All existing JSON structure classes unchanged
     public class LgbJsonData
     {
         public string? FilePath { get; set; }

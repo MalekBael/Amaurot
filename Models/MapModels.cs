@@ -69,24 +69,6 @@ namespace Amaurot
         public List<MapMarker> Markers { get; set; } = new List<MapMarker>();
     }
 
-    // REMOVE OR COMMENT OUT THE CONFLICTING CLASSES:
-    // The QuestInfo and QuestNpcInfo classes here conflict with the ones in Services.Entities
-    // Comment them out or delete them entirely:
-
-    /*
-    public class QuestInfo
-    {
-        // This conflicts with Amaurot.Services.Entities.QuestInfo
-        // Remove this entire class definition
-    }
-
-    public class QuestNpcInfo
-    {
-        // This conflicts with Amaurot.Services.Entities.QuestNpcInfo
-        // Remove this entire class definition
-    }
-    */
-
     public static class MapMarkerHelper
     {
         private static Dictionary<uint, uint> IconToPlaceNameIdMap = new Dictionary<uint, uint>();

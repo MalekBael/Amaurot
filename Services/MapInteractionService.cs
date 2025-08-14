@@ -14,7 +14,7 @@ namespace Amaurot
 {
     public class MapInteractionService
     {
-        private WpfPoint _lastMousePosition; // Fix: Use WpfPoint alias
+        private WpfPoint _lastMousePosition;     
         private bool _isDragging = false;
         private readonly Action<string> _logDebug;
 
@@ -23,7 +23,7 @@ namespace Amaurot
             _logDebug = logDebug;
         }
 
-        public void HandleMouseWheel(MouseWheelEventArgs e, Canvas mapCanvas, WpfImage mapImageControl, // Fix: Use WpfImage alias
+        public void HandleMouseWheel(MouseWheelEventArgs e, Canvas mapCanvas, WpfImage mapImageControl,     
             ref double currentScale, Canvas overlayCanvas, Action syncOverlayAction, Action refreshMarkersAction)
         {
             if (mapImageControl.Source == null) return;
@@ -61,13 +61,13 @@ namespace Amaurot
             e.Handled = true;
         }
 
-        public void HandleMouseLeftButtonDown(MouseButtonEventArgs e, Canvas mapCanvas, WpfImage mapImageControl) // Fix: Use WpfImage alias
+        public void HandleMouseLeftButtonDown(MouseButtonEventArgs e, Canvas mapCanvas, WpfImage mapImageControl)     
         {
             if (mapImageControl.Source != null)
             {
                 _lastMousePosition = e.GetPosition(mapCanvas);
                 _isDragging = true;
-                mapCanvas.Cursor = WpfCursors.Hand; // Fix: Use WpfCursors alias
+                mapCanvas.Cursor = WpfCursors.Hand;     
                 mapCanvas.CaptureMouse();
                 e.Handled = true;
             }
@@ -78,13 +78,13 @@ namespace Amaurot
             if (_isDragging)
             {
                 _isDragging = false;
-                mapCanvas.Cursor = WpfCursors.Arrow; // Fix: Use WpfCursors alias
+                mapCanvas.Cursor = WpfCursors.Arrow;     
                 mapCanvas.ReleaseMouseCapture();
                 e.Handled = true;
             }
         }
 
-        public void HandleMouseMove(WpfMouseEventArgs e, Canvas mapCanvas, WpfImage mapImageControl, Action syncOverlayAction) // Fix: Use aliases
+        public void HandleMouseMove(WpfMouseEventArgs e, Canvas mapCanvas, WpfImage mapImageControl, Action syncOverlayAction)    
         {
             if (_isDragging && e.LeftButton == MouseButtonState.Pressed && mapImageControl.Source != null)
             {
@@ -109,7 +109,7 @@ namespace Amaurot
         }
 
         public void CalculateAndApplyInitialScale(BitmapSource bitmapSource, Canvas mapCanvas,
-            WpfImage mapImageControl, ref double currentScale) // Fix: Use WpfImage alias
+            WpfImage mapImageControl, ref double currentScale)     
         {
             double canvasWidth = mapCanvas.ActualWidth;
             double canvasHeight = mapCanvas.ActualHeight;
@@ -142,7 +142,7 @@ namespace Amaurot
             transformGroup.Children.Add(new ScaleTransform(currentScale, currentScale));
             transformGroup.Children.Add(new TranslateTransform(centeredX, centeredY));
             mapImageControl.RenderTransform = transformGroup;
-            mapImageControl.RenderTransformOrigin = new WpfPoint(0, 0); // Fix: Use WpfPoint alias
+            mapImageControl.RenderTransformOrigin = new WpfPoint(0, 0);     
 
             _logDebug($"Map scaled to {currentScale:F2} and positioned via transform at ({centeredX:F1}, {centeredY:F1})");
         }

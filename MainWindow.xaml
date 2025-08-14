@@ -75,13 +75,11 @@
                   Margin="5,0" Checked="PanelVisibility_Changed" Unchecked="PanelVisibility_Changed" />
                 <CheckBox x:Name="ShowFatesCheckBox" Content="Fates" IsChecked="True"
                   Margin="5,0" Checked="PanelVisibility_Changed" Unchecked="PanelVisibility_Changed" />
-                <!-- ✅ CHANGED: Default to False for 2×2 layout -->
                 <CheckBox x:Name="ShowInstanceContentCheckBox" Content="Instance Content" IsChecked="True"
                   Margin="5,0" Checked="PanelVisibility_Changed" Unchecked="PanelVisibility_Changed" />
                 <CheckBox x:Name="ShowEobjsCheckBox" Content="Eobjs" IsChecked="False"
                   Margin="5,0" Checked="PanelVisibility_Changed" Unchecked="PanelVisibility_Changed" />
-                <CheckBox x:Name="ShowEventItemCheckBox" Content="EventItem" IsChecked="False"
-                  Margin="5,0" Checked="PanelVisibility_Changed" Unchecked="PanelVisibility_Changed" />
+                <!-- ✅ REMOVED: ShowEventItemCheckBox completely removed -->
             </WrapPanel>
         </GroupBox>
 
@@ -97,7 +95,7 @@
                 <ColumnDefinition Width="5" />
                 <!-- Splitter: Fixed 5px -->
                 <ColumnDefinition Width="500" x:Name="PanelAreaColumn" />
-                <!-- ✅ CHANGED: Fixed 500px width -->
+                <!-- Fixed 500px width -->
             </Grid.ColumnDefinitions>
 
             <!-- Territory List -->
@@ -107,7 +105,7 @@
                     <TextBlock Name="TerritoryCountText" Text="(0)" Margin="5,0,0,0" Foreground="Gray" VerticalAlignment="Center" />
                 </StackPanel>
                 <TextBox DockPanel.Dock="Top" Name="TerritorySearchBox" Margin="5,0,5,5"
-                         Text="" TextChanged="TerritorySearchBox_TextChanged"
+                         Text="" TextChanged="SearchBox_TextChanged"
                          Background="White" BorderThickness="1" BorderBrush="Gray"
                          ToolTip="Search territories by name or ID" />
                 <CheckBox DockPanel.Dock="Top" x:Name="HideDuplicateTerritoriesCheckBox"
@@ -227,7 +225,7 @@
 
             <GridSplitter Grid.Column="3" HorizontalAlignment="Stretch" />
 
-            <!-- ✅ FIXED: Dynamic Panel Grid Area - panels will be moved here by ReorganizePanels() -->
+            <!-- Dynamic Panel Grid Area - panels will be moved here by ReorganizePanels() -->
             <Border Grid.Column="4" x:Name="PanelGridArea" Background="White" BorderBrush="Gray" BorderThickness="1" Margin="2">
                 <Grid x:Name="DynamicPanelGrid" Margin="2">
                     <!-- Grid structure and panels will be added dynamically -->
@@ -235,7 +233,7 @@
             </Border>
         </Grid>
 
-        <!-- ✅ HIDDEN: Panel definitions - these will be moved to DynamicPanelGrid when visible -->
+        <!-- HIDDEN: Panel definitions - these will be moved to DynamicPanelGrid when visible -->
         <Grid x:Name="PanelContainer" Visibility="Collapsed">
 
             <!-- Quests Panel -->
@@ -247,10 +245,9 @@
                     </StackPanel>
                 </Border>
                 <TextBox DockPanel.Dock="Top" x:Name="QuestSearchBox" Margin="2"
-                         Text="" TextChanged="QuestSearchBox_TextChanged"
+                         Text="" TextChanged="SearchBox_TextChanged"
                          Background="White" BorderThickness="1" BorderBrush="Gray"
                          ToolTip="Search quests by name or ID" />
-                <!-- ✅ FIXED: Added MaxHeight and proper scrolling -->
                 <ListBox Name="QuestList"
                          ItemsSource="{Binding FilteredQuests}"
                          SelectionChanged="QuestList_SelectionChanged"
@@ -332,7 +329,6 @@
                          Text="" TextChanged="NpcSearchBox_TextChanged"
                          Background="White" BorderThickness="1" BorderBrush="Gray"
                          ToolTip="Search NPCs by name or ID" />
-                <!-- ✅ UPDATED: Modified template to show quest count on separate line -->
                 <ListBox Name="NpcList"
                          ItemsSource="{Binding FilteredNpcs}"
                          SelectionChanged="NpcList_SelectionChanged"
@@ -361,10 +357,9 @@
                     </StackPanel>
                 </Border>
                 <TextBox DockPanel.Dock="Top" x:Name="BNpcSearchBox" Margin="2"
-                         Text="" TextChanged="BNpcSearchBox_TextChanged"
+                         Text="" TextChanged="SearchBox_TextChanged"
                          Background="White" BorderThickness="1" BorderBrush="Gray"
                          ToolTip="Search NPCs by name or Base ID" />
-                <!-- ✅ FIXED: Added MaxHeight and proper scrolling -->
                 <ListBox Name="BNpcList"
                          ItemsSource="{Binding FilteredBNpcs}"
                          SelectionChanged="BNpcList_SelectionChanged"
@@ -388,10 +383,9 @@
                     </StackPanel>
                 </Border>
                 <TextBox DockPanel.Dock="Top" x:Name="FateSearchBox" Margin="2"
-                         Text="" TextChanged="FateSearchBox_TextChanged"
+                         Text="" TextChanged="SearchBox_TextChanged"
                          Background="White" BorderThickness="1" BorderBrush="Gray"
                          ToolTip="Search fates by name or ID" />
-                <!-- ✅ FIXED: Added MaxHeight and proper scrolling -->
                 <ListBox Name="FateList"
                          ItemsSource="{Binding FilteredFates}"
                          SelectionChanged="FateList_SelectionChanged"
@@ -415,10 +409,9 @@
                     </StackPanel>
                 </Border>
                 <TextBox DockPanel.Dock="Top" x:Name="EobjSearchBox" Margin="2"
-                         Text="" TextChanged="EobjSearchBox_TextChanged"
+                         Text="" TextChanged="SearchBox_TextChanged"
                          Background="White" BorderThickness="1" BorderBrush="Gray"
                          ToolTip="Search Eobjs by name or ID" />
-                <!-- ✅ FIXED: Added MaxHeight and proper scrolling -->
                 <ListBox Name="EobjList" Margin="2"
                          ScrollViewer.VerticalScrollBarVisibility="Auto"
                          ScrollViewer.HorizontalScrollBarVisibility="Disabled">
@@ -433,32 +426,7 @@
                 </ListBox>
             </DockPanel>
 
-            <!-- EventItem Panel -->
-            <DockPanel x:Name="EventItemPanel" Visibility="Collapsed" Margin="2">
-                <Border DockPanel.Dock="Top" Background="LightBlue" Padding="5" Margin="0,0,0,2">
-                    <StackPanel Orientation="Horizontal">
-                        <TextBlock Text="EventItem" FontWeight="Bold" VerticalAlignment="Center" />
-                        <TextBlock x:Name="LeveCountText" Text="(0)" Margin="5,0,0,0" Foreground="Gray" VerticalAlignment="Center" />
-                    </StackPanel>
-                </Border>
-                <TextBox DockPanel.Dock="Top" x:Name="EventItemSearchBox" Margin="2"
-                         Text="" TextChanged="EventItemSearchBox_TextChanged"
-                         Background="White" BorderThickness="1" BorderBrush="Gray"
-                         ToolTip="Search EventItem by name or ID" />
-                <!-- ✅ FIXED: Added MaxHeight and proper scrolling -->
-                <ListBox Name="LeveList" Margin="2"
-                         ScrollViewer.VerticalScrollBarVisibility="Auto"
-                         ScrollViewer.HorizontalScrollBarVisibility="Disabled">
-                    <ListBox.ItemTemplate>
-                        <DataTemplate>
-                            <StackPanel Margin="2">
-                                <TextBlock Text="Sample Leve 1" FontWeight="SemiBold" />
-                                <TextBlock Text="Type: Battlecraft" FontSize="10" Foreground="Gray" />
-                            </StackPanel>
-                        </DataTemplate>
-                    </ListBox.ItemTemplate>
-                </ListBox>
-            </DockPanel>
+            <!-- ✅ REMOVED: EventItem Panel completely removed -->
 
             <!-- InstanceContent Panel -->
             <DockPanel x:Name="InstanceContentPanel" Visibility="Visible" Margin="2">
@@ -469,7 +437,7 @@
                     </StackPanel>
                 </Border>
                 <TextBox DockPanel.Dock="Top" x:Name="InstanceContentSearchBox" Margin="2"
-                         Text="" TextChanged="InstanceContentSearchBox_TextChanged"
+                         Text="" TextChanged="SearchBox_TextChanged"
                          Background="White" BorderThickness="1" BorderBrush="Gray"
                          ToolTip="Search instance content by name or ID" />
                 <ListBox Name="InstanceContentList"

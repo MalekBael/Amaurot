@@ -10,7 +10,7 @@ using WpfPoint = System.Windows.Point;
 using WpfSize = System.Windows.Size;
 using System.Windows.Media;
 using System.Windows.Controls;
-using Amaurot.Services; // ✅ ADD: This should already be there, but make sure it includes FateLgbService
+using Amaurot.Services;              
 
 using FateInfo = Amaurot.Services.Entities.FateInfo;
 
@@ -89,7 +89,6 @@ namespace Amaurot
         {
             _logDebug($"🗺️ === MAP SERVICE DEBUG START === MapId: {mapId}");
 
-            // Check cache first
             if (_mapMarkerCache.ContainsKey(mapId))
             {
                 _logDebug($"💾 Returning {_mapMarkerCache[mapId].Count} cached markers for map {mapId}");
@@ -117,12 +116,10 @@ namespace Amaurot
 
                 _logDebug($"✅ Found map {mapId}: {map.PlaceName?.Name}");
 
-                // Load regular map markers
                 _logDebug($"📍 Loading regular map markers from sheet...");
                 LoadMapMarkersFromSheet(markers, map);
                 _logDebug($"📍 Loaded {markers.Count} regular markers");
 
-                // ✅ ENHANCED: Load FATE markers with detailed debugging
                 _logDebug($"🎯 Loading FATE markers from LGB data...");
                 if (_realm != null)
                 {
@@ -134,7 +131,7 @@ namespace Amaurot
                     if (fateMarkers.Count > 0)
                     {
                         _logDebug($"📋 FATE markers details:");
-                        for (int i = 0; i < Math.Min(fateMarkers.Count, 5); i++) // Show first 5
+                        for (int i = 0; i < Math.Min(fateMarkers.Count, 5); i++)    
                         {
                             var marker = fateMarkers[i];
                             _logDebug($"   #{i + 1}: '{marker.PlaceName}' at ({marker.X:F1}, {marker.Y:F1}) - Type: {marker.Type}, Visible: {marker.IsVisible}, Icon: {marker.IconId}");
@@ -151,7 +148,6 @@ namespace Amaurot
 
                 _logDebug($"📊 Total markers loaded for map {mapId}: {markers.Count} (including {markers.Count(m => m.Type == MarkerType.Fate)} FATE markers)");
 
-                // Cache the results
                 _mapMarkerCache[mapId] = markers;
 
                 _logDebug($"🗺️ === MAP SERVICE COMPLETE === Cached {markers.Count} markers for map {mapId}");
@@ -558,7 +554,6 @@ namespace Amaurot
 
         private MarkerType DetermineMarkerType(uint iconId)
         {
-            // Add Fate icon detection
             if (iconId == 60093 || iconId == 60501 || iconId == 60502 || iconId == 60503 || iconId == 60504 || iconId == 60505)
                 return MarkerType.Fate;
 
@@ -675,16 +670,13 @@ namespace Amaurot
                 relativeX = Math.Max(0, Math.Min(1, relativeX));
                 relativeY = Math.Max(0, Math.Min(1, relativeY));
 
-                // Calculate raw map coordinates
                 double rawX = relativeX * 2048.0 - offsetX;
                 double rawY = relativeY * 2048.0 - offsetY;
 
-                // Calculate game coordinates
                 double c = sizeFactor / 100.0;
                 double gameX = (41.0 / c) * relativeX + 1.0;
                 double gameY = (41.0 / c) * relativeY + 1.0;
 
-                // Populate result
                 result.MapX = gameX;
                 result.MapY = gameY;
                 result.ClientX = clickPoint.X;
@@ -1002,7 +994,6 @@ namespace Amaurot
                 if (!uint.TryParse(cols[3], out uint iconId)) iconId = 0;
                 if (!uint.TryParse(cols[4], out uint placeNameId)) placeNameId = 0;
 
-                // Normalize X/Y from pixel to game coordinates
                 double gameX = (x / mapImageSize) * 100.0;
                 double gameY = (y / mapImageSize) * 100.0;
 
@@ -1271,7 +1262,6 @@ namespace Amaurot
 
             string lowerName = placeName.ToLower();
 
-            // Common shop/market terms
             return lowerName.Contains("shop") ||
                    lowerName.Contains("market") ||
                    lowerName.Contains("stalls") ||
@@ -1389,7 +1379,6 @@ namespace Amaurot
 
                 var territoryId = (uint)map.TerritoryType.Key;
 
-                // Load sheets
                 var fateSheet = _realm.GameData.GetSheet("Fate");
 
                 if (_verboseDebugMode)
@@ -1443,7 +1432,6 @@ namespace Amaurot
                             {
                                 _logDebug($"Error accessing FATE name at index 24 for key {fateKey}: {ex.Message}");
                             }
-                            // Fallback to string access
                             try
                             {
                                 if (fateRow is SaintCoinach.Xiv.XivRow xivRow)
@@ -1489,7 +1477,7 @@ namespace Amaurot
                         }
 
                         uint classJobLevel = 0;
-                        uint iconId = 60093; // Default FATE icon
+                        uint iconId = 60093;    
 
                         try
                         {
@@ -1585,8 +1573,6 @@ namespace Amaurot
                 {
                     _logDebug($"No FATEs found for map {mapId} (territory {territoryId}). Loading all FATEs as fallback...");
 
-                    // As a fallback, load ALL FATEs regardless of territory
-                    // This ensures the FATE list window has something to show
                     foreach (var fateRow in fateSheet)
                     {
                         try
@@ -1618,7 +1604,6 @@ namespace Amaurot
 
                             if (string.IsNullOrWhiteSpace(fateName)) continue;
 
-                            // Get basic properties
                             uint classJobLevel = 0;
                             try
                             {
@@ -1628,7 +1613,6 @@ namespace Amaurot
                                 }
                                 else
                                 {
-                                    // Fixed: Add null check for unboxing operation (Line 1665)
                                     var levelValue = fateRow[2];
                                     if (levelValue != null)
                                     {
@@ -1647,7 +1631,6 @@ namespace Amaurot
                                 }
                                 else
                                 {
-                                    // Fixed: Add null check for unboxing operation (Line 1666)
                                     var iconValue = fateRow[3];
                                     if (iconValue != null)
                                     {
@@ -1666,7 +1649,6 @@ namespace Amaurot
                                 }
                                 else
                                 {
-                                    // Fixed: Add null check for unboxing operation (Line 1667)
                                     var descValue = fateRow[25];
                                     if (descValue != null)
                                     {
@@ -1716,7 +1698,6 @@ namespace Amaurot
         {
             try
             {
-                // Get map properties
                 float sizeFactor = 100.0f;
                 float offsetX = 0;
                 float offsetY = 0;
@@ -1752,18 +1733,10 @@ namespace Amaurot
                     Debug.WriteLine($"Error accessing map properties: {ex.Message}");
                 }
 
-                // FFXIV world coordinate conversion
-                // World coordinates are typically in the range of roughly -1000 to +1000
-                // Map coordinates in your system are 0-42
-
-                // Apply the standard FFXIV coordinate conversion
                 double c = sizeFactor / 100.0;
 
-                // Convert world coordinate to map coordinate
-                // This formula converts FFXIV world coordinates to map coordinates
                 double mapCoord = ((worldCoord + offsetX) * c + 1024.0) / 2048.0 * 41.0 + 1.0;
 
-                // Clamp to valid range
                 mapCoord = Math.Max(1, Math.Min(42, mapCoord));
 
                 return mapCoord;
@@ -1771,7 +1744,7 @@ namespace Amaurot
             catch (Exception ex)
             {
                 Debug.WriteLine($"Error converting world coordinate {worldCoord}: {ex.Message}");
-                return 21.0; // Return center coordinate as fallback
+                return 21.0;      
             }
         }
 
@@ -1781,10 +1754,8 @@ namespace Amaurot
 
             foreach (var fate in fates)
             {
-                // Use the FATE's actual icon from the game data
                 uint iconId = fate.IconId;
 
-                // If no icon is specified, determine a default based on FATE name/description patterns
                 if (iconId == 0)
                 {
                     iconId = DetermineFateTypeIcon(fate.Name, fate.Description);
@@ -1807,7 +1778,6 @@ namespace Amaurot
 
                 markers.Add(marker);
 
-                // DEBUG: Log first few FATE markers to see if they're created correctly
                 if (markers.Count <= 5)
                 {
                     Debug.WriteLine($"Created FATE marker: '{marker.PlaceName}' at ({marker.X:F1}, {marker.Y:F1}) with icon {marker.IconId}, Type={marker.Type}, Visible={marker.IsVisible}");
@@ -1820,51 +1790,44 @@ namespace Amaurot
 
         private uint DetermineFateTypeIcon(string fateName, string fateDescription)
         {
-            // Analyze the FATE name and description to determine the appropriate icon
             string combined = $"{fateName} {fateDescription}".ToLowerInvariant();
 
-            // Boss/Named Monster FATEs
             if (combined.Contains("slay") || combined.Contains("defeat") ||
                 combined.Contains("eliminate") || combined.Contains("hunt") ||
                 combined.Contains("kill") || combined.Contains("destroy") ||
                 fateName.Contains("vs") || fateName.Contains("Vs"))
             {
-                return 60501; // Boss/Combat icon
+                return 60501;   
             }
 
-            // Escort/Protection FATEs
             if (combined.Contains("escort") || combined.Contains("protect") ||
                 combined.Contains("defend") || combined.Contains("guard") ||
                 combined.Contains("accompany") || combined.Contains("guide"))
             {
-                return 60502; // Escort/Protection icon
+                return 60502;   
             }
 
-            // Collection/Gathering FATEs
             if (combined.Contains("collect") || combined.Contains("gather") ||
                 combined.Contains("deliver") || combined.Contains("retrieve") ||
                 combined.Contains("harvest") || combined.Contains("supply"))
             {
-                return 60503; // Collection icon
+                return 60503;   
             }
 
-            // Survival/Defense FATEs
             if (combined.Contains("survive") || combined.Contains("hold") ||
                 combined.Contains("defend") || combined.Contains("withstand") ||
                 combined.Contains("last") || combined.Contains("endure"))
             {
-                return 60504; // Defense icon
+                return 60504;   
             }
 
-            // Special Event FATEs
             if (combined.Contains("special") || combined.Contains("event") ||
                 combined.Contains("seasonal") || combined.Contains("festival"))
             {
-                return 60505; // Special event icon
+                return 60505;    
             }
 
-            // Default FATE icon for anything else
-            return 60093; // Generic FATE icon
+            return 60093;    
         }
 
         public void SetVerboseDebugMode(bool enabled)
@@ -1873,7 +1836,6 @@ namespace Amaurot
             Debug.WriteLine($"MapService verbose debug mode set to: {enabled}");
         }
 
-        // Create a helper method for conditional debug output
         private void DebugWriteLine(string message)
         {
             if (_verboseDebugMode)
@@ -1889,13 +1851,11 @@ namespace Amaurot
 
             try
             {
-                // If it's already a TerritoryType object
                 if (territoryValue is SaintCoinach.Xiv.TerritoryType territoryType)
                 {
                     return (uint)territoryType.Key;
                 }
 
-                // If it's a direct integer value
                 if (territoryValue is int intValue)
                 {
                     return (uint)Math.Max(0, intValue);
@@ -1906,14 +1866,12 @@ namespace Amaurot
                     return uintValue;
                 }
 
-                // Try to convert directly
                 try
                 {
                     return Convert.ToUInt32(territoryValue);
                 }
                 catch
                 {
-                    // If direct conversion fails, try to get Key property via reflection
                     var keyProp = territoryValue.GetType().GetProperty("Key");
                     if (keyProp != null)
                     {

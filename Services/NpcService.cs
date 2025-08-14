@@ -328,7 +328,6 @@ namespace Amaurot.Services
                 using var connection = new SQLiteConnection($"Data Source={_libraDbPath};Version=3;Read Only=True;");
                 connection.Open();
 
-                // Query to get all NPCs with coordinate data from Libra
                 var query = @"
                     SELECT
                         n.Key as npc_id,
@@ -492,7 +491,6 @@ namespace Amaurot.Services
         {
             try
             {
-                // Convert raw Libra coordinates to game coordinates (1-42 range)
                 double gameCoordX = rawLibraX / 10.0;
                 double gameCoordY = rawLibraY / 10.0;
 
@@ -506,7 +504,6 @@ namespace Amaurot.Services
 
                 if (map != null)
                 {
-                    // Get map properties
                     float sizeFactor = 200.0f;
                     float offsetX = 0;
                     float offsetY = 0;
@@ -525,7 +522,6 @@ namespace Amaurot.Services
                     }
                     catch { }
 
-                    // Convert to marker coordinates (reverse of MapRenderer calculation)
                     double c = sizeFactor / 100.0;
                     double markerX = ((gameCoordX - 1.0) * c / 41.0) * 2048.0 - offsetX;
                     double markerY = ((gameCoordY - 1.0) * c / 41.0) * 2048.0 - offsetY;
@@ -541,7 +537,6 @@ namespace Amaurot.Services
             {
                 _logDebug($"Error converting coordinates for MapId {mapId}: {ex.Message}");
 
-                // Fallback to simple game coordinate conversion
                 double gameCoordX = rawLibraX / 10.0;
                 double gameCoordY = rawLibraY / 10.0;
                 return (gameCoordX, gameCoordY, 0);
@@ -559,14 +554,12 @@ namespace Amaurot.Services
 
                 var territorySheet = _realm.GameData.GetSheet<SaintCoinach.Xiv.TerritoryType>();
 
-                // Try direct PlaceName ID match first
                 var territory = territorySheet.FirstOrDefault(t => t.PlaceName?.Key == libraPlaceNameId);
                 if (territory != null)
                 {
                     return (uint)territory.Key;
                 }
 
-                // If that fails, try getting the place name and matching by name
                 var placeNameQuery = "SELECT SGL_en FROM PlaceName WHERE Key = ?";
                 using var command = new SQLiteCommand(placeNameQuery, connection);
                 command.Parameters.AddWithValue("Key", libraPlaceNameId);
@@ -638,7 +631,6 @@ namespace Amaurot.Services
             }
         }
 
-        // Keep the basic extraction method as fallback
         public async Task<List<NpcInfo>> ExtractNpcsFromSaintCoinachAsync()
         {
             var npcInfoList = new List<NpcInfo>();
@@ -755,7 +747,6 @@ namespace Amaurot.Services
         public double MapY { get; set; }
         public double MapZ { get; set; }
 
-        // ✅ Enhanced quest properties from Libra
         public string JournalGenre { get; set; } = string.Empty;
 
         public uint LevelRequired { get; set; }
@@ -777,7 +768,6 @@ namespace Amaurot.Services
         }
     }
 
-    // Helper classes for NPC position data
     public class NpcLocationData
     {
         public uint NpcId { get; set; }

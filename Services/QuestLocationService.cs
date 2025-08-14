@@ -8,7 +8,6 @@ using System.Data;
 using System.Data.SQLite;
 using System.IO;
 
-// ✅ FIX: Use entity types consistently
 using QuestInfo = Amaurot.Services.Entities.QuestInfo;
 using QuestNpcInfo = Amaurot.Services.Entities.QuestNpcInfo;
 
@@ -132,7 +131,6 @@ namespace Amaurot.Services
 
             _logDebug($"🎯 Quest location extraction complete! Found {_questLocationCache.Count} quest locations");
 
-            // ✅ ADD: Debug MapId distribution
             if (_verboseDebugMode)
             {
                 var mapIdCounts = _questLocationCache.Values
@@ -153,7 +151,6 @@ namespace Amaurot.Services
                     _logDebug($"⚠️ WARNING: {mapId1Count} quests have MapId=1 (likely incorrect default)");
                 }
 
-                // ✅ COORDINATE RANGE DEBUG
                 var coordRanges = _questLocationCache.Values.Where(q => q.MapX > 0 && q.MapY > 0).ToList();
                 if (coordRanges.Count > 0)
                 {
@@ -176,7 +173,6 @@ namespace Amaurot.Services
             return _questLocationCache;
         }
 
-        // ✅ ENHANCED: Store quest name in location data for better marker naming
         private async Task ExtractFromLibraDatabase()
         {
             try
@@ -188,7 +184,6 @@ namespace Amaurot.Services
                     using var connection = new SQLiteConnection($"Data Source={_libraDbPath};Version=3;Read Only=True;");
                     connection.Open();
 
-                    // First, let's explore the database structure to understand the column names
                     var schemaQuery = "PRAGMA table_info(ENpcResident)";
                     using var schemaCommand = new SQLiteCommand(schemaQuery, connection);
                     using var schemaReader = schemaCommand.ExecuteReader();
@@ -204,7 +199,6 @@ namespace Amaurot.Services
                         _logDebug($"📊 ENpcResident table columns: {string.Join(", ", columns)}");
                     }
 
-                    // Updated query using correct column names from the CSV structure
                     var query = @"
                         SELECT
                             q.Key as quest_id,
@@ -252,7 +246,6 @@ namespace Amaurot.Services
                                 continue;
                             }
 
-                            // ✅ ENHANCED: Track MapId 1 issues
                             if (coordinateData.MapId == 1)
                             {
                                 mapId1Count++;
@@ -261,8 +254,8 @@ namespace Amaurot.Services
                             var locationData = new QuestLocationData
                             {
                                 QuestId = questId,
-                                QuestName = questName, // ✅ STORE QUEST NAME
-                                NpcName = npcName,     // ✅ STORE NPC NAME
+                                QuestName = questName,     
+                                NpcName = npcName,         
                                 TerritoryId = coordinateData.TerritoryId,
                                 MapId = coordinateData.MapId,
                                 MapX = coordinateData.MapX,
@@ -293,13 +286,11 @@ namespace Amaurot.Services
 
                     _logDebug($"📊 Extracted {questCount} quest locations from Libra database");
 
-                    // ✅ ENHANCED: Report MapId 1 issues
                     if (mapId1Count > 0)
                     {
                         _logDebug($"⚠️ WARNING: {mapId1Count}/{questCount} quests assigned MapId=1 (likely incorrect)");
                     }
 
-                    // ✅ ENHANCED: Report territory mapping failures
                     if (territoryMappingFailures.Count > 0 && _verboseDebugMode)
                     {
                         _logDebug($"🗺️ TERRITORY MAPPING FAILURES ({territoryMappingFailures.Count}):");
@@ -416,11 +407,9 @@ namespace Amaurot.Services
                     if (!double.TryParse(xString, out double rawLibraX) || !double.TryParse(yString, out double rawLibraY))
                         continue;
 
-                    // ✅ ENHANCED: Better territory mapping with detailed logging
                     uint saintCoinachTerritoryId = MapLibraToSaintCoinachTerritory(libraPlaceNameId, connection, questId, territoryMappingFailures);
                     uint mapId = GetMapIdForTerritory(saintCoinachTerritoryId);
 
-                    // ✅ ENHANCED: Log problematic MapId assignments
                     if (_verboseDebugMode && mapId == 1 && saintCoinachTerritoryId == 0)
                     {
                         string? placeName = GetLibraPlaceName(libraPlaceNameId, connection);
@@ -465,14 +454,11 @@ namespace Amaurot.Services
         {
             try
             {
-                // ✅ STEP 1: First, correct the Libra coordinates by dividing by 10 to get game coordinates (1-42 range)
                 double gameCoordX = rawLibraX / 10.0;
                 double gameCoordY = rawLibraY / 10.0;
 
                 if (_realm == null)
                 {
-                    // ✅ SIMPLE FALLBACK: Just use the game coordinates directly
-                    // The MapRenderer will handle the normalization
                     return (gameCoordX, gameCoordY, 0);
                 }
 
@@ -481,7 +467,6 @@ namespace Amaurot.Services
 
                 if (map != null)
                 {
-                    // ✅ Get map properties the same way MapRenderer does
                     float sizeFactor = 200.0f;
                     float offsetX = 0;
                     float offsetY = 0;
@@ -506,20 +491,6 @@ namespace Amaurot.Services
                         }
                     }
 
-                    // ✅ KEY INSIGHT: MapRenderer does this calculation:
-                    // normalizedX = (marker.X + offsetX) / 2048.0
-                    // normalizedY = (marker.Y + offsetY) / 2048.0
-                    // gameX = (41.0 / c) * (normalizedX) + 1.0  where c = sizeFactor / 100.0
-                    // gameY = (41.0 / c) * (normalizedY) + 1.0
-
-                    // We need to reverse this to find what marker.X should be
-                    // From: gameCoord = (41.0 / c) * ((marker.X + offset) / 2048.0) + 1.0
-                    // Solve for marker.X:
-                    // gameCoord - 1.0 = (41.0 / c) * ((marker.X + offset) / 2048.0)
-                    // (gameCoord - 1.0) * c / 41.0 = (marker.X + offset) / 2048.0
-                    // ((gameCoord - 1.0) * c / 41.0) * 2048.0 = marker.X + offset
-                    // marker.X = ((gameCoord - 1.0) * c / 41.0) * 2048.0 - offset
-
                     double c = sizeFactor / 100.0;
                     double markerX = ((gameCoordX - 1.0) * c / 41.0) * 2048.0 - offsetX;
                     double markerY = ((gameCoordY - 1.0) * c / 41.0) * 2048.0 - offsetY;
@@ -532,7 +503,6 @@ namespace Amaurot.Services
                         _logDebug($"      Map {mapId}: SizeFactor={sizeFactor}, OffsetX={offsetX}, OffsetY={offsetY}, c={c:F3}");
                         _logDebug($"      Final Marker Coords: ({markerX:F1}, {markerY:F1})");
 
-                        // ✅ VERIFICATION: Show what MapRenderer will calculate
                         double verifyNormX = (markerX + offsetX) / 2048.0;
                         double verifyNormY = (markerY + offsetY) / 2048.0;
                         double verifyGameX = (41.0 / c) * verifyNormX + 1.0;
@@ -549,7 +519,6 @@ namespace Amaurot.Services
                         _logDebug($"    Map {mapId} not found in map sheet, using game coordinates directly");
                     }
 
-                    // ✅ FALLBACK: Use game coordinates directly
                     return (gameCoordX, gameCoordY, 0);
                 }
             }
@@ -557,14 +526,12 @@ namespace Amaurot.Services
             {
                 _logDebug($"Error converting coordinates for MapId {mapId}: {ex.Message}");
 
-                // Fallback to simple game coordinate conversion
                 double gameCoordX = rawLibraX / 10.0;
                 double gameCoordY = rawLibraY / 10.0;
                 return (gameCoordX, gameCoordY, 0);
             }
         }
 
-        // ✅ ADD: The missing MapLibraToSaintCoinachTerritory method
         private uint MapLibraToSaintCoinachTerritory(uint libraPlaceNameId, SQLiteConnection connection,
             uint questId = 0, List<(uint questId, uint libraPlaceNameId, string? placeName)>? territoryMappingFailures = null)
         {
@@ -575,41 +542,34 @@ namespace Amaurot.Services
 
             try
             {
-                // ✅ FIRST: Try direct ID mapping - Libra PlaceName IDs might match SaintCoinach PlaceName IDs
                 uint saintCoinachTerritoryId = FindSaintCoinachTerritoryByPlaceNameId(libraPlaceNameId);
 
                 if (saintCoinachTerritoryId == 0)
                 {
-                    // If direct ID didn't work, get the place name and try name matching
                     string? libraPlaceName = GetLibraPlaceName(libraPlaceNameId, connection);
 
                     if (!string.IsNullOrEmpty(libraPlaceName))
                     {
-                        // Try exact name match
                         saintCoinachTerritoryId = FindSaintCoinachTerritoryByPlaceName(libraPlaceName);
 
                         if (saintCoinachTerritoryId == 0)
                         {
-                            // Try partial matching with cleaned names
                             saintCoinachTerritoryId = FindSaintCoinachTerritoryByPartialName(libraPlaceName);
                         }
 
                         if (saintCoinachTerritoryId == 0)
                         {
-                            // Try finding by normalized name (remove special characters, articles)
                             saintCoinachTerritoryId = FindSaintCoinachTerritoryByNormalizedName(libraPlaceName);
                         }
                     }
 
                     if (saintCoinachTerritoryId == 0)
                     {
-                        // FALLBACK: Try common known mappings
                         saintCoinachTerritoryId = GetKnownTerritoryMapping(libraPlaceNameId);
                     }
 
                     if (saintCoinachTerritoryId == 0)
                     {
-                        // Track the failure for debugging
                         string? placeName = GetLibraPlaceName(libraPlaceNameId, connection);
                         territoryMappingFailures?.Add((questId, libraPlaceNameId, placeName));
 
@@ -643,7 +603,6 @@ namespace Amaurot.Services
             }
         }
 
-        // ✅ ADD: Try finding by normalized name
         private uint FindSaintCoinachTerritoryByNormalizedName(string libraPlaceName)
         {
             try
@@ -653,10 +612,8 @@ namespace Amaurot.Services
 
                 var territorySheet = _realm.GameData.GetSheet<SaintCoinach.Xiv.TerritoryType>();
 
-                // Normalize the Libra place name
                 string normalizedLibraName = NormalizePlaceName(libraPlaceName);
 
-                // Try to find a territory with a matching normalized name
                 var territory = territorySheet.FirstOrDefault(t =>
                 {
                     var territoryPlaceName = t.PlaceName?.ToString();
@@ -679,45 +636,33 @@ namespace Amaurot.Services
             }
         }
 
-        // ✅ ADD: Normalize place names for better matching
         private string NormalizePlaceName(string placeName)
         {
-            // Remove common articles and prepositions
             string normalized = placeName;
 
-            // Remove "The " from the beginning
             if (normalized.StartsWith("The ", StringComparison.OrdinalIgnoreCase))
                 normalized = normalized.Substring(4);
 
-            // Remove parenthetical content
             int parenIndex = normalized.IndexOf('(');
             if (parenIndex > 0)
                 normalized = normalized.Substring(0, parenIndex).Trim();
 
-            // Remove special characters
             normalized = System.Text.RegularExpressions.Regex.Replace(normalized, @"[^\w\s]", "");
 
-            // Collapse multiple spaces
             normalized = System.Text.RegularExpressions.Regex.Replace(normalized, @"\s+", " ").Trim();
 
             return normalized;
         }
 
-        // ✅ ADD: Known territory mappings for common areas
         private uint GetKnownTerritoryMapping(uint libraPlaceNameId)
         {
-            // These are common mappings that might not match by name
-            // You can expand this based on debug logs
             var knownMappings = new Dictionary<uint, uint>
             {
-                // Add known mappings here as you discover them
-                // Example: { libraPlaceNameId, saintCoinachTerritoryId }
             };
 
             return knownMappings.TryGetValue(libraPlaceNameId, out uint territoryId) ? territoryId : 0;
         }
 
-        // ✅ ADD: Missing method for exact place name matching
         private uint FindSaintCoinachTerritoryByPlaceName(string placeName)
         {
             try
@@ -727,7 +672,6 @@ namespace Amaurot.Services
 
                 var territorySheet = _realm.GameData.GetSheet<SaintCoinach.Xiv.TerritoryType>();
 
-                // Try exact match first
                 var territory = territorySheet.FirstOrDefault(t =>
                     string.Equals(t.PlaceName?.ToString(), placeName, StringComparison.OrdinalIgnoreCase));
 
@@ -752,7 +696,6 @@ namespace Amaurot.Services
             }
         }
 
-        // ✅ ADD: Missing method for partial name matching
         private uint FindSaintCoinachTerritoryByPartialName(string libraPlaceName)
         {
             try
@@ -762,10 +705,8 @@ namespace Amaurot.Services
 
                 var territorySheet = _realm.GameData.GetSheet<SaintCoinach.Xiv.TerritoryType>();
 
-                // Clean the place name (remove extra spaces)
                 string cleanedLibraName = libraPlaceName.Trim().Replace("  ", " ");
 
-                // Try partial matching (contains)
                 var territory = territorySheet.FirstOrDefault(t =>
                 {
                     var territoryName = t.PlaceName?.ToString();
@@ -797,7 +738,6 @@ namespace Amaurot.Services
             }
         }
 
-        // ✅ UPDATE: Fix the PlaceName ID matching method (remove Region check)
         private uint FindSaintCoinachTerritoryByPlaceNameId(uint libraPlaceNameId)
         {
             try
@@ -807,7 +747,6 @@ namespace Amaurot.Services
 
                 var territorySheet = _realm.GameData.GetSheet<SaintCoinach.Xiv.TerritoryType>();
 
-                // First try exact PlaceName.Key match
                 var territory = territorySheet.FirstOrDefault(t => t.PlaceName?.Key == libraPlaceNameId);
 
                 if (territory != null)
@@ -819,23 +758,18 @@ namespace Amaurot.Services
                     return (uint)territory.Key;
                 }
 
-                // ✅ FIXED: Check PlaceNameRegion and PlaceNameZone properties
-                // Try matching against PlaceNameRegion
                 territory = territorySheet.FirstOrDefault(t =>
                 {
                     try
                     {
-                        // Access PlaceNameRegion using indexer since it's at index 3
                         var placeNameRegion = t[3];
                         if (placeNameRegion != null)
                         {
-                            // Check if it's a PlaceName link and compare the key
                             var placeNameRegionObj = placeNameRegion as dynamic;
                             if (placeNameRegionObj?.Key == libraPlaceNameId)
                                 return true;
                         }
 
-                        // Also check PlaceNameZone at index 4
                         var placeNameZone = t[4];
                         if (placeNameZone != null)
                         {
@@ -846,7 +780,6 @@ namespace Amaurot.Services
                     }
                     catch
                     {
-                        // Ignore any access errors
                     }
                     return false;
                 });
@@ -872,12 +805,10 @@ namespace Amaurot.Services
             }
         }
 
-        // ✅ IMPROVED: Get Libra place name with better error handling
         private string? GetLibraPlaceName(uint placeNameId, SQLiteConnection connection)
         {
             try
             {
-                // First try by Key
                 var keyQuery = @"SELECT SGL_en FROM PlaceName WHERE Key = ?";
                 using var keyCommand = new SQLiteCommand(keyQuery, connection);
                 keyCommand.Parameters.AddWithValue("Key", placeNameId);
@@ -888,7 +819,6 @@ namespace Amaurot.Services
                     return placeName;
                 }
 
-                // Then try by rowid
                 var placeNameQuery = @"SELECT SGL_en FROM PlaceName WHERE rowid = ?";
                 using var placeCommand = new SQLiteCommand(placeNameQuery, connection);
                 placeCommand.Parameters.AddWithValue("rowid", placeNameId);
@@ -909,7 +839,6 @@ namespace Amaurot.Services
             }
         }
 
-        // ✅ IMPROVED: Better fallback for unmapped territories
         private uint GetMapIdForTerritory(uint saintCoinachTerritoryId)
         {
             try
@@ -931,23 +860,21 @@ namespace Amaurot.Services
                     }
                 }
 
-                // ✅ IMPORTANT: Don't default to MapId 1 for missing territories
-                // Return 0 instead so we can handle it properly upstream
                 if (_verboseDebugMode && saintCoinachTerritoryId > 0)
                 {
                     _logDebug($"⚠️ No map found for territory {saintCoinachTerritoryId}, returning 0 instead of defaulting to 1");
                 }
 
-                return 0; // Return 0 instead of 1 to indicate "no valid map"
+                return 0;           
             }
             catch (Exception ex)
             {
                 _logDebug($"Error getting MapId for Territory {saintCoinachTerritoryId}: {ex.Message}");
-                return 0; // Return 0 instead of 1
+                return 0;      
             }
         }
 
-        public void UpdateQuestLocations(IEnumerable<QuestInfo> quests) // ✅ FIX: Use entity QuestInfo
+        public void UpdateQuestLocations(IEnumerable<QuestInfo> quests)      
         {
             int updatedCount = 0;
 
@@ -959,11 +886,11 @@ namespace Amaurot.Services
                     {
                         quest.MapId = locationData.MapId;
                         quest.TerritoryId = locationData.TerritoryId;
-                        quest.MapX = locationData.MapX; // ✅ FIX: Use MapX instead of X
-                        quest.MapY = locationData.MapY; // ✅ FIX: Use MapY instead of Y
-                        quest.MapZ = locationData.MapZ; // ✅ FIX: Use MapZ instead of Z
+                        quest.MapX = locationData.MapX;        
+                        quest.MapY = locationData.MapY;        
+                        quest.MapZ = locationData.MapZ;        
 
-                        var questGiver = new QuestNpcInfo // ✅ FIX: Use entity QuestNpcInfo
+                        var questGiver = new QuestNpcInfo      
                         {
                             NpcId = locationData.ObjectId,
                             NpcName = GetNpcNameFromId(locationData.ObjectId),
@@ -1044,12 +971,11 @@ namespace Amaurot.Services
             return new Dictionary<uint, QuestLocationData>(_questLocationCache);
         }
 
-        // Data classes
         public class QuestLocationData
         {
             public uint QuestId { get; set; }
-            public string QuestName { get; set; } = string.Empty; // ✅ ADD
-            public string NpcName { get; set; } = string.Empty;   // ✅ ADD
+            public string QuestName { get; set; } = string.Empty;   
+            public string NpcName { get; set; } = string.Empty;     
             public uint TerritoryId { get; set; }
             public uint MapId { get; set; }
             public double MapX { get; set; }
