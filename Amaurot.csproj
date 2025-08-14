@@ -39,10 +39,6 @@
 	</ItemGroup>
 
 	<ItemGroup>
-		<EmbeddedResource Include="Resources\LgbData\**\*.json" />
-	</ItemGroup>
-
-	<ItemGroup>
 		<Content Include="Libs\Definitions\**\*.*">
 			<Link>Definitions\%(RecursiveDir)%(Filename)%(Extension)</Link>
 			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
@@ -52,12 +48,16 @@
 	<ItemGroup>
 	  <Compile Remove="LGB-Parser\**" />
 	  <Compile Remove="notes\**" />
+	  <Compile Remove="Resources\LgbData\**" />
 	  <EmbeddedResource Remove="LGB-Parser\**" />
 	  <EmbeddedResource Remove="notes\**" />
+	  <EmbeddedResource Remove="Resources\LgbData\**" />
 	  <None Remove="LGB-Parser\**" />
 	  <None Remove="notes\**" />
+	  <None Remove="Resources\LgbData\**" />
 	  <Page Remove="LGB-Parser\**" />
 	  <Page Remove="notes\**" />
+	  <Page Remove="Resources\LgbData\**" />
 	  
 	</ItemGroup>
 
@@ -153,6 +153,7 @@
 	  </None>
 	</ItemGroup>
 	<ItemGroup>
+	  <Folder Include="Resources\" />
 	  <Folder Include="Tools\" />
 	</ItemGroup>
 
@@ -167,47 +168,30 @@
     </PropertyGroup>
     
     <Message Text="🧹 Cleaning LGB-Parser..." Importance="high" />
-    <Exec Command="dotnet clean &quot;$(LgbParserProjectPath)\LGB-Parser.csproj&quot; --configuration $(Configuration)" 
-          ContinueOnError="false" 
-          WorkingDirectory="$(LgbParserProjectPath)" />
+    <Exec Command="dotnet clean &quot;$(LgbParserProjectPath)\LGB-Parser.csproj&quot; --configuration $(Configuration)" ContinueOnError="false" WorkingDirectory="$(LgbParserProjectPath)" />
     
     <Message Text="🔨 Building LGB-Parser..." Importance="high" />
-    <Exec Command="dotnet build &quot;$(LgbParserProjectPath)\LGB-Parser.csproj&quot; --configuration $(Configuration) --no-restore" 
-          ContinueOnError="false" 
-          WorkingDirectory="$(LgbParserProjectPath)" />
+    <Exec Command="dotnet build &quot;$(LgbParserProjectPath)\LGB-Parser.csproj&quot; --configuration $(Configuration) --no-restore" ContinueOnError="false" WorkingDirectory="$(LgbParserProjectPath)" />
     
-    <Error Condition="!Exists('$(LgbParserExePath)')" 
-           Text="❌ LGB-Parser.exe was not created at: $(LgbParserExePath)" />
+    <Error Condition="!Exists('$(LgbParserExePath)')" Text="❌ LGB-Parser.exe was not created at: $(LgbParserExePath)" />
     
     <MakeDir Directories="$(OutputPath)Tools" />
     
-    <Copy SourceFiles="$(LgbParserExePath)" 
-          DestinationFolder="$(OutputPath)Tools" 
-          SkipUnchangedFiles="true" />
+    <Copy SourceFiles="$(LgbParserExePath)" DestinationFolder="$(OutputPath)Tools" SkipUnchangedFiles="true" />
     
-    <Copy SourceFiles="$(LgbParserBinPath)\LGB-Parser.runtimeconfig.json" 
-          DestinationFolder="$(OutputPath)Tools" 
-          SkipUnchangedFiles="true" 
-          ContinueOnError="false" />
+    <Copy SourceFiles="$(LgbParserBinPath)\LGB-Parser.runtimeconfig.json" DestinationFolder="$(OutputPath)Tools" SkipUnchangedFiles="true" ContinueOnError="false" />
     
-    <Copy SourceFiles="$(LgbParserBinPath)\LGB-Parser.deps.json" 
-          DestinationFolder="$(OutputPath)Tools" 
-          SkipUnchangedFiles="true" 
-          ContinueOnError="true" />
+    <Copy SourceFiles="$(LgbParserBinPath)\LGB-Parser.deps.json" DestinationFolder="$(OutputPath)Tools" SkipUnchangedFiles="true" ContinueOnError="true" />
     
     <ItemGroup>
       <LgbParserDependencies Include="$(LgbParserBinPath)\*.dll" />
       
       <AmaurotDependencies Include="$(OutputPath)*.dll" />
       
-      <UniqueLgbParserDependencies Include="@(LgbParserDependencies)" 
-                                   Condition="!Exists('$(OutputPath)%(Filename)%(Extension)')" />
+      <UniqueLgbParserDependencies Include="@(LgbParserDependencies)" Condition="!Exists('$(OutputPath)%(Filename)%(Extension)')" />
     </ItemGroup>
     
-    <Copy SourceFiles="@(UniqueLgbParserDependencies)" 
-          DestinationFolder="$(OutputPath)Tools" 
-          SkipUnchangedFiles="true" 
-          ContinueOnError="true" />
+    <Copy SourceFiles="@(UniqueLgbParserDependencies)" DestinationFolder="$(OutputPath)Tools" SkipUnchangedFiles="true" ContinueOnError="true" />
     
     <Message Text="✅ Successfully built and copied LGB-Parser.exe with runtime configuration" Importance="high" />
     <Message Text="📄 Copied files: LGB-Parser.exe, runtimeconfig.json, and unique dependencies only" Importance="high" />
