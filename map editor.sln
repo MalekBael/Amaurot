@@ -7,8 +7,6 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Amaurot", "Amaurot.csproj",
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{8EC462FD-D22E-90A8-E5CE-7E832BA40C5D}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LGB-Parser", "..\LGB-Parser\LGB-Parser.csproj", "{6284154A-798C-A43A-215B-7B5C2E4775F4}"
-EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -19,17 +17,12 @@ Global
 		{E603A238-5A9B-4813-AE52-5CBBBDA10F11}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{E603A238-5A9B-4813-AE52-5CBBBDA10F11}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{E603A238-5A9B-4813-AE52-5CBBBDA10F11}.Release|Any CPU.Build.0 = Release|Any CPU
-		{6284154A-798C-A43A-215B-7B5C2E4775F4}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{6284154A-798C-A43A-215B-7B5C2E4775F4}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{6284154A-798C-A43A-215B-7B5C2E4775F4}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{6284154A-798C-A43A-215B-7B5C2E4775F4}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{E603A238-5A9B-4813-AE52-5CBBBDA10F11} = {8EC462FD-D22E-90A8-E5CE-7E832BA40C5D}
-		{6284154A-798C-A43A-215B-7B5C2E4775F4} = {8EC462FD-D22E-90A8-E5CE-7E832BA40C5D}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {772A06FA-8D11-4F3B-9508-4901A68B1547}

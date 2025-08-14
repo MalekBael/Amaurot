@@ -9,7 +9,9 @@
 		<UseWPF>true</UseWPF>
 		<UseWindowsForms>true</UseWindowsForms>
 		
-		<!-- ✅ WINE-FRIENDLY: Disable hardware acceleration -->
+		<GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+		<GenerateTargetFrameworkAttribute>false</GenerateTargetFrameworkAttribute>
+		
 		<DisableWPFHardwareAcceleration>true</DisableWPFHardwareAcceleration>
 		<WpfDisableAnimations>false</WpfDisableAnimations>
 	</PropertyGroup>
@@ -24,7 +26,6 @@
 		<PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
 		<PackageReference Include="System.Data.SQLite.Core" Version="1.0.119" />
 		
-		<!-- ✅ REQUIRED: For System.Drawing compatibility -->
 		<PackageReference Include="System.Drawing.Common" Version="8.0.0" />
 	</ItemGroup>
 
@@ -49,51 +50,19 @@
 	</ItemGroup>
 
 	<ItemGroup>
-	  <Compile Remove="notes\Coinach CS\Libra\Frontline01.cs" />
-	  <Compile Remove="notes\Coinach CS\Libra\Gathering.cs" />
-	  <Compile Remove="notes\Coinach CS\Libra\GatheringType.cs" />
-	  <Compile Remove="notes\Coinach CS\Libra\GCRankGridaniaFemaleText.cs" />
-	  <Compile Remove="notes\Coinach CS\Libra\GCRankGridaniaMaleText.cs" />
-	  <Compile Remove="notes\Coinach CS\Libra\GCRankLimsaFemaleText.cs" />
-	  <Compile Remove="notes\Coinach CS\Libra\GCRankLimsaMaleText.cs" />
-	  <Compile Remove="notes\Coinach CS\Libra\GCRankUldahFemaleText.cs" />
-	  <Compile Remove="notes\Coinach CS\Libra\GCRankUldahMaleText.cs" />
-	  <Compile Remove="notes\Coinach CS\Libra\GeneralAction.cs" />
-	  <Compile Remove="notes\Coinach CS\Libra\GrandCompany.cs" />
-	  <Compile Remove="notes\Coinach CS\Libra\GuardianDeity.cs" />
-	  <Compile Remove="notes\Coinach CS\Libra\GuildOrder.cs" />
-	  <Compile Remove="notes\Coinach CS\Libra\InstanceContent.cs" />
-	  <Compile Remove="notes\Coinach CS\Libra\InstanceContentType.cs" />
-	  <Compile Remove="notes\Coinach CS\Libra\Item.cs" />
+	  <Compile Remove="LGB-Parser\**" />
+	  <Compile Remove="notes\**" />
+	  <EmbeddedResource Remove="LGB-Parser\**" />
+	  <EmbeddedResource Remove="notes\**" />
+	  <None Remove="LGB-Parser\**" />
+	  <None Remove="notes\**" />
+	  <Page Remove="LGB-Parser\**" />
+	  <Page Remove="notes\**" />
+	  
 	</ItemGroup>
 
 	<ItemGroup>
 	  <None Remove="amaurot.ico" />
-	  <None Remove="notes\Coinach CS\Libra\Achievement.txt" />
-	  <None Remove="notes\Coinach CS\Libra\AchievementCategory.cs.txt" />
-	  <None Remove="notes\Coinach CS\Libra\AchievementKind.cs.txt" />
-	  <None Remove="notes\Coinach CS\Libra\Action.cs.txt" />
-	  <None Remove="notes\Coinach CS\Libra\BaseParam.cs.txt" />
-	  <None Remove="notes\Coinach CS\Libra\BeastTribe.cs.txt" />
-	  <None Remove="notes\Coinach CS\Libra\BNpcName.cs.txt" />
-	  <None Remove="notes\Coinach CS\Libra\BNpcName.Parse.cs.txt" />
-	  <None Remove="notes\Coinach CS\Libra\BNpcName_PlaceName.cs.txt" />
-	  <None Remove="notes\Coinach CS\Libra\ClassJob.cs.txt" />
-	  <None Remove="notes\Coinach CS\Libra\ClassJobCategory.cs.txt" />
-	  <None Remove="notes\Coinach CS\Libra\ClassJob_ClassJobCategory.cs.txt" />
-	  <None Remove="notes\Coinach CS\Libra\Colosseum.cs.txt" />
-	  <None Remove="notes\Coinach CS\Libra\ContentRoulette.cs.txt" />
-	  <None Remove="notes\Coinach CS\Libra\ContentType.cs.txt" />
-	  <None Remove="notes\Coinach CS\Libra\CraftType.cs.txt" />
-	  <None Remove="notes\Coinach CS\Libra\Emote.cs.txt" />
-	  <None Remove="notes\Coinach CS\Libra\ENpcResident.Parse.cs.txt" />
-	  <None Remove="notes\Coinach CS\Libra\ENpcResident.txt" />
-	  <None Remove="notes\Coinach CS\Libra\ENpcResident_PlaceName.cs.txt" />
-	  <None Remove="notes\Coinach CS\Libra\ENpcResident_Quest..cs.txt" />
-	  <None Remove="notes\Coinach CS\Libra\Entities.cs.txt" />
-	  <None Remove="notes\Coinach CS\Libra\FCHierarchy.cs.txt" />
-	  <None Remove="notes\Coinach CS\Libra\FCRank.cs.txt" />
-	  <None Remove="notes\Coinach CS\Libra\FCReputation.cs.txt" />
 	  <None Remove="Resources\planevent.lgb.json" />
 	</ItemGroup>
 
@@ -187,4 +156,61 @@
 	  <Folder Include="Tools\" />
 	</ItemGroup>
 
+  <Target Name="BuildAndCopyLgbParser" AfterTargets="Build">
+    
+    <Message Text="🔧 Building LGB-Parser separately..." Importance="high" />
+    
+    <PropertyGroup>
+      <LgbParserProjectPath>$(MSBuildProjectDirectory)\..\LGB-Parser</LgbParserProjectPath>
+      <LgbParserBinPath>$(LgbParserProjectPath)\bin\$(Configuration)\net8.0</LgbParserBinPath>
+      <LgbParserExePath>$(LgbParserBinPath)\LGB-Parser.exe</LgbParserExePath>
+    </PropertyGroup>
+    
+    <Message Text="🧹 Cleaning LGB-Parser..." Importance="high" />
+    <Exec Command="dotnet clean &quot;$(LgbParserProjectPath)\LGB-Parser.csproj&quot; --configuration $(Configuration)" 
+          ContinueOnError="false" 
+          WorkingDirectory="$(LgbParserProjectPath)" />
+    
+    <Message Text="🔨 Building LGB-Parser..." Importance="high" />
+    <Exec Command="dotnet build &quot;$(LgbParserProjectPath)\LGB-Parser.csproj&quot; --configuration $(Configuration) --no-restore" 
+          ContinueOnError="false" 
+          WorkingDirectory="$(LgbParserProjectPath)" />
+    
+    <Error Condition="!Exists('$(LgbParserExePath)')" 
+           Text="❌ LGB-Parser.exe was not created at: $(LgbParserExePath)" />
+    
+    <MakeDir Directories="$(OutputPath)Tools" />
+    
+    <Copy SourceFiles="$(LgbParserExePath)" 
+          DestinationFolder="$(OutputPath)Tools" 
+          SkipUnchangedFiles="true" />
+    
+    <Copy SourceFiles="$(LgbParserBinPath)\LGB-Parser.runtimeconfig.json" 
+          DestinationFolder="$(OutputPath)Tools" 
+          SkipUnchangedFiles="true" 
+          ContinueOnError="false" />
+    
+    <Copy SourceFiles="$(LgbParserBinPath)\LGB-Parser.deps.json" 
+          DestinationFolder="$(OutputPath)Tools" 
+          SkipUnchangedFiles="true" 
+          ContinueOnError="true" />
+    
+    <ItemGroup>
+      <LgbParserDependencies Include="$(LgbParserBinPath)\*.dll" />
+      
+      <AmaurotDependencies Include="$(OutputPath)*.dll" />
+      
+      <UniqueLgbParserDependencies Include="@(LgbParserDependencies)" 
+                                   Condition="!Exists('$(OutputPath)%(Filename)%(Extension)')" />
+    </ItemGroup>
+    
+    <Copy SourceFiles="@(UniqueLgbParserDependencies)" 
+          DestinationFolder="$(OutputPath)Tools" 
+          SkipUnchangedFiles="true" 
+          ContinueOnError="true" />
+    
+    <Message Text="✅ Successfully built and copied LGB-Parser.exe with runtime configuration" Importance="high" />
+    <Message Text="📄 Copied files: LGB-Parser.exe, runtimeconfig.json, and unique dependencies only" Importance="high" />
+    
+  </Target>
 </Project>

@@ -366,6 +366,9 @@ MigrationBackup/
 # Ionide (cross platform F# VS Code tools) working folder
 .ionide/
 
+# Don't ignore submodules
+!LGB-Parser/
+
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
 /Libs/app_data.sqlite

@@ -73,7 +73,7 @@
                   Margin="5,0" Checked="PanelVisibility_Changed" Unchecked="PanelVisibility_Changed" />
                 <CheckBox x:Name="ShowBNpcsCheckBox" Content="BNpcs" IsChecked="True"
                   Margin="5,0" Checked="PanelVisibility_Changed" Unchecked="PanelVisibility_Changed" />
-                <CheckBox x:Name="ShowFatesCheckBox" Content="Fates" IsChecked="True"
+                <CheckBox x:Name="ShowFatesCheckBox" Content="Fates" IsChecked="False"
                   Margin="5,0" Checked="PanelVisibility_Changed" Unchecked="PanelVisibility_Changed" />
                 <CheckBox x:Name="ShowInstanceContentCheckBox" Content="Instance Content" IsChecked="True"
                   Margin="5,0" Checked="PanelVisibility_Changed" Unchecked="PanelVisibility_Changed" />
@@ -375,7 +375,7 @@
             </DockPanel>
 
             <!-- Fates Panel -->
-            <DockPanel x:Name="FatesPanel" Visibility="Visible" Margin="2">
+            <DockPanel x:Name="FatesPanel" Visibility="Collapsed" Margin="2">
                 <Border DockPanel.Dock="Top" Background="LightBlue" Padding="5" Margin="0,0,0,2">
                     <StackPanel Orientation="Horizontal">
                         <TextBlock Text="Fates" FontWeight="Bold" VerticalAlignment="Center" />
