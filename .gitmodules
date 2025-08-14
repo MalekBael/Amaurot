@@ -1,0 +1,3 @@
+[submodule "LGB-Parser"]
+	path = LGB-Parser
+	url = https://github.com/MalekBael/FFXIV-LGB-Parser
