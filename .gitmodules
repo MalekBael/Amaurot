@@ -1,3 +1,6 @@
 [submodule "LGB-Parser"]
 	path = LGB-Parser
 	url = https://github.com/MalekBael/FFXIV-LGB-Parser
+[submodule "unluac"]
+	path = unluac
+	url = https://github.com/HansWessels/unluac.git
