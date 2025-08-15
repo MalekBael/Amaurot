@@ -34,6 +34,9 @@ namespace Amaurot.Services.Entities
         public uint PlaceNameIdTerr { get; set; }
         public uint RegionId { get; set; }
         public string RegionName { get; set; } = string.Empty;
+        public string Bg { get; set; } = string.Empty;
+        public uint PlaceNameZoneId { get; set; }
+        public string PlaceNameZone { get; set; } = string.Empty;
 
         public override string DisplayName => !string.IsNullOrEmpty(PlaceName) && !PlaceName.StartsWith("[Territory ID:")
             ? $"{Id} - {PlaceName}"

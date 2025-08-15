@@ -6,6 +6,8 @@ A work in progress tool for visualizing and navigating Final Fantasy XIV map dat
 
 ## Features
 
+Development is ongoing, but the current version includes:
+
 ### **Interactive Map Visualization**
 - **High-resolution map display** with zoom and pan controls
 - **Dynamic marker system** for NPCs, quests, FATEs, and points of interest
@@ -28,7 +30,7 @@ A work in progress tool for visualizing and navigating Final Fantasy XIV map dat
 ### **Integrated Tools**
 - **LGB Parser integration** - parse FFXIV LGB files directly from the editor
 - **Quest file extraction**
-- 
+
 ### **Search & Filtering**
 - **Real-time search** across territories, quests, NPCs, and FATEs
 - **Territory deduplication** option for cleaner lists

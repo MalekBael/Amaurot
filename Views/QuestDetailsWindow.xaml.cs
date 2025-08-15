@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
@@ -16,12 +17,16 @@ namespace Amaurot
     {
         private QuestInfo _questInfo;
         private QuestScriptService? _questScriptService;
+        private Action<string>? _logDebug; // Add this field
 
         public QuestDetailsWindow(QuestInfo questInfo, Window? owner = null, QuestScriptService? questScriptService = null)
         {
             InitializeComponent();
 
             _questScriptService = questScriptService;
+            
+            // Initialize the debug logging action
+            _logDebug = owner is MainWindow mainWindow ? mainWindow.LogDebug : null;
 
             // ✅ FIX: Don't set Owner to prevent minimization issues
             // Comment out the owner setting logic
@@ -263,16 +268,37 @@ namespace Amaurot
             };
             valuePanel.Children.Add(valueBlock);
 
-            // Get script information
+            // Get extended script information including import status
             if (_questScriptService != null)
             {
-                var scriptInfo = _questScriptService.GetQuestScriptInfo(questIdString);
+                var scriptInfo = _questScriptService.GetQuestScriptInfoExtended(questIdString);
 
-                if (scriptInfo.Exists)
+                // Import button if script can be imported
+                if (scriptInfo.CanImport)
                 {
-                    // Script exists - show both buttons
+                    var importButton = new System.Windows.Controls.Button
+                    {
+                        Content = "📥 Import Script",
+                        Padding = new Thickness(8, 4, 8, 4),
+                        Background = new SolidColorBrush(System.Windows.Media.Color.FromRgb(255, 140, 0)), // Orange
+                        Foreground = new SolidColorBrush(Colors.White),
+                        BorderBrush = new SolidColorBrush(System.Windows.Media.Color.FromRgb(230, 120, 0)),
+                        FontSize = 11,
+                        VerticalAlignment = VerticalAlignment.Center,
+                        Cursor = System.Windows.Input.Cursors.Hand,
+                        Margin = new Thickness(0, 0, 5, 0),
+                        ToolTip = $"Import {questIdString}.cpp from generated output to Sapphire repository"
+                    };
+                    importButton.Click += (s, e) => ImportQuestScript(scriptInfo);
+                    valuePanel.Children.Add(importButton);
+                }
+
+                // Regular editor buttons if script exists
+                if (scriptInfo.Exists || scriptInfo.HasLuaScript)
+                {
                     if (scriptInfo.CanOpenInVSCode)
                     {
+                        var filesCount = (scriptInfo.Exists ? 1 : 0) + (scriptInfo.HasLuaScript ? 1 : 0);
                         var vscodeButton = new System.Windows.Controls.Button
                         {
                             Content = "Open in VSCode",
@@ -284,7 +310,7 @@ namespace Amaurot
                             VerticalAlignment = VerticalAlignment.Center,
                             Cursor = System.Windows.Input.Cursors.Hand,
                             Margin = new Thickness(0, 0, 5, 0),
-                            ToolTip = $"Open {questIdString}.cpp in Visual Studio Code"
+                            ToolTip = $"Open {filesCount} file(s) for {questIdString} (C++ & Lua) in Visual Studio Code"
                         };
                         vscodeButton.Click += (s, e) => OpenScript(scriptInfo, useVSCode: true);
                         valuePanel.Children.Add(vscodeButton);
@@ -292,6 +318,7 @@ namespace Amaurot
 
                     if (scriptInfo.CanOpenInVisualStudio)
                     {
+                        var filesCount = (scriptInfo.Exists ? 1 : 0) + (scriptInfo.HasLuaScript ? 1 : 0);
                         var vsButton = new System.Windows.Controls.Button
                         {
                             Content = "Open in Visual Studio",
@@ -303,16 +330,24 @@ namespace Amaurot
                             VerticalAlignment = VerticalAlignment.Center,
                             Cursor = System.Windows.Input.Cursors.Hand,
                             Margin = new Thickness(0, 0, 5, 0),
-                            ToolTip = $"Open {questIdString}.cpp in Visual Studio"
+                            ToolTip = $"Open {filesCount} file(s) for {questIdString} (C++ & Lua) in Visual Studio"
                         };
                         vsButton.Click += (s, e) => OpenScript(scriptInfo, useVSCode: false);
                         valuePanel.Children.Add(vsButton);
                     }
+                }
 
-                    // Add script info
+                // Status information
+                var statusParts = new List<string>();
+                if (scriptInfo.ExistsInRepo) statusParts.Add("C++ (Repo)");
+                if (scriptInfo.ExistsInGenerated && !scriptInfo.ExistsInRepo) statusParts.Add("C++ (Generated)");
+                if (scriptInfo.HasLuaScript) statusParts.Add("Lua");
+
+                if (statusParts.Count > 0)
+                {
                     var infoText = new TextBlock
                     {
-                        Text = "✓ Script found",
+                        Text = $"✓ Found: {string.Join(" & ", statusParts)}",
                         FontSize = 10,
                         Foreground = new SolidColorBrush(Colors.Green),
                         VerticalAlignment = VerticalAlignment.Center,
@@ -320,17 +355,29 @@ namespace Amaurot
                     };
                     valuePanel.Children.Add(infoText);
                 }
-                else
+                else if (scriptInfo.ExistsInGenerated)
                 {
-                    // Script doesn't exist
                     var infoText = new TextBlock
                     {
-                        Text = "✗ Script not found",
+                        Text = "⚠ Script available in generated output",
+                        FontSize = 10,
+                        Foreground = new SolidColorBrush(Colors.Orange),
+                        VerticalAlignment = VerticalAlignment.Center,
+                        Margin = new Thickness(5, 0, 0, 0),
+                        ToolTip = "Script exists in generated output but not in repository. Click Import to add it."
+                    };
+                    valuePanel.Children.Add(infoText);
+                }
+                else
+                {
+                    var infoText = new TextBlock
+                    {
+                        Text = "✗ No scripts found",
                         FontSize = 10,
                         Foreground = new SolidColorBrush(Colors.Gray),
                         VerticalAlignment = VerticalAlignment.Center,
                         Margin = new Thickness(5, 0, 0, 0),
-                        ToolTip = $"Could not find {questIdString}.cpp in Sapphire repository"
+                        ToolTip = $"Could not find {questIdString}.cpp in repository or generated output"
                     };
                     valuePanel.Children.Add(infoText);
                 }
@@ -356,16 +403,127 @@ namespace Amaurot
         }
 
         /// <summary>
-        /// ✅ NEW: Opens quest script in Visual Studio Code
+        /// NEW: Handles importing a quest script from generated output to repository
         /// </summary>
-        private void OpenScript(QuestScriptInfo scriptInfo, bool useVSCode)
+        private void ImportQuestScript(QuestScriptInfoExtended scriptInfo)
         {
-            if (_questScriptService == null || string.IsNullOrEmpty(scriptInfo.ScriptPath))
+            if (_questScriptService == null || string.IsNullOrEmpty(scriptInfo.GeneratedScriptPath))
                 return;
 
-            bool success = useVSCode 
-                ? _questScriptService.OpenInVSCode(scriptInfo.ScriptPath)
-                : _questScriptService.OpenInVisualStudio(scriptInfo.ScriptPath);
+            try
+            {
+                // Show confirmation dialog
+                var result = System.Windows.MessageBox.Show(
+                    $"Import quest script for {scriptInfo.QuestIdString}?\n\n" +
+                    $"This will copy the generated C++ script to your Sapphire repository:\n\n" +
+                    $"From: {Path.GetFileName(scriptInfo.GeneratedScriptPath)}\n" +
+                    $"To: src/scripts/quest/{scriptInfo.QuestIdString}.cpp\n\n" +
+                    $"Continue with import?",
+                    "Import Quest Script",
+                    MessageBoxButton.YesNo,
+                    MessageBoxImage.Question);
+
+                if (result != MessageBoxResult.Yes)
+                    return;
+
+                // Perform the import
+                var importResult = _questScriptService.ImportQuestScript(
+                    scriptInfo.QuestIdString, 
+                    scriptInfo.GeneratedScriptPath);
+
+                if (importResult.Success)
+                {
+                    // Show success message
+                    System.Windows.MessageBox.Show(
+                        $"✅ {importResult.Message}\n\n" +
+                        $"The script is now available in your Sapphire repository and can be opened for editing.",
+                        "Import Successful",
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Information);
+
+                    // Refresh the UI to show the new script status
+                    RefreshQuestDetails();
+                }
+                else
+                {
+                    // Show error message
+                    System.Windows.MessageBox.Show(
+                        $"❌ Import failed:\n\n{importResult.ErrorMessage}",
+                        "Import Failed",
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Error);
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Windows.MessageBox.Show(
+                    $"❌ An error occurred during import:\n\n{ex.Message}",
+                    "Import Error",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Error);
+            }
+        }
+
+        /// <summary>
+        /// NEW: Refreshes the quest details display
+        /// </summary>
+        private void RefreshQuestDetails()
+        {
+            PopulateQuestDetails(_questInfo);
+        }
+
+        /// <summary>
+        /// ✅ Updated OpenScript method to work with extended script info
+        /// </summary>
+        private void OpenScript(QuestScriptInfoExtended scriptInfo, bool useVSCode)
+        {
+            if (_questScriptService == null)
+                return;
+
+            // Get all script files (C++ and Lua)
+            var scriptFiles = _questScriptService.FindQuestScriptFiles(scriptInfo.QuestIdString);
+            
+            if (scriptFiles.Length == 0)
+            {
+                System.Windows.MessageBox.Show($"No script files found for {scriptInfo.QuestIdString}.\n\nLooked for both C++ (.cpp) and Lua (.lua) files.",
+                                   "No Scripts Found", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            bool success;
+            if (useVSCode)
+            {
+                if (scriptFiles.Length > 1)
+                {
+                    // Open multiple files in VSCode
+                    success = _questScriptService.OpenMultipleInVSCode(scriptFiles);
+                }
+                else
+                {
+                    // Single file
+                    success = _questScriptService.OpenInVSCode(scriptFiles[0]);
+                }
+            }
+            else
+            {
+                // Visual Studio - open files one by one
+                success = true;
+                foreach (var file in scriptFiles)
+                {
+                    var fileSuccess = _questScriptService.OpenInVisualStudio(file);
+                    if (!fileSuccess)
+                    {
+                        success = false;
+                        break;
+                    }
+                    
+                    // Small delay between opening files in Visual Studio
+                    if (scriptFiles.Length > 1)
+                    {
+                        System.Threading.Thread.Sleep(500);
+                    }
+                }
+            }
 
             if (!success)
             {
@@ -374,8 +532,8 @@ namespace Amaurot
                     ? "Please ensure Visual Studio Code is installed and accessible via the 'code' command."
                     : "Please ensure Visual Studio is installed and accessible.";
 
-                System.Windows.MessageBox.Show($"Failed to open {scriptInfo.QuestIdString}.cpp in {editorName}.\n\n{commandHint}",
-                               "Error Opening Script", MessageBoxButton.OK, MessageBoxImage.Warning);
+                System.Windows.MessageBox.Show($"Failed to open script files in {editorName}.\n\n{commandHint}",
+                               "Error Opening Scripts", MessageBoxButton.OK, MessageBoxImage.Warning);
             }
         }
 
@@ -518,29 +676,53 @@ namespace Amaurot
             }
         }
 
-        // ✅ Add quest giver marker to the map
+        // ✅ Enhanced quest giver marker with script-based icon selection
+        // ✅ Enhanced quest giver marker with script-based icon selection
         private void AddQuestGiverMarkerToMap(QuestNpcInfo questGiver, MainWindow mainWindow)
         {
             try
             {
-                // Create a quest marker for this quest giver using the specified icon
+                // Check if quest script exists in repository
+                bool hasQuestScript = false;
+                uint iconId = 71031; // Default: script not found icon
+                string iconPath = "ui/icon/071000/071031.tex";
+                string markerDescription = "Quest Giver (No Script)";
+
+                if (_questScriptService != null && !string.IsNullOrEmpty(_questInfo.QuestIdString))
+                {
+                    var scriptInfo = _questScriptService.GetQuestScriptInfoExtended(_questInfo.QuestIdString);
+                    hasQuestScript = scriptInfo.ExistsInRepo || scriptInfo.CanImport;
+
+                    if (hasQuestScript)
+                    {
+                        iconId = 61411; // Script available icon
+                        iconPath = "ui/icon/061000/061411.tex";
+                        markerDescription = scriptInfo.ExistsInRepo ?
+                            "Quest Giver (Script Available)" :
+                            "Quest Giver (Script Can Be Imported)";
+                    }
+                }
+
+                // Create a quest marker for this quest giver using the appropriate icon
                 var questMarker = new MapMarker
                 {
                     Id = 1000000 + questGiver.NpcId, // High ID to distinguish custom markers
                     MapId = questGiver.MapId,
                     PlaceNameId = 0,
-                    PlaceName = $"{questGiver.NpcName} (Quest Giver)",
+                    PlaceName = $"{questGiver.NpcName} ({markerDescription})",
                     X = questGiver.MapX,
                     Y = questGiver.MapY,
                     Z = questGiver.MapZ,
-                    IconId = 61411,
-                    IconPath = "ui/icon/061000/061411.tex",
+                    IconId = iconId,
+                    IconPath = iconPath,
                     Type = MarkerType.Quest,
                     IsVisible = true
                 };
 
                 // Add to current map markers using AddCustomMarker (the method that exists)
                 mainWindow.AddCustomMarker(questMarker);
+
+                _logDebug?.Invoke($"Added quest marker for {questGiver.NpcName} with icon {iconId} (hasScript: {hasQuestScript})");
             }
             catch (System.Exception ex)
             {

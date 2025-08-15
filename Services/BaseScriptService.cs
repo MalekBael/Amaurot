@@ -61,6 +61,32 @@ namespace Amaurot.Services
             }
         }
 
+        public bool OpenMultipleInVSCode(params string[] scriptPaths)
+        {
+            if (scriptPaths == null || scriptPaths.Length == 0)
+            {
+                return false;
+            }
+
+            var validPaths = scriptPaths.Where(path => !string.IsNullOrEmpty(path) && File.Exists(path)).ToArray();
+            
+            if (validPaths.Length == 0)
+            {
+                _logDebug?.Invoke("No valid script paths provided for VSCode opening");
+                return false;
+            }
+
+            _logDebug?.Invoke($"Attempting to open {validPaths.Length} files in VSCode");
+
+            if (TryOpenMultipleWithVSCodeUri(validPaths))
+            {
+                return true;
+            }
+
+            _logDebug?.Invoke("URI scheme failed, falling back to direct process execution");
+            return TryOpenMultipleWithVSCodeProcess(validPaths);
+        }
+
         private bool TryOpenWithVSCodeUri(string scriptPath)
         {
             try
@@ -555,6 +581,213 @@ namespace Amaurot.Services
             }
 
             _logDebug?.Invoke($"❌ Failed to open {scriptPath} in VSCode - no working VSCode installation found");
+            return false;
+        }
+
+        private bool TryOpenMultipleWithVSCodeUri(string[] scriptPaths)
+        {
+            try
+            {
+                foreach (var scriptPath in scriptPaths)
+                {
+                    string fileUri = ConvertToFileUri(scriptPath);
+                    string vscodeUri = $"vscode://file/{fileUri}";
+
+                    _logDebug?.Invoke($"Opening VSCode with URI: {vscodeUri}");
+
+                    var processInfo = new ProcessStartInfo
+                    {
+                        FileName = vscodeUri,
+                        UseShellExecute = true,
+                        CreateNoWindow = true
+                    };
+
+                    var process = Process.Start(processInfo);
+                    if (process == null)
+                    {
+                        _logDebug?.Invoke($"❌ Failed to start process for {scriptPath}");
+                        return false;
+                    }
+
+                    System.Threading.Thread.Sleep(200);
+                }
+
+                _logDebug?.Invoke($"✅ Successfully opened {scriptPaths.Length} files in VSCode via URI scheme");
+                return true;
+            }
+            catch (Exception ex)
+            {
+                _logDebug?.Invoke($"❌ VSCode URI scheme failed: {ex.Message}");
+                return false;
+            }
+        }
+
+        private bool TryOpenMultipleWithVSCodeProcess(string[] scriptPaths)
+        {
+            _logDebug?.Invoke("Trying direct VSCode process execution for multiple files");
+
+            try
+            {
+                var arguments = string.Join(" ", scriptPaths.Select(path => $"\"{path}\""));
+
+                var processInfo = new ProcessStartInfo
+                {
+                    FileName = "code",
+                    Arguments = arguments,
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                    RedirectStandardError = true
+                };
+
+                var process = Process.Start(processInfo);
+                if (process != null)
+                {
+                    process.WaitForExit(3000);
+                    if (process.ExitCode == 0)
+                    {
+                        _logDebug?.Invoke($"✅ Successfully opened {scriptPaths.Length} files in VSCode via 'code' command");
+                        return true;
+                    }
+                    else
+                    {
+                        _logDebug?.Invoke($"❌ 'code' command failed with exit code: {process.ExitCode}");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logDebug?.Invoke($"❌ Error running 'code' command with multiple files: {ex.Message}");
+            }
+
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+            {
+                return TryOpenMultipleVSCodeLinux(scriptPaths);
+            }
+            else if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            {
+                return TryOpenMultipleVSCodeWindows(scriptPaths);
+            }
+
+            return false;
+        }
+
+        private bool TryOpenMultipleVSCodeLinux(string[] scriptPaths)
+        {
+            var arguments = string.Join(" ", scriptPaths.Select(path => $"\"{path}\""));
+
+            var linuxVSCodeCommands = new[]
+            {
+                "code",
+                "/usr/bin/code",
+                "/snap/bin/code",
+                "/var/lib/flatpak/exports/bin/com.visualstudio.code",
+                "/opt/visual-studio-code/code",
+                "/usr/local/bin/code"
+            };
+
+            foreach (var vscodeCmd in linuxVSCodeCommands)
+            {
+                try
+                {
+                    _logDebug?.Invoke($"Trying Linux VSCode command: {vscodeCmd} with {scriptPaths.Length} files");
+
+                    ProcessStartInfo processInfo;
+
+                    if (vscodeCmd.Contains("flatpak"))
+                    {
+                        processInfo = new ProcessStartInfo
+                        {
+                            FileName = "flatpak",
+                            Arguments = $"run com.visualstudio.code {arguments}",
+                            UseShellExecute = false,
+                            CreateNoWindow = true,
+                            RedirectStandardError = true
+                        };
+                    }
+                    else
+                    {
+                        processInfo = new ProcessStartInfo
+                        {
+                            FileName = vscodeCmd,
+                            Arguments = arguments,
+                            UseShellExecute = false,
+                            CreateNoWindow = true,
+                            RedirectStandardError = true
+                        };
+                    }
+
+                    var process = Process.Start(processInfo);
+                    if (process != null)
+                    {
+                        if (!process.WaitForExit(3000))
+                        {
+                            _logDebug?.Invoke($"✅ Successfully started VSCode via '{vscodeCmd}' with multiple files (process still running)");
+                            return true;
+                        }
+                        else if (process.ExitCode == 0)
+                        {
+                            _logDebug?.Invoke($"✅ Successfully opened {scriptPaths.Length} files in VSCode via '{vscodeCmd}'");
+                            return true;
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logDebug?.Invoke($"❌ Error running '{vscodeCmd}' with multiple files: {ex.Message}");
+                    continue;
+                }
+            }
+
+            return false;
+        }
+
+        private bool TryOpenMultipleVSCodeWindows(string[] scriptPaths)
+        {
+            var arguments = string.Join(" ", scriptPaths.Select(path => $"\"{path}\""));
+
+            var vscodeExecutables = new[]
+            {
+                @"C:\Users\{0}\AppData\Local\Programs\Microsoft VS Code\Code.exe",
+                @"C:\Program Files\Microsoft VS Code\Code.exe",
+                @"C:\Program Files (x86)\Microsoft VS Code\Code.exe"
+            };
+
+            var username = Environment.UserName;
+            foreach (var pathTemplate in vscodeExecutables)
+            {
+                var fullPath = pathTemplate.Contains("{0}")
+                    ? string.Format(pathTemplate, username)
+                    : pathTemplate;
+
+                if (File.Exists(fullPath))
+                {
+                    try
+                    {
+                        _logDebug?.Invoke($"Attempting to open {scriptPaths.Length} files using VSCode at: {fullPath}");
+
+                        var processInfo = new ProcessStartInfo
+                        {
+                            FileName = fullPath,
+                            Arguments = arguments,
+                            UseShellExecute = false,
+                            CreateNoWindow = true
+                        };
+
+                        var process = Process.Start(processInfo);
+                        if (process != null)
+                        {
+                            _logDebug?.Invoke($"✅ Successfully opened {scriptPaths.Length} files in VSCode at: {fullPath}");
+                            return true;
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logDebug?.Invoke($"❌ Error opening VSCode at {fullPath} with multiple files: {ex.Message}");
+                        continue;
+                    }
+                }
+            }
+
             return false;
         }
 

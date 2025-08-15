@@ -535,10 +535,12 @@ namespace Amaurot
         {
             MapInfoText.Text = $"""
                 Region: {territory.Region}
+                PlaceNameZone: {territory.PlaceNameZone}
                 Place Name: {territory.PlaceName}
                 Territory ID: {territory.Id}
                 Territory Name ID: {territory.TerritoryNameId}
                 Map ID: {territory.MapId}
+                bg: {territory.Bg}
                 """;
         }
 
@@ -591,7 +593,7 @@ namespace Amaurot
             bitmapSource.CacheOption = BitmapCacheOption.OnLoad;
             bitmapSource.StreamSource = memoryStream;
             bitmapSource.EndInit();
-            bitmapSource.Freeze();        
+            bitmapSource.Freeze();
 
             MapImageControl.Source = bitmapSource;
 
@@ -611,10 +613,16 @@ namespace Amaurot
             StatusText.Text = $"Loading markers for {territory.PlaceName}...";
 
             var mapService = _services.Get<MapService>();
-            var originalMarkers = await Task.Run(() =>
+
+            // Load both marker types in parallel
+            var originalMarkersTask = Task.Run(() =>
                 mapService?.LoadMapMarkers(territory.MapId) ?? new List<MapMarker>());
 
-            var npcMarkers = CreateNpcMarkers(territory.MapId);
+            var npcMarkersTask = CreateNpcMarkersWithScriptCheckingAsync(territory.MapId);
+
+            // Wait for both to complete
+            var originalMarkers = await originalMarkersTask;
+            var npcMarkers = await npcMarkersTask;
 
             _mapState.CurrentMapMarkers.Clear();
             _mapState.CurrentMapMarkers.AddRange(originalMarkers);
@@ -629,31 +637,133 @@ namespace Amaurot
                               $"{_mapState.CurrentMapMarkers.Count} markers found";
         }
 
-        private List<MapMarker> CreateNpcMarkers(uint mapId)
+        // Fixed async method that doesn't cause deadlocks
+        private async Task<List<MapMarker>> CreateNpcMarkersWithScriptCheckingAsync(uint mapId)
         {
-            var markers = new List<MapMarker>();
-            var npcsForMap = _entities.AllNpcs.Where(npc =>
-                npc.MapId == mapId && npc.QuestCount > 0).ToList();
-
-            foreach (var npc in npcsForMap)
+            return await Task.Run(() =>
             {
-                markers.Add(new MapMarker
+                var markers = new List<MapMarker>();
+                var npcsForMap = _entities.AllNpcs.Where(npc =>
+                    npc.MapId == mapId && npc.QuestCount > 0).ToList();
+
+                var questScriptService = _services?.Get<QuestScriptService>();
+                LogDebug($"Creating NPC markers for map {mapId} with {npcsForMap.Count} NPCs");
+
+                if (questScriptService == null)
                 {
-                    Id = npc.NpcId,
-                    MapId = mapId,
-                    PlaceNameId = 0,
-                    PlaceName = $"{npc.NpcName} ({npc.QuestCount} quest{(npc.QuestCount != 1 ? "s" : "")})",
-                    X = npc.MapX,
-                    Y = npc.MapY,
-                    Z = npc.MapZ,
-                    IconId = 61411,
-                    Type = MarkerType.Npc,
-                    IsVisible = true
-                });
+                    // No script service - create all markers with default icon
+                    foreach (var npc in npcsForMap)
+                    {
+                        markers.Add(CreateNpcMarker(npc, 71031, "ui/icon/071000/071031.tex", 0, npc.QuestCount));
+                    }
+                    LogDebug($"Created {markers.Count} NPC markers (no script service available)");
+                    return markers;
+                }
+
+                // Build script cache efficiently
+                var scriptCache = BuildOptimizedScriptCacheForMap(npcsForMap, questScriptService);
+
+                foreach (var npc in npcsForMap)
+                {
+                    uint iconId = 71031; // Default: no scripts found
+                    string iconPath = "ui/icon/071000/071031.tex";
+                    int scriptsAvailable = 0;
+
+                    // Check cached script availability for this NPC's quests
+                    foreach (var quest in npc.Quests)
+                    {
+                        var fullQuestInfo = _entities.Quests.FirstOrDefault(q => q.Id == quest.QuestId);
+                        if (fullQuestInfo != null && !string.IsNullOrEmpty(fullQuestInfo.QuestIdString))
+                        {
+                            if (scriptCache.TryGetValue(fullQuestInfo.QuestIdString, out bool hasScript) && hasScript)
+                            {
+                                scriptsAvailable++;
+                            }
+                        }
+                    }
+
+                    // Use script-available icon if any quest has scripts
+                    if (scriptsAvailable > 0)
+                    {
+                        iconId = 61411;
+                        iconPath = "ui/icon/061000/061411.tex";
+                    }
+
+                    markers.Add(CreateNpcMarker(npc, iconId, iconPath, scriptsAvailable, npc.QuestCount));
+                }
+
+                LogDebug($"Created {markers.Count} NPC markers for map {mapId}. " +
+                         $"Icons: {markers.Count(m => m.IconId == 61411)} with scripts, " +
+                         $"{markers.Count(m => m.IconId == 71031)} without scripts");
+                return markers;
+            });
+        }
+
+        // Optimized cache building with limits to prevent excessive file system calls
+        private Dictionary<string, bool> BuildOptimizedScriptCacheForMap(List<EntityNpcInfo> npcsForMap, QuestScriptService questScriptService)
+        {
+            var scriptCache = new Dictionary<string, bool>();
+
+            try
+            {
+                var uniqueQuestIds = npcsForMap
+                    .SelectMany(npc => npc.Quests)
+                    .Select(q => _entities.Quests.FirstOrDefault(quest => quest.Id == q.QuestId))
+                    .Where(quest => quest != null && !string.IsNullOrEmpty(quest.QuestIdString))
+                    .Select(quest => quest.QuestIdString!)
+                    .Distinct()
+                    .Take(100) // Reasonable limit to prevent excessive calls
+                    .ToList();
+
+                LogDebug($"Checking script availability for {uniqueQuestIds.Count} unique quests on this map");
+
+                // Use the cached method from QuestScriptService
+                foreach (var questIdString in uniqueQuestIds)
+                {
+                    try
+                    {
+                        // This method already has caching built-in, so it's fast on subsequent calls
+                        bool hasScript = questScriptService.HasQuestScriptInRepo(questIdString);
+                        scriptCache[questIdString] = hasScript;
+                    }
+                    catch (Exception ex)
+                    {
+                        LogDebug($"Error checking script for {questIdString}: {ex.Message}");
+                        scriptCache[questIdString] = false;
+                    }
+                }
+
+                var scriptsFound = scriptCache.Values.Count(v => v);
+                LogDebug($"Script cache built: {scriptsFound}/{uniqueQuestIds.Count} quests have scripts");
+            }
+            catch (Exception ex)
+            {
+                LogDebug($"Error building script cache: {ex.Message}");
             }
 
-            LogDebug($"Created {markers.Count} NPC markers for map {mapId}");
-            return markers;
+            return scriptCache;
+        }
+
+        private MapMarker CreateNpcMarker(EntityNpcInfo npc, uint iconId, string iconPath, int scriptsAvailable, int questCount)
+        {
+            string markerText = scriptsAvailable > 0
+                ? $"{npc.NpcName} ({questCount} quest{(questCount != 1 ? "s" : "")}, {scriptsAvailable} script{(scriptsAvailable != 1 ? "s" : "")})"
+                : $"{npc.NpcName} ({questCount} quest{(questCount != 1 ? "s" : "")}, no scripts)";
+
+            return new MapMarker
+            {
+                Id = npc.NpcId,
+                MapId = npc.MapId,
+                PlaceNameId = 0,
+                PlaceName = markerText,
+                X = npc.MapX,
+                Y = npc.MapY,
+                Z = npc.MapZ,
+                IconId = iconId,
+                IconPath = iconPath,
+                Type = MarkerType.Npc,
+                IsVisible = true
+            };
         }
 
         private void RefreshMarkerDisplay()
@@ -1092,25 +1202,6 @@ namespace Amaurot
             }
         }
 
-        private void CancelExtraction_Click(object sender, RoutedEventArgs e)
-        {
-            try
-            {
-                LogDebug("User requested cancellation of operation");
-                _progressManager.Hide();
-                StatusText.Text = "Operation cancelled by user";
-
-                System.Windows.MessageBox.Show("Operation has been cancelled.", "Operation Cancelled",
-                    MessageBoxButton.OK, MessageBoxImage.Information);
-            }
-            catch (Exception ex)
-            {
-                LogDebug($"Error cancelling operation: {ex.Message}");
-                System.Windows.MessageBox.Show($"Error cancelling operation: {ex.Message}", "Error",
-                    MessageBoxButton.OK, MessageBoxImage.Error);
-            }
-        }
-
         #endregion UI Updates
 
         #region List Event Handlers
@@ -1189,6 +1280,12 @@ namespace Amaurot
             }
         }
 
+        private async void ExtractQuestFiles_Click(object sender, RoutedEventArgs e) =>
+            await RunConfiguredTool("quest_parse.exe");
+
+        private async void RunLgbParser_Click(object sender, RoutedEventArgs e) =>
+            await RunConfiguredTool("lgb-parser.exe");
+
         private void EntityList_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
             if (sender is not System.Windows.Controls.ListBox listBox || listBox.SelectedItem == null) return;
@@ -1213,27 +1310,10 @@ namespace Amaurot
 
         #region Tool Methods
 
-        private static string[] ShowLgbParserOptions(string gamePath)
-        {
-            var result = System.Windows.MessageBox.Show(
-                "LGB Parser Options:\n\n" +
-                "Yes - Parse all LGB files (batch mode)\n" +
-                "No - List available zones\n" +
-                "Cancel - Show help",
-                "LGB Parser", MessageBoxButton.YesNoCancel, MessageBoxImage.Question);
-
-            return result switch
-            {
-                MessageBoxResult.Yes => ["--game", gamePath, "--batch"],
-                MessageBoxResult.No => ["--game", gamePath, "--list-zones"],
-                _ => Array.Empty<string>()
-            };
-        }
-
         private static readonly Dictionary<string, ToolConfig> ToolConfigurations = new()
         {
-            ["quest_parse.exe"] = new("Quest extraction", (gamePath) => new[] { $"\"{Path.Combine(gamePath, "game", "sqpack")}\"" }),
-            ["lgb-parser.exe"] = new("LGB Parser", (gamePath) => ShowLgbParserOptions(gamePath))
+            ["quest_parse.exe"] = new("Quest extraction", (gamePath) => new[] { $"\"{gamePath}\"", "1" }),
+            ["lgb-parser.exe"] = new("LGB Parser", (gamePath) => [])
         };
 
         private record ToolConfig(string DisplayName, Func<string, string[]> GetArguments);
@@ -1248,34 +1328,108 @@ namespace Amaurot
 
             await RunTool(toolName, config.DisplayName, async (toolPath) =>
             {
-                var gamePath = _services.Get<SettingsService>()?.Settings.GameInstallationPath;
-                if (string.IsNullOrEmpty(gamePath))
+                if (toolName == "quest_parse.exe")
                 {
-                    System.Windows.MessageBox.Show("Game path not configured", "Error", MessageBoxButton.OK, MessageBoxImage.Warning);
-                    return;
-                }
+                    var buildPath = _services.Get<SettingsService>()?.Settings.SapphireBuildPath;
+                    if (string.IsNullOrEmpty(buildPath))
+                    {
+                        System.Windows.MessageBox.Show("Sapphire build path not configured in settings.\n\nPlease configure it first.",
+                            "Build Path Required", MessageBoxButton.OK, MessageBoxImage.Warning);
+                        return;
+                    }
 
-                var args = config.GetArguments(gamePath);
-                if (args.Length == 0)
-                {
-                    OpenToolInConsole(toolPath, args);
+                    var questParserPath = Path.Combine(buildPath, "tools", "quest_parse.exe");
+                    if (!File.Exists(questParserPath))
+                    {
+                        System.Windows.MessageBox.Show($"Quest parser not found at:\n{questParserPath}\n\nPlease build Sapphire Server first.",
+                            "Quest Parser Not Found", MessageBoxButton.OK, MessageBoxImage.Error);
+                        return;
+                    }
+
+                    var gamePath = _services.Get<SettingsService>()?.Settings.GameInstallationPath;
+                    if (string.IsNullOrEmpty(gamePath))
+                    {
+                        System.Windows.MessageBox.Show("Game installation path not configured in settings.\n\nPlease configure it first.",
+                            "Game Path Required", MessageBoxButton.OK, MessageBoxImage.Warning);
+                        return;
+                    }
+
+                    var sqpackPath = Path.Combine(gamePath, "game", "sqpack");
+                    if (!Directory.Exists(sqpackPath))
+                    {
+                        System.Windows.MessageBox.Show($"Game sqpack directory not found at:\n{sqpackPath}\n\nPlease check your game installation path.",
+                            "Sqpack Directory Not Found", MessageBoxButton.OK, MessageBoxImage.Error);
+                        return;
+                    }
+
+                    var args = config.GetArguments(sqpackPath);
+                    await RunToolWithProgress(questParserPath, string.Join(" ", args), config.DisplayName);
                 }
-                else
+                else if (toolName == "lgb-parser.exe")
                 {
-                    await RunToolWithProgress(toolPath, string.Join(" ", args), config.DisplayName);
+                    var gamePath = _services.Get<SettingsService>()?.Settings.GameInstallationPath;
+                    if (string.IsNullOrEmpty(gamePath))
+                    {
+                        System.Windows.MessageBox.Show("Game path not configured", "Error", MessageBoxButton.OK, MessageBoxImage.Warning);
+                        return;
+                    }
+
+                    var choice = System.Windows.MessageBox.Show(
+                        "LGB Parser Options:\n\n" +
+                        "Yes - Parse all LGB files (batch mode) - This will take a long time!\n" +
+                        "No - List available zones\n" +
+                        "Cancel - Open tool in console window for manual commands",
+                        "LGB Parser", MessageBoxButton.YesNoCancel, MessageBoxImage.Question);
+
+                    switch (choice)
+                    {
+                        case MessageBoxResult.Yes:
+                            var confirmBatch = System.Windows.MessageBox.Show(
+                                "Batch mode will process ALL LGB files in the game.\n" +
+                                "This can take 10+ minutes, cause the system to slow down and use significant disk space.\n\n" +
+                                "Continue?",
+                                "Confirm Batch Operation",
+                                MessageBoxButton.YesNo,
+                                MessageBoxImage.Warning);
+
+                            if (confirmBatch == MessageBoxResult.Yes)
+                            {
+                                await RunToolWithProgress(toolPath, $"--game \"{gamePath}\" --batch", "LGB Batch Processing");
+                            }
+                            break;
+
+                        case MessageBoxResult.No:
+                            await RunToolWithProgress(toolPath, $"--game \"{gamePath}\" --list-zones", "Listing LGB Zones");
+                            break;
+
+                        case MessageBoxResult.Cancel:
+                            OpenToolInConsole(toolPath, ["--game", $"\"{gamePath}\"", "--help"]);
+                            break;
+                    }
                 }
             });
         }
 
-        private async void ExtractQuestFiles_Click(object sender, RoutedEventArgs e) =>
-            await RunConfiguredTool("quest_parse.exe");
-
-        private async void RunLgbParser_Click(object sender, RoutedEventArgs e) =>
-            await RunConfiguredTool("lgb-parser.exe");
-
         private async Task RunTool(string toolName, string displayName, Func<string, Task> runAction)
         {
-            var toolPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Tools", toolName);
+            string toolPath;
+
+            if (toolName == "quest_parse.exe")
+            {
+                var buildPath = _services.Get<SettingsService>()?.Settings.SapphireBuildPath;
+                if (string.IsNullOrEmpty(buildPath))
+                {
+                    System.Windows.MessageBox.Show("Sapphire build path not configured in settings.\n\nPlease configure it first.",
+                        "Build Path Required", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    return;
+                }
+
+                toolPath = Path.Combine(buildPath, "tools", toolName);
+            }
+            else
+            {
+                toolPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Tools", toolName);
+            }
 
             if (!File.Exists(toolPath))
             {
@@ -1290,12 +1444,15 @@ namespace Amaurot
         private async Task RunToolWithProgress(string toolPath, string arguments, string operationName)
         {
             _progressManager.Show(operationName);
+            LogDebug($"Starting {operationName} with arguments: {arguments}");
+
+            System.Diagnostics.Process? process = null;
 
             try
             {
                 await Task.Run(() =>
                 {
-                    using var process = new System.Diagnostics.Process
+                    process = new System.Diagnostics.Process
                     {
                         StartInfo = new System.Diagnostics.ProcessStartInfo
                         {
@@ -1309,34 +1466,98 @@ namespace Amaurot
                         }
                     };
 
+                    LogDebug($"Tool path: {toolPath}");
+                    LogDebug($"Working directory: {Path.GetDirectoryName(toolPath)}");
+                    LogDebug($"Arguments: {arguments}");
+
                     process.OutputDataReceived += (s, e) =>
                     {
                         if (!string.IsNullOrEmpty(e.Data))
                         {
+                            LogDebug($"Tool output: {e.Data}");
                             Dispatcher.InvokeAsync(() => _progressManager.UpdateStatus(e.Data));
                         }
                     };
 
+                    process.ErrorDataReceived += (s, e) =>
+                    {
+                        if (!string.IsNullOrEmpty(e.Data))
+                        {
+                            LogDebug($"Tool error: {e.Data}");
+                            Dispatcher.InvokeAsync(() => _progressManager.UpdateStatus($"Error: {e.Data}"));
+                        }
+                    };
+
+                    _progressManager.SetCurrentProcess(process);
+
                     process.Start();
                     process.BeginOutputReadLine();
-                    process.WaitForExit();
+                    process.BeginErrorReadLine();
 
-                    if (process.ExitCode != 0)
+                    LogDebug($"Process started with ID: {process.Id}");
+
+                    while (!process.WaitForExit(1000))
+                    {
+                        if (_progressManager.CancellationToken.IsCancellationRequested)
+                        {
+                            LogDebug("Cancellation requested - killing process");
+                            try
+                            {
+                                if (!process.HasExited)
+                                {
+                                    process.Kill(entireProcessTree: true);
+                                    LogDebug($"Process {process.Id} killed successfully");
+                                }
+                            }
+                            catch (Exception killEx)
+                            {
+                                LogDebug($"Error killing process: {killEx.Message}");
+                            }
+                            throw new OperationCanceledException("Operation was cancelled by user");
+                        }
+                    }
+
+                    LogDebug($"Process exited with code: {process.ExitCode}");
+
+                    if (process.ExitCode != 0 && !_progressManager.CancellationToken.IsCancellationRequested)
                     {
                         throw new Exception($"Tool exited with code {process.ExitCode}");
                     }
                 });
 
-                StatusText.Text = $"{operationName} completed successfully";
+                if (!_progressManager.CancellationToken.IsCancellationRequested)
+                {
+                    StatusText.Text = $"{operationName} completed successfully";
+                    LogDebug($"{operationName} completed successfully");
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                StatusText.Text = $"{operationName} was cancelled";
+                LogDebug($"{operationName} was cancelled by user");
             }
             catch (Exception ex)
             {
                 LogDebug($"Error running {operationName}: {ex.Message}");
+                StatusText.Text = $"Error running {operationName}: {ex.Message}";
                 System.Windows.MessageBox.Show($"Error: {ex.Message}", "Error",
                     MessageBoxButton.OK, MessageBoxImage.Error);
             }
             finally
             {
+                try
+                {
+                    if (process != null && !process.HasExited)
+                    {
+                        process.Kill(entireProcessTree: true);
+                    }
+                    process?.Dispose();
+                }
+                catch (Exception ex)
+                {
+                    LogDebug($"Error disposing process: {ex.Message}");
+                }
+
                 _progressManager.Hide();
             }
         }
@@ -1360,6 +1581,22 @@ namespace Amaurot
             {
                 LogDebug($"Error opening console: {ex.Message}");
                 System.Windows.MessageBox.Show($"Failed to open console: {ex.Message}", "Error",
+                    MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        private void CancelExtraction_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                LogDebug("User requested cancellation of operation");
+                _progressManager.RequestCancellation();
+                StatusText.Text = "Cancelling operation...";
+            }
+            catch (Exception ex)
+            {
+                LogDebug($"Error cancelling operation: {ex.Message}");
+                System.Windows.MessageBox.Show($"Error cancelling operation: {ex.Message}", "Error",
                     MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
@@ -1419,7 +1656,7 @@ namespace Amaurot
         {
             try
             {
-                var targetNpc = _entities.Npcs.FirstOrDefault(n => n.NpcId == npcId);
+                var targetNpc = _entities.FilteredNpcs.FirstOrDefault(n => n.Id == npcId);
                 if (targetNpc != null)
                 {
                     var questPopup = new NpcQuestPopupWindow(targetNpc, this);
@@ -1740,6 +1977,7 @@ namespace Amaurot
     {
         private readonly MainWindow _window;
         private CancellationTokenSource? _cancellationSource;
+        private System.Diagnostics.Process? _currentProcess;
 
         public ProgressManager(MainWindow window)
         {
@@ -1753,6 +1991,7 @@ namespace Amaurot
             _window.QuestExtractionProgressBar.IsIndeterminate = true;
             _window.CancelExtractionButton.IsEnabled = true;
             _cancellationSource = new CancellationTokenSource();
+            _currentProcess = null;
         }
 
         public void UpdateStatus(string message)
@@ -1766,6 +2005,30 @@ namespace Amaurot
             _window.ProgressOverlay.Visibility = Visibility.Collapsed;
             _cancellationSource?.Dispose();
             _cancellationSource = null;
+            _currentProcess = null;
+        }
+
+        public void SetCurrentProcess(System.Diagnostics.Process process)
+        {
+            _currentProcess = process;
+        }
+
+        public void RequestCancellation()
+        {
+            _cancellationSource?.Cancel();
+
+            if (_currentProcess != null && !_currentProcess.HasExited)
+            {
+                try
+                {
+                    _currentProcess.Kill(entireProcessTree: true);
+                    _window.LogDebug($"Immediately killed process {_currentProcess.Id} due to cancellation request");
+                }
+                catch (Exception ex)
+                {
+                    _window.LogDebug($"Error immediately killing process: {ex.Message}");
+                }
+            }
         }
 
         public CancellationToken CancellationToken => _cancellationSource?.Token ?? CancellationToken.None;

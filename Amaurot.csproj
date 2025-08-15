@@ -49,15 +49,19 @@
 	  <Compile Remove="LGB-Parser\**" />
 	  <Compile Remove="notes\**" />
 	  <Compile Remove="Resources\LgbData\**" />
+	  <Compile Remove="unluac\**" />
 	  <EmbeddedResource Remove="LGB-Parser\**" />
 	  <EmbeddedResource Remove="notes\**" />
 	  <EmbeddedResource Remove="Resources\LgbData\**" />
+	  <EmbeddedResource Remove="unluac\**" />
 	  <None Remove="LGB-Parser\**" />
 	  <None Remove="notes\**" />
 	  <None Remove="Resources\LgbData\**" />
+	  <None Remove="unluac\**" />
 	  <Page Remove="LGB-Parser\**" />
 	  <Page Remove="notes\**" />
 	  <Page Remove="Resources\LgbData\**" />
+	  <Page Remove="unluac\**" />
 	  
 	</ItemGroup>
 
@@ -157,6 +161,7 @@
 	  <Folder Include="Tools\" />
 	</ItemGroup>
 
+  <!-- Build and copy LGB-Parser -->
   <Target Name="BuildAndCopyLgbParser" AfterTargets="Build">
     
     <Message Text="🔧 Building LGB-Parser separately..." Importance="high" />
@@ -195,6 +200,112 @@
     
     <Message Text="✅ Successfully built and copied LGB-Parser.exe with runtime configuration" Importance="high" />
     <Message Text="📄 Copied files: LGB-Parser.exe, runtimeconfig.json, and unique dependencies only" Importance="high" />
+    
+  </Target>
+
+  <!-- Build and copy unluac -->
+  <Target Name="BuildAndCopyUnluac" AfterTargets="BuildAndCopyLgbParser">
+    
+    <Message Text="🔧 Building unluac from submodule..." Importance="high" />
+    
+    <PropertyGroup>
+      <UnluacSubmodulePath>$(MSBuildProjectDirectory)\unluac</UnluacSubmodulePath>
+      <UnluacBuildScript>$(UnluacSubmodulePath)\build.sh</UnluacBuildScript>
+      <UnluacBinJarPath>$(UnluacSubmodulePath)\bin\unluac.jar</UnluacBinJarPath>
+      <UnluacDestinationPath>$(OutputPath)Tools\unluac.jar</UnluacDestinationPath>
+    </PropertyGroup>
+    
+    <!-- Check if submodule exists and has content -->
+    <Message Text="🔍 Checking unluac submodule at: $(UnluacSubmodulePath)" Importance="high" />
+    
+    <!-- Initialize submodule if it doesn't exist or is empty -->
+    <Exec Command="git submodule update --init --recursive" 
+          ContinueOnError="true" 
+          WorkingDirectory="$(MSBuildProjectDirectory)"
+          Condition="!Exists('$(UnluacSubmodulePath)\src')" />
+    
+    <!-- Check if the submodule has source files -->
+    <ItemGroup>
+      <UnluacSourceFiles Include="$(UnluacSubmodulePath)\src\**\*.java" />
+    </ItemGroup>
+    
+    <Message Text="📂 Found $(UnluacSourceFiles->Count()) Java source files in unluac submodule" Importance="high" />
+    
+    <!-- Create Tools directory -->
+    <MakeDir Directories="$(OutputPath)Tools" />
+    
+    <!-- Method 1: Try using the build.sh script (preferred) -->
+    <Message Text="🛠️ Attempting to build unluac using build.sh script..." Importance="high" 
+             Condition="Exists('$(UnluacBuildScript)') And '@(UnluacSourceFiles)' != ''" />
+    
+    <!-- Try with bash (Git Bash, WSL, Linux, macOS) -->
+    <Exec Command="bash build.sh" 
+          ContinueOnError="true" 
+          WorkingDirectory="$(UnluacSubmodulePath)"
+          Condition="Exists('$(UnluacBuildScript)') And '@(UnluacSourceFiles)' != ''" />
+    
+    <!-- Try with sh if bash failed -->
+    <Exec Command="sh build.sh" 
+          ContinueOnError="true" 
+          WorkingDirectory="$(UnluacSubmodulePath)"
+          Condition="Exists('$(UnluacBuildScript)') And '@(UnluacSourceFiles)' != '' And !Exists('$(UnluacBinJarPath)')" />
+    
+    <!-- Method 2: Manual Java compilation if build.sh failed -->
+    <Message Text="🔨 build.sh failed, trying manual Java compilation..." Importance="high" 
+             Condition="'@(UnluacSourceFiles)' != '' And !Exists('$(UnluacBinJarPath)')" />
+    
+    <!-- Create build directories -->
+    <MakeDir Directories="$(UnluacSubmodulePath)\build" 
+             Condition="'@(UnluacSourceFiles)' != '' And !Exists('$(UnluacBinJarPath)')" />
+    <MakeDir Directories="$(UnluacSubmodulePath)\bin" 
+             Condition="'@(UnluacSourceFiles)' != '' And !Exists('$(UnluacBinJarPath)')" />
+    
+    <!-- Compile Java source files -->
+    <Exec Command="javac -deprecation -d build -sourcepath src src\unluac\*.java" 
+          ContinueOnError="true" 
+          WorkingDirectory="$(UnluacSubmodulePath)"
+          Condition="'@(UnluacSourceFiles)' != '' And !Exists('$(UnluacBinJarPath)')" />
+    
+    <!-- Create JAR file with manifest -->
+    <Exec Command="jar -cfm bin\unluac.jar src\unluac\Manifest.mf -C build ." 
+          ContinueOnError="true" 
+          WorkingDirectory="$(UnluacSubmodulePath)"
+          Condition="Exists('$(UnluacSubmodulePath)\build') And !Exists('$(UnluacBinJarPath)')" />
+    
+    <!-- Method 3: Look for pre-built JAR files -->
+    <ItemGroup Condition="!Exists('$(UnluacBinJarPath)')">
+      <PossibleUnluacJars Include="$(UnluacSubmodulePath)\**\unluac*.jar" />
+      <PossibleUnluacJars Include="$(UnluacSubmodulePath)\**\*.jar" />
+    </ItemGroup>
+    
+    <PropertyGroup Condition="'@(PossibleUnluacJars)' != '' And !Exists('$(UnluacBinJarPath)')">
+      <UnluacBinJarPath>@(PossibleUnluacJars -> '%(FullPath)' -> FirstOrDefault())</UnluacBinJarPath>
+    </PropertyGroup>
+    
+    <!-- Copy the JAR file to Tools directory -->
+    <Copy SourceFiles="$(UnluacBinJarPath)" 
+          DestinationFiles="$(UnluacDestinationPath)" 
+          SkipUnchangedFiles="true" 
+          Condition="Exists('$(UnluacBinJarPath)')" />
+    
+    <!-- Report build results -->
+    <Message Text="Successfully built and copied unluac.jar to Tools directory!" 
+             Importance="high" 
+             Condition="Exists('$(UnluacDestinationPath)')" />
+    
+    <Message Text="unluac.jar available at: $(UnluacDestinationPath)" 
+             Importance="high" 
+             Condition="Exists('$(UnluacDestinationPath)')" />
+    
+    <Warning Text="unluac.jar could not be built automatically. Check if Java compiler (javac) is installed and in PATH." 
+             Condition="'@(UnluacSourceFiles)' != '' And !Exists('$(UnluacDestinationPath)')" />
+    
+    <Warning Text="unluac submodule appears to be empty. Run 'git submodule update --init --recursive' manually." 
+             Condition="'@(UnluacSourceFiles)' == ''" />
+    
+    <Message Text="Manual setup: You can also download unluac.jar from https://sourceforge.net/projects/unluac/ and place it in the Tools directory" 
+             Importance="high" 
+             Condition="!Exists('$(UnluacDestinationPath)')" />
     
   </Target>
 </Project>

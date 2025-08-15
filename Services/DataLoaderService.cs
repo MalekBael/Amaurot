@@ -806,36 +806,72 @@ namespace Amaurot.Services
                             {
                                 string placeName;
                                 uint placeNameId = 0;
+                                string territoryNameId = territory.Name?.ToString() ?? string.Empty;
 
                                 if (territory.PlaceName != null && !string.IsNullOrWhiteSpace(territory.PlaceName.Name))
                                 {
                                     placeName = territory.PlaceName.Name.ToString();
                                     placeNameId = (uint)territory.PlaceName.Key;
                                 }
+                                else if (!string.IsNullOrWhiteSpace(territoryNameId))
+                                {
+                                    placeName = territoryNameId;
+                                    placeNameId = 0;     
+                                }
                                 else
                                 {
                                     placeName = $"[Territory ID: {territory.Key}]";
+                                    placeNameId = 0;
                                 }
 
-                                string territoryNameId = territory.Name?.ToString() ?? string.Empty;
                                 string regionName = "Unknown";
                                 uint regionId = 0;
                                 bool regionFound = false;
 
                                 try
                                 {
-                                    if (territory.RegionPlaceName != null && territory.RegionPlaceName.Key != 0)
+                                    var placeNameRegionValue = territory[3];
+                                    if (placeNameRegionValue != null && placeNameRegionValue is SaintCoinach.Xiv.PlaceName placeNameRegion && placeNameRegion.Key != 0)
                                     {
-                                        string? name = territory.RegionPlaceName.Name?.ToString();
+                                        string? name = placeNameRegion.Name?.ToString();
                                         if (!string.IsNullOrEmpty(name))
                                         {
                                             regionName = name;
-                                            regionId = (uint)territory.RegionPlaceName.Key;
+                                            regionId = (uint)placeNameRegion.Key;
                                             regionFound = true;
+
+                                            if (territory.Key == 128)       
+                                            {
+                                                _logDebug($"Territory 128: PlaceNameRegion (index 3) -> PlaceName ID {regionId} = '{regionName}'");
+                                            }
                                         }
                                     }
                                 }
-                                catch (KeyNotFoundException) { }
+                                catch (Exception ex)
+                                {
+                                    if (territory.Key == 128)
+                                    {
+                                        _logDebug($"Territory 128: Error accessing PlaceNameRegion (index 3): {ex.Message}");
+                                    }
+                                }
+
+                                if (!regionFound)
+                                {
+                                    try
+                                    {
+                                        if (territory.RegionPlaceName != null && territory.RegionPlaceName.Key != 0)
+                                        {
+                                            string? name = territory.RegionPlaceName.Name?.ToString();
+                                            if (!string.IsNullOrEmpty(name))
+                                            {
+                                                regionName = name;
+                                                regionId = (uint)territory.RegionPlaceName.Key;
+                                                regionFound = true;
+                                            }
+                                        }
+                                    }
+                                    catch (KeyNotFoundException) { }
+                                }
 
                                 if (!regionFound)
                                 {
@@ -854,6 +890,56 @@ namespace Amaurot.Services
                                     catch (KeyNotFoundException) { }
                                 }
 
+                                string bgPath = "";
+                                try
+                                {
+                                    var bgValue = territory[1];
+                                    if (bgValue != null)
+                                    {
+                                        bgPath = bgValue.ToString() ?? "";
+                                        
+                                        if (territory.Key == 128)       
+                                        {
+                                            _logDebug($"Territory 128: Bg (index 1) = '{bgPath}'");
+                                        }
+                                    }
+                                }
+                                catch (Exception ex)
+                                {
+                                    if (territory.Key == 128)
+                                    {
+                                        _logDebug($"Territory 128: Error accessing Bg (index 1): {ex.Message}");
+                                    }
+                                }
+
+                                string placeNameZone = "";
+                                uint placeNameZoneId = 0;
+                                try
+                                {
+                                    var placeNameZoneValue = territory[4];
+                                    if (placeNameZoneValue != null && placeNameZoneValue is SaintCoinach.Xiv.PlaceName placeNameZoneObj && placeNameZoneObj.Key != 0)
+                                    {
+                                        string? name = placeNameZoneObj.Name?.ToString();
+                                        if (!string.IsNullOrEmpty(name))
+                                        {
+                                            placeNameZone = name;
+                                            placeNameZoneId = (uint)placeNameZoneObj.Key;
+
+                                            if (territory.Key == 128)       
+                                            {
+                                                _logDebug($"Territory 128: PlaceNameZone (index 4) -> PlaceName ID {placeNameZoneId} = '{placeNameZone}'");
+                                            }
+                                        }
+                                    }
+                                }
+                                catch (Exception ex)
+                                {
+                                    if (territory.Key == 128)
+                                    {
+                                        _logDebug($"Territory 128: Error accessing PlaceNameZone (index 4): {ex.Message}");
+                                    }
+                                }
+
                                 uint mapId = 0;
                                 try
                                 {
@@ -870,17 +956,25 @@ namespace Amaurot.Services
                                 var territoryInfo = new TerritoryInfo
                                 {
                                     Id = (uint)territory.Key,
-                                    Name = placeName,
-                                    TerritoryNameId = territoryNameId,
+                                    Name = placeName,          
+                                    TerritoryNameId = territoryNameId,       
                                     PlaceNameId = placeNameId,
-                                    PlaceName = placeName,
+                                    PlaceName = placeName,      
                                     RegionId = regionId,
                                     RegionName = regionName,
                                     Region = regionName,
                                     MapId = mapId,
+                                    Bg = bgPath,
+                                    PlaceNameZoneId = placeNameZoneId,
+                                    PlaceNameZone = placeNameZone,
                                 };
 
                                 tempTerritories.Add(territoryInfo);
+
+                                if (processedCount < 10 || territory.Key == 128)
+                                {
+                                    _logDebug($"  Territory {territory.Key}: Name='{placeName}', TerritoryNameId='{territoryNameId}', PlaceNameId={placeNameId}, Region='{regionName}' (ID: {regionId}), Bg='{bgPath}', PlaceNameZone='{placeNameZone}' (ID: {placeNameZoneId})");
+                                }
 
                                 processedCount++;
                                 if (processedCount % 100 == 0)
