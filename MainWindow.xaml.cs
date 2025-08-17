@@ -117,7 +117,10 @@ namespace Amaurot
             try
             {
                 _services.Register(new SettingsService());
-                _services.Register(new DebugHelper(this));
+                
+                // ✅ CORRECT: Initialize DebugModeManager instead of registering DebugHelper
+                DebugModeManager.Initialize(this);
+                
                 _services.Register(new MapRenderer(_realm));
                 _services.Register(new UIUpdateService());
 
@@ -125,6 +128,7 @@ namespace Amaurot
                 _services.Register(_filterService);
 
                 _services.Register(new MapInteractionService(LogDebug));
+                _services.Register<IFileDialogService>(new CrossPlatformFileDialogService());
 
                 LogDebug("Services initialized successfully");
             }
@@ -237,19 +241,22 @@ namespace Amaurot
 
         private async void LoadGameData_Click(object sender, RoutedEventArgs e)
         {
-            var dialog = new Microsoft.Win32.OpenFileDialog
+            // REPLACE: Microsoft.Win32.OpenFileDialog with IFileDialogService
+            var fileDialogService = _services.Get<IFileDialogService>();
+            if (fileDialogService == null)
             {
-                Title = "Select FFXIV game installation folder",
-                InitialDirectory = _services.Get<SettingsService>()?.Settings.GameInstallationPath ?? Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
-                ValidateNames = false,
-                CheckFileExists = false,
-                CheckPathExists = true,
-                FileName = "Select Folder"
-            };
+                LogDebug("File dialog service not available");
+                return;
+            }
 
-            if (dialog.ShowDialog() == true)
+            var selectedPath = fileDialogService.SelectFolder(
+                "Select FFXIV game installation folder",
+                _services.Get<SettingsService>()?.Settings.GameInstallationPath ??
+                Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles)
+            );
+
+            if (!string.IsNullOrEmpty(selectedPath))
             {
-                var selectedPath = System.IO.Path.GetDirectoryName(dialog.FileName) ?? dialog.FileName;
                 _services.Get<SettingsService>()?.UpdateGamePath(selectedPath);
                 await LoadFFXIVDataAsync(selectedPath);
             }
@@ -1180,22 +1187,31 @@ namespace Amaurot
 
         private void SaveLogButton_Click(object sender, RoutedEventArgs e)
         {
-            var dialog = new Microsoft.Win32.SaveFileDialog
+            var fileDialogService = _services.Get<IFileDialogService>();
+            if (fileDialogService == null)
             {
-                Filter = "Log files (*.log)|*.log|Text files (*.txt)|*.txt|All files (*.*)|*.*",
-                DefaultExt = ".log",
-                FileName = $"MapEditor_Log_{DateTime.Now:yyyyMMdd_HHmmss}"
-            };
+                LogDebug("File dialog service not available");
+                return;
+            }
 
-            if (dialog.ShowDialog() == true)
+            var fileName = fileDialogService.SaveFile(
+                "Save Log File",
+                "Log files (*.log)|*.log|Text files (*.txt)|*.txt|All files (*.*)|*.*",
+                Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
+                $"MapEditor_Log_{DateTime.Now:yyyyMMdd_HHmmss}.log"
+            );
+
+            if (!string.IsNullOrEmpty(fileName))
             {
                 try
                 {
-                    File.WriteAllText(dialog.FileName, DebugTextBox.Text);
-                    StatusText.Text = $"Log saved to {dialog.FileName}";
+                    File.WriteAllText(fileName, DebugTextBox.Text);
+                    StatusText.Text = $"Log saved to {fileName}";
+                    LogDebug($"Log saved to: {fileName}");
                 }
                 catch (Exception ex)
                 {
+                    LogDebug($"Error saving log: {ex.Message}");
                     System.Windows.MessageBox.Show($"Error saving log: {ex.Message}", "Error",
                         MessageBoxButton.OK, MessageBoxImage.Error);
                 }
@@ -1386,7 +1402,8 @@ namespace Amaurot
                         case MessageBoxResult.Yes:
                             var confirmBatch = System.Windows.MessageBox.Show(
                                 "Batch mode will process ALL LGB files in the game.\n" +
-                                "This can take 10+ minutes, cause the system to slow down and use significant disk space.\n\n" +
+                                "Output will be saved as JSON files in 'lgb_output' folder.\n" +
+                                "This can take 10+ minutes and use significant disk space.\n\n" +
                                 "Continue?",
                                 "Confirm Batch Operation",
                                 MessageBoxButton.YesNo,
@@ -1394,7 +1411,8 @@ namespace Amaurot
 
                             if (confirmBatch == MessageBoxResult.Yes)
                             {
-                                await RunToolWithProgress(toolPath, $"--game \"{gamePath}\" --batch", "LGB Batch Processing");
+                                // ✅ SIMPLE: Always use JSON format when run from tools menu
+                                await RunToolWithProgress(toolPath, $"--game \"{gamePath}\" --batch lgb_output json", "LGB Batch Processing (JSON)");
                             }
                             break;
 
@@ -1467,7 +1485,6 @@ namespace Amaurot
                     };
 
                     LogDebug($"Tool path: {toolPath}");
-                    LogDebug($"Working directory: {Path.GetDirectoryName(toolPath)}");
                     LogDebug($"Arguments: {arguments}");
 
                     process.OutputDataReceived += (s, e) =>
@@ -1642,14 +1659,16 @@ namespace Amaurot
 
         #region Helper Methods
 
-        private bool ValidateGameDirectory(string directory)
-        {
-            return _services.Get<DebugHelper>()?.ValidateGameDirectory(directory) ?? false;
-        }
-
+        // ✅ CORRECT: Use DebugModeManager directly
         public void LogDebug(string message)
         {
-            _services.Get<DebugHelper>()?.LogDebug(message);
+            DebugModeManager.LogDebug(message);
+        }
+
+        // ✅ CORRECT: Use DebugModeManager directly  
+        private bool ValidateGameDirectory(string directory)
+        {
+            return DebugModeManager.ValidateGameDirectory(directory);
         }
 
         public void HandleNpcMarkerClick(uint npcId)
@@ -1990,19 +2009,37 @@ namespace Amaurot
             _window.ProgressStatusText.Text = $"Starting {operation}...";
             _window.QuestExtractionProgressBar.IsIndeterminate = true;
             _window.CancelExtractionButton.IsEnabled = true;
+
+            if (_window.FindName("ProgressTitleText") is TextBlock titleText)
+            {
+                titleText.Text = operation;
+            }
+
+            if (_window.FindName("OperationTypeText") is TextBlock operationText)
+            {
+                operationText.Text = operation;
+            }
+
             _cancellationSource = new CancellationTokenSource();
             _currentProcess = null;
         }
 
         public void UpdateStatus(string message)
         {
-            _window.ProgressStatusText.Text = message;
-            _window.StatusText.Text = message;
+            var displayMessage = message.Length > 120 ? message.Substring(0, 117) + "..." : message;
+            
+            _window.ProgressStatusText.Text = displayMessage;
+            _window.StatusText.Text = displayMessage;
         }
 
         public void Hide()
         {
             _window.ProgressOverlay.Visibility = Visibility.Collapsed;
+            
+            _window.QuestExtractionProgressBar.IsIndeterminate = true;
+            _window.QuestExtractionProgressBar.Value = 0;
+            _window.QuestExtractionProgressBar.Foreground = new SolidColorBrush(Colors.Green);
+            
             _cancellationSource?.Dispose();
             _cancellationSource = null;
             _currentProcess = null;
@@ -2022,11 +2059,11 @@ namespace Amaurot
                 try
                 {
                     _currentProcess.Kill(entireProcessTree: true);
-                    _window.LogDebug($"Immediately killed process {_currentProcess.Id} due to cancellation request");
+                    _window.LogDebug($"Process killed due to user cancellation");
                 }
                 catch (Exception ex)
                 {
-                    _window.LogDebug($"Error immediately killing process: {ex.Message}");
+                    _window.LogDebug($"Error killing process: {ex.Message}");
                 }
             }
         }

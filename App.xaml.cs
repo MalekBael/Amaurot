@@ -1,4 +1,6 @@
-﻿using System.Windows;
+﻿using System;
+using System.IO;
+using System.Windows;
 using System.Windows.Interop;
 using System.Windows.Media;
 
@@ -13,11 +15,12 @@ namespace Amaurot
         {
             try
             {
-                System.Diagnostics.Process.GetCurrentProcess().Kill();
+                Current.Shutdown(0);
             }
-            catch
+            catch (Exception ex)
             {
-                System.Environment.Exit(0);
+                System.Diagnostics.Debug.WriteLine($"Error during graceful shutdown: {ex.Message}");
+                Environment.Exit(0);
             }
 
             base.OnExit(e);
@@ -25,9 +28,27 @@ namespace Amaurot
 
         protected override void OnStartup(StartupEventArgs e)
         {
-            RenderOptions.ProcessRenderMode = RenderMode.SoftwareOnly;
+            // Make hardware acceleration configurable for Wine
+            if (IsRunningOnWine())
+            {
+                RenderOptions.ProcessRenderMode = RenderMode.SoftwareOnly;
+            }
 
             base.OnStartup(e);
+        }
+
+        private static bool IsRunningOnWine()
+        {
+            try
+            {
+                return Environment.GetEnvironmentVariable("WINEPREFIX") != null ||
+                       Environment.GetEnvironmentVariable("WINE") != null ||
+                       Directory.Exists(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".wine"));
+            }
+            catch
+            {
+                return false;
+            }
         }
     }
 }
