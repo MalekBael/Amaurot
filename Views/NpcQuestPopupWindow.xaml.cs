@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -17,6 +18,10 @@ namespace Amaurot
         private readonly MainWindow _mainWindow;
         private readonly NpcInfo _npcInfo;
         private QuestScriptService? _questScriptService;
+        
+        // ✅ PERFORMANCE FIX: Cache quest lookup and script info to avoid repeated expensive operations
+        private readonly Dictionary<uint, QuestInfo?> _questLookupCache = new();
+        private readonly Dictionary<string, QuestScriptInfo> _scriptInfoCache = new();
 
         public NpcQuestPopupWindow(NpcInfo npcInfo, MainWindow mainWindow)
         {
@@ -24,51 +29,63 @@ namespace Amaurot
             _npcInfo = npcInfo;
             _mainWindow = mainWindow;
 
-            _questScriptService = GetQuestScriptServiceFromMainWindow();
+            // ✅ PERFORMANCE FIX: Direct access instead of reflection
+            _questScriptService = _mainWindow.GetQuestScriptService();
 
             InitializeWindow();
-            PopulateNpcQuests();
+            
+            // ✅ PERFORMANCE FIX: Load popup content asynchronously
+            _ = InitializeAsync();
         }
 
-        private QuestScriptService? GetQuestScriptServiceFromMainWindow()
+        private async Task InitializeAsync()
         {
-            try
+            // Populate basic info immediately
+            NpcNameText.Text = _npcInfo.NpcName;
+            NpcLocationText.Text = $"{_npcInfo.TerritoryName} ({_npcInfo.MapX:F1}, {_npcInfo.MapY:F1})";
+            QuestCountText.Text = $"{_npcInfo.QuestCount} Quest{(_npcInfo.QuestCount != 1 ? "s" : "")}";
+
+            // ✅ PERFORMANCE FIX: Pre-populate caches on background thread
+            await Task.Run(() =>
             {
-                var servicesField = typeof(MainWindow).GetField("_services",
-                    System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-
-                if (servicesField?.GetValue(_mainWindow) is not object servicesContainer)
+                // Build quest lookup cache
+                foreach (var npcQuest in _npcInfo.Quests)
                 {
-                    _mainWindow.LogDebug("Could not get services container from MainWindow");
-                    return null;
+                    if (!_questLookupCache.ContainsKey(npcQuest.QuestId))
+                    {
+                        var fullQuest = _mainWindow.Quests?.FirstOrDefault(q => q.Id == npcQuest.QuestId);
+                        _questLookupCache[npcQuest.QuestId] = fullQuest;
+                    }
                 }
 
-                var getMethod = servicesContainer.GetType().GetMethod("Get");
-                if (getMethod == null)
+                // Pre-load script info for quests that have QuestIdString
+                if (_questScriptService != null)
                 {
-                    _mainWindow.LogDebug("Could not find Get method on services container");
-                    return null;
-                }
+                    var questsWithScripts = _questLookupCache.Values
+                        .Where(q => q != null && !string.IsNullOrEmpty(q.QuestIdString))
+                        .ToList();
 
-                var genericGetMethod = getMethod.MakeGenericMethod(typeof(QuestScriptService));
-                var questScriptService = genericGetMethod.Invoke(servicesContainer, null) as QuestScriptService;
-
-                if (questScriptService != null)
-                {
-                    _mainWindow.LogDebug("Successfully retrieved QuestScriptService from MainWindow");
+                    foreach (var quest in questsWithScripts)
+                    {
+                        if (quest != null && !string.IsNullOrEmpty(quest.QuestIdString) && 
+                            !_scriptInfoCache.ContainsKey(quest.QuestIdString))
+                        {
+                            try
+                            {
+                                var scriptInfo = _questScriptService.GetQuestScriptInfo(quest.QuestIdString);
+                                _scriptInfoCache[quest.QuestIdString] = scriptInfo;
+                            }
+                            catch (Exception ex)
+                            {
+                                _mainWindow.LogDebug($"Error caching script info for {quest.QuestIdString}: {ex.Message}");
+                            }
+                        }
+                    }
                 }
-                else
-                {
-                    _mainWindow.LogDebug("QuestScriptService not found in MainWindow services");
-                }
+            });
 
-                return questScriptService;
-            }
-            catch (Exception ex)
-            {
-                _mainWindow.LogDebug($"Error getting QuestScriptService: {ex.Message}");
-                return null;
-            }
+            // Update UI on main thread
+            await Dispatcher.InvokeAsync(CreateEnhancedQuestList);
         }
 
         private void InitializeWindow()
@@ -77,11 +94,9 @@ namespace Amaurot
             this.Width = 650;
             this.Height = 450;
             this.WindowStartupLocation = WindowStartupLocation.CenterOwner;
-            // ✅ FIX: Don't set Owner to prevent minimization issues
-            // this.Owner = _mainWindow;
             this.ShowInTaskbar = false;
             
-            // ✅ FIX: Position window manually relative to main window
+            // Position window manually relative to main window
             if (_mainWindow != null)
             {
                 this.Left = _mainWindow.Left + (_mainWindow.Width - this.Width) / 2;
@@ -91,13 +106,11 @@ namespace Amaurot
 
         private void CloseButton_Click(object sender, RoutedEventArgs e)
         {
-            // ✅ FIX: Simple close without owner manipulation
             this.Close();
         }
 
         protected override void OnClosing(System.ComponentModel.CancelEventArgs e)
         {
-            // ✅ FIX: Ensure clean closing without affecting parent
             base.OnClosing(e);
         }
 
@@ -107,7 +120,10 @@ namespace Amaurot
             {
                 try
                 {
-                    var fullQuestInfo = _mainWindow.Quests?.FirstOrDefault(q => q.Id == npcQuestInfo.QuestId);
+                    // ✅ PERFORMANCE FIX: Use cached lookup
+                    var fullQuestInfo = _questLookupCache.TryGetValue(npcQuestInfo.QuestId, out var cached) 
+                        ? cached 
+                        : _mainWindow.Quests?.FirstOrDefault(q => q.Id == npcQuestInfo.QuestId);
 
                     if (fullQuestInfo != null)
                     {
@@ -157,7 +173,6 @@ namespace Amaurot
             }
         }
 
-        // ✅ FIX: Remove async since no await is used
         private void NavigateToQuest(NpcQuestInfo questInfo)
         {
             try
@@ -184,15 +199,6 @@ namespace Amaurot
                 WpfMessageBox.Show($"Error navigating to quest: {ex.Message}",
                     "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
-        }
-
-        private void PopulateNpcQuests()
-        {
-            NpcNameText.Text = _npcInfo.NpcName;
-            NpcLocationText.Text = $"{_npcInfo.TerritoryName} ({_npcInfo.MapX:F1}, {_npcInfo.MapY:F1})";
-            QuestCountText.Text = $"{_npcInfo.QuestCount} Quest{(_npcInfo.QuestCount != 1 ? "s" : "")}";
-
-            CreateEnhancedQuestList();
         }
 
         private void CreateEnhancedQuestList()
@@ -359,11 +365,17 @@ namespace Amaurot
                 HorizontalAlignment = System.Windows.HorizontalAlignment.Center
             };
 
-            var fullQuestInfo = _mainWindow.Quests?.FirstOrDefault(q => q.Id == npcQuestInfo.QuestId);
+            // ✅ PERFORMANCE FIX: Use cached quest lookup
+            var fullQuestInfo = _questLookupCache.TryGetValue(npcQuestInfo.QuestId, out var cached) 
+                ? cached 
+                : null;
 
             if (fullQuestInfo != null && !string.IsNullOrEmpty(fullQuestInfo.QuestIdString) && _questScriptService != null)
             {
-                var scriptInfo = _questScriptService.GetQuestScriptInfo(fullQuestInfo.QuestIdString);
+                // ✅ PERFORMANCE FIX: Use cached script info
+                var scriptInfo = _scriptInfoCache.TryGetValue(fullQuestInfo.QuestIdString, out var cachedScript)
+                    ? cachedScript
+                    : new QuestScriptInfo { QuestIdString = fullQuestInfo.QuestIdString, Exists = false };
 
                 if (scriptInfo.Exists)
                 {

@@ -1678,9 +1678,16 @@ namespace Amaurot
                 var targetNpc = _entities.FilteredNpcs.FirstOrDefault(n => n.Id == npcId);
                 if (targetNpc != null)
                 {
-                    var questPopup = new NpcQuestPopupWindow(targetNpc, this);
-                    questPopup.Show();
-                    LogDebug($"Opened quest popup from map click for NPC: {targetNpc.NpcName} (ID: {npcId})");
+                    // ✅ PERFORMANCE FIX: Create popup asynchronously to avoid UI blocking
+                    Task.Run(() =>
+                    {
+                        Dispatcher.BeginInvoke(() =>
+                        {
+                            var questPopup = new NpcQuestPopupWindow(targetNpc, this);
+                            questPopup.Show();
+                            LogDebug($"Opened quest popup from map click for NPC: {targetNpc.NpcName} (ID: {npcId})");
+                        });
+                    });
                 }
                 else
                 {
@@ -1691,6 +1698,12 @@ namespace Amaurot
             {
                 LogDebug($"Error handling NPC marker click: {ex.Message}");
             }
+        }
+
+        // ✅ ADD: Performance-optimized method to get QuestScriptService without reflection
+        public QuestScriptService? GetQuestScriptService()
+        {
+            return _services?.Get<QuestScriptService>();
         }
 
         public void ToggleNpcMarkers(bool visible)

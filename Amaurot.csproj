@@ -8,10 +8,10 @@
 		<ImplicitUsings>enable</ImplicitUsings>
 		<UseWPF>true</UseWPF>
 		<UseWindowsForms>true</UseWindowsForms>
-		
+
 		<GenerateAssemblyInfo>false</GenerateAssemblyInfo>
 		<GenerateTargetFrameworkAttribute>false</GenerateTargetFrameworkAttribute>
-		
+
 		<DisableWPFHardwareAcceleration>true</DisableWPFHardwareAcceleration>
 		<WpfDisableAnimations>false</WpfDisableAnimations>
 	</PropertyGroup>
@@ -25,7 +25,7 @@
 		<PackageReference Include="Machina.FFXIV" Version="2.4.1" />
 		<PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
 		<PackageReference Include="System.Data.SQLite.Core" Version="1.0.119" />
-		
+
 		<PackageReference Include="System.Drawing.Common" Version="8.0.0" />
 	</ItemGroup>
 
@@ -46,236 +46,336 @@
 	</ItemGroup>
 
 	<ItemGroup>
-	  <Compile Remove="LGB-Parser\**" />
-	  <Compile Remove="notes\**" />
-	  <Compile Remove="Resources\LgbData\**" />
-	  <Compile Remove="unluac\**" />
-	  <EmbeddedResource Remove="LGB-Parser\**" />
-	  <EmbeddedResource Remove="notes\**" />
-	  <EmbeddedResource Remove="Resources\LgbData\**" />
-	  <EmbeddedResource Remove="unluac\**" />
-	  <None Remove="LGB-Parser\**" />
-	  <None Remove="notes\**" />
-	  <None Remove="Resources\LgbData\**" />
-	  <None Remove="unluac\**" />
-	  <Page Remove="LGB-Parser\**" />
-	  <Page Remove="notes\**" />
-	  <Page Remove="Resources\LgbData\**" />
-	  <Page Remove="unluac\**" />
-	  
+		<Compile Remove="LGB-Parser\**" />
+		<Compile Remove="notes\**" />
+		<Compile Remove="Resources\LgbData\**" />
+		<Compile Remove="unluac\**" />
+		<EmbeddedResource Remove="LGB-Parser\**" />
+		<EmbeddedResource Remove="notes\**" />
+		<EmbeddedResource Remove="Resources\LgbData\**" />
+		<EmbeddedResource Remove="unluac\**" />
+		<None Remove="LGB-Parser\**" />
+		<None Remove="notes\**" />
+		<None Remove="Resources\LgbData\**" />
+		<None Remove="unluac\**" />
+		<Page Remove="LGB-Parser\**" />
+		<Page Remove="notes\**" />
+		<Page Remove="Resources\LgbData\**" />
+		<Page Remove="unluac\**" />
+
 	</ItemGroup>
 
 	<ItemGroup>
-	  <None Remove="amaurot.ico" />
-	  <None Remove="Resources\planevent.lgb.json" />
+		<None Remove="amaurot.ico" />
+		<None Remove="Resources\planevent.lgb.json" />
 	</ItemGroup>
 
 	<ItemGroup>
-	  <None Include="map editor.sln" />
+		<None Include="map editor.sln" />
 	</ItemGroup>
 	<ItemGroup>
-	  <Content Update="Libs\Definitions\EObj.json" Link="Definitions\EObj.json" />
-	  <Content Update="Libs\Definitions\Map.json">
-	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-	  </Content>
-	  <Content Update="Libs\Definitions\MapMarker.json">
-	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-	  </Content>
-	  <Content Update="Libs\Definitions\MapSymbol.json">
-	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-	  </Content>
-	  <Content Update="Libs\Definitions\PlaceName.json">
-	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-	  </Content>
-	  <Content Update="Libs\Definitions\TerritoryType.json">
-	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-	  </Content>
+		<Content Update="Libs\Definitions\EObj.json" Link="Definitions\EObj.json" />
+		<Content Update="Libs\Definitions\Map.json">
+			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
+		</Content>
+		<Content Update="Libs\Definitions\MapMarker.json">
+			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
+		</Content>
+		<Content Update="Libs\Definitions\MapSymbol.json">
+			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
+		</Content>
+		<Content Update="Libs\Definitions\PlaceName.json">
+			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
+		</Content>
+		<Content Update="Libs\Definitions\TerritoryType.json">
+			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
+		</Content>
 	</ItemGroup>
 	<ItemGroup>
-	  <Resource Include="amaurot.ico" />
+		<Resource Include="amaurot.ico" />
 	</ItemGroup>
 	<ItemGroup>
-	  <None Update="Libs\app_data.sqlite">
-	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-	  </None>
-	  <None Update="Libs\Definitions\BNpcBase.json">
-	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-	  </None>
-	  <None Update="Libs\Definitions\BNpcName.json">
-	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-	  </None>
-	  <None Update="Libs\Definitions\CompleteJournal.json">
-	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-	  </None>
-	  <None Update="Libs\Definitions\ENpcBase.json">
-	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-	  </None>
-	  <None Update="Libs\Definitions\ENpcResident.json">
-	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-	  </None>
-	  <None Update="Libs\Definitions\EObj.json">
-	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-	  </None>
-	  <None Update="Libs\Definitions\EObjName.json">
-	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-	  </None>
-	  <None Update="Libs\Definitions\Fate.json">
-	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-	  </None>
-	  <None Update="Libs\Definitions\game.ver">
-	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-	  </None>
-	  <None Update="Libs\Definitions\InstanceContent.json">
-	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-	  </None>
-	  <None Update="Libs\Definitions\JournalGenre.json">
-	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-	  </None>
-	  <None Update="Libs\Definitions\Level.json">
-	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-	  </None>
-	  <None Update="Libs\Definitions\Map.json">
-	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-	  </None>
-	  <None Update="Libs\Definitions\MapMarker.json">
-	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-	  </None>
-	  <None Update="Libs\Definitions\MapSymbol.json">
-	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-	  </None>
-	  <None Update="Libs\Definitions\PlaceName.json">
-	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-	  </None>
-	  <None Update="Libs\Definitions\Quest.json">
-	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-	  </None>
-	  <None Update="Libs\Definitions\TerritoryType.json">
-	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-	  </None>
-	  <None Update="Libs\MonsterData.csv">
-	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-	  </None>
+		<None Update="Libs\app_data.sqlite">
+			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
+		</None>
+		<None Update="Libs\Definitions\BNpcBase.json">
+			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
+		</None>
+		<None Update="Libs\Definitions\BNpcName.json">
+			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
+		</None>
+		<None Update="Libs\Definitions\CompleteJournal.json">
+			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
+		</None>
+		<None Update="Libs\Definitions\ENpcBase.json">
+			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
+		</None>
+		<None Update="Libs\Definitions\ENpcResident.json">
+			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
+		</None>
+		<None Update="Libs\Definitions\EObj.json">
+			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
+		</None>
+		<None Update="Libs\Definitions\EObjName.json">
+			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
+		</None>
+		<None Update="Libs\Definitions\Fate.json">
+			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
+		</None>
+		<None Update="Libs\Definitions\game.ver">
+			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
+		</None>
+		<None Update="Libs\Definitions\InstanceContent.json">
+			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
+		</None>
+		<None Update="Libs\Definitions\JournalGenre.json">
+			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
+		</None>
+		<None Update="Libs\Definitions\Level.json">
+			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
+		</None>
+		<None Update="Libs\Definitions\Map.json">
+			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
+		</None>
+		<None Update="Libs\Definitions\MapMarker.json">
+			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
+		</None>
+		<None Update="Libs\Definitions\MapSymbol.json">
+			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
+		</None>
+		<None Update="Libs\Definitions\PlaceName.json">
+			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
+		</None>
+		<None Update="Libs\Definitions\Quest.json">
+			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
+		</None>
+		<None Update="Libs\Definitions\TerritoryType.json">
+			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
+		</None>
+		<None Update="Libs\MonsterData.csv">
+			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
+		</None>
 	</ItemGroup>
 	<ItemGroup>
-	  <Folder Include="Resources\" />
-	  <Folder Include="Tools\" />
+		<Folder Include="Resources\" />
+		<Folder Include="Tools\" />
 	</ItemGroup>
 
-  <!-- Build and copy LGB-Parser -->
-  <Target Name="BuildAndCopyLgbParser" AfterTargets="Build">
-    
-    <Message Text="🔧 Building LGB-Parser separately..." Importance="high" />
-    
-    <PropertyGroup>
-      <LgbParserProjectPath>$(MSBuildProjectDirectory)\..\LGB-Parser</LgbParserProjectPath>
-      <LgbParserBinPath>$(LgbParserProjectPath)\bin\$(Configuration)\net8.0</LgbParserBinPath>
-      <LgbParserExePath>$(LgbParserBinPath)\LGB-Parser.exe</LgbParserExePath>
-    </PropertyGroup>
-    
-    <Message Text="🧹 Cleaning LGB-Parser..." Importance="high" />
-    <Exec Command="dotnet clean &quot;$(LgbParserProjectPath)\LGB-Parser.csproj&quot; --configuration $(Configuration)" ContinueOnError="false" WorkingDirectory="$(LgbParserProjectPath)" />
-    
-    <Message Text="🔨 Building LGB-Parser..." Importance="high" />
-    <Exec Command="dotnet build &quot;$(LgbParserProjectPath)\LGB-Parser.csproj&quot; --configuration $(Configuration) --no-restore" ContinueOnError="false" WorkingDirectory="$(LgbParserProjectPath)" />
-    
-    <Error Condition="!Exists('$(LgbParserExePath)')" Text="❌ LGB-Parser.exe was not created at: $(LgbParserExePath)" />
-    
-    <MakeDir Directories="$(OutputPath)Tools" />
-    
-    <Copy SourceFiles="$(LgbParserExePath)" DestinationFolder="$(OutputPath)Tools" SkipUnchangedFiles="true" />
-    
-    <Copy SourceFiles="$(LgbParserBinPath)\LGB-Parser.runtimeconfig.json" DestinationFolder="$(OutputPath)Tools" SkipUnchangedFiles="true" ContinueOnError="false" />
-    
-    <Copy SourceFiles="$(LgbParserBinPath)\LGB-Parser.deps.json" DestinationFolder="$(OutputPath)Tools" SkipUnchangedFiles="true" ContinueOnError="true" />
-    
-    <ItemGroup>
-      <LgbParserDependencies Include="$(LgbParserBinPath)\*.dll" />
-      
-      <AmaurotDependencies Include="$(OutputPath)*.dll" />
-      
-      <UniqueLgbParserDependencies Include="@(LgbParserDependencies)" Condition="!Exists('$(OutputPath)%(Filename)%(Extension)')" />
-    </ItemGroup>
-    
-    <Copy SourceFiles="@(UniqueLgbParserDependencies)" DestinationFolder="$(OutputPath)Tools" SkipUnchangedFiles="true" ContinueOnError="true" />
-    
-    <Message Text="✅ Successfully built and copied LGB-Parser.exe with runtime configuration" Importance="high" />
-    <Message Text="📄 Copied files: LGB-Parser.exe, runtimeconfig.json, and unique dependencies only" Importance="high" />
-    
-  </Target>
+	<!-- ✅ CORRECTED: Build and copy LGB-Parser from submodule (not sibling directory) -->
+	<Target Name="BuildAndCopyLgbParser" AfterTargets="Build">
 
-  <!-- Build and copy unluac -->
-  <Target Name="BuildAndCopyUnluac" AfterTargets="BuildAndCopyLgbParser">
-    
-    <Message Text="🔧 Building unluac from submodule..." Importance="high" />
-    
-    <PropertyGroup>
-      <UnluacSubmodulePath>$(MSBuildProjectDirectory)\unluac</UnluacSubmodulePath>
-      <UnluacBuildScript>$(UnluacSubmodulePath)\build.sh</UnluacBuildScript>
-      <UnluacBinJarPath>$(UnluacSubmodulePath)\bin\unluac.jar</UnluacBinJarPath>
-      <UnluacDestinationPath>$(OutputPath)Tools\unluac.jar</UnluacDestinationPath>
-    </PropertyGroup>
-    
-    <!-- Check if submodule exists and has content -->
-    <Message Text="🔍 Checking unluac submodule at: $(UnluacSubmodulePath)" Importance="high" />
-    
-    <!-- Initialize submodule if it doesn't exist or is empty -->
-    <Exec Command="git submodule update --init --recursive" ContinueOnError="true" WorkingDirectory="$(MSBuildProjectDirectory)" Condition="!Exists('$(UnluacSubmodulePath)\src')" />
-    
-    <!-- Check if the submodule has source files -->
-    <ItemGroup>
-      <UnluacSourceFiles Include="$(UnluacSubmodulePath)\src\**\*.java" />
-    </ItemGroup>
-    
-    <Message Text="📂 Found $(UnluacSourceFiles-&gt;Count()) Java source files in unluac submodule" Importance="high" />
-    
-    <!-- Create Tools directory -->
-    <MakeDir Directories="$(OutputPath)Tools" />
-    
-    <!-- Method 1: Try using the build.sh script (preferred) -->
-    <Message Text="🛠️ Attempting to build unluac using build.sh script..." Importance="high" Condition="Exists('$(UnluacBuildScript)') And '@(UnluacSourceFiles)' != ''" />
-    
-    <!-- Try with bash (Git Bash, WSL, Linux, macOS) -->
-    <Exec Command="bash build.sh" ContinueOnError="true" WorkingDirectory="$(UnluacSubmodulePath)" Condition="Exists('$(UnluacBuildScript)') And '@(UnluacSourceFiles)' != ''" />
-    
-    <!-- Try with sh if bash failed -->
-    <Exec Command="sh build.sh" ContinueOnError="true" WorkingDirectory="$(UnluacSubmodulePath)" Condition="Exists('$(UnluacBuildScript)') And '@(UnluacSourceFiles)' != '' And !Exists('$(UnluacBinJarPath)')" />
-    
-    <!-- Method 2: Manual Java compilation if build.sh failed -->
-    <Message Text="🔨 build.sh failed, trying manual Java compilation..." Importance="high" Condition="'@(UnluacSourceFiles)' != '' And !Exists('$(UnluacBinJarPath)')" />
-    
-    <!-- Create build directories -->
-    <MakeDir Directories="$(UnluacSubmodulePath)\build" Condition="'@(UnluacSourceFiles)' != '' And !Exists('$(UnluacBinJarPath)')" />
-    <MakeDir Directories="$(UnluacSubmodulePath)\bin" Condition="'@(UnluacSourceFiles)' != '' And !Exists('$(UnluacBinJarPath)')" />
-    
-    <!-- Compile Java source files -->
-    <Exec Command="javac -deprecation -d build -sourcepath src src\unluac\*.java" ContinueOnError="true" WorkingDirectory="$(UnluacSubmodulePath)" Condition="'@(UnluacSourceFiles)' != '' And !Exists('$(UnluacBinJarPath)')" />
-    
-    <!-- Create JAR file with manifest -->
-    <Exec Command="jar -cfm bin\unluac.jar src\unluac\Manifest.mf -C build ." ContinueOnError="true" WorkingDirectory="$(UnluacSubmodulePath)" Condition="Exists('$(UnluacSubmodulePath)\build') And !Exists('$(UnluacBinJarPath)')" />
-    
-    <!-- Method 3: Look for pre-built JAR files -->
-    <ItemGroup Condition="!Exists('$(UnluacBinJarPath)')">
-      <PossibleUnluacJars Include="$(UnluacSubmodulePath)\**\unluac*.jar" />
-      <PossibleUnluacJars Include="$(UnluacSubmodulePath)\**\*.jar" />
-    </ItemGroup>
-    
-    <PropertyGroup Condition="'@(PossibleUnluacJars)' != '' And !Exists('$(UnluacBinJarPath)')">
-      <UnluacBinJarPath>@(PossibleUnluacJars -&gt; '%(FullPath)' -&gt; FirstOrDefault())</UnluacBinJarPath>
-    </PropertyGroup>
-    
-    <!-- Copy the JAR file to Tools directory -->
-    <Copy SourceFiles="$(UnluacBinJarPath)" DestinationFiles="$(UnluacDestinationPath)" SkipUnchangedFiles="true" Condition="Exists('$(UnluacBinJarPath)')" />
-    
-    <!-- Report build results -->
-    <Message Text="Successfully built and copied unluac.jar to Tools directory!" Importance="high" Condition="Exists('$(UnluacDestinationPath)')" />
-    
-    <Message Text="unluac.jar available at: $(UnluacDestinationPath)" Importance="high" Condition="Exists('$(UnluacDestinationPath)')" />
-    
-    <Warning Text="unluac.jar could not be built automatically. Check if Java compiler (javac) is installed and in PATH." Condition="'@(UnluacSourceFiles)' != '' And !Exists('$(UnluacDestinationPath)')" />
-    
-    <Warning Text="unluac submodule appears to be empty. Run 'git submodule update --init --recursive' manually." Condition="'@(UnluacSourceFiles)' == ''" />
-    
-    <Message Text="Manual setup: You can also download unluac.jar from https://sourceforge.net/projects/unluac/ and place it in the Tools directory" Importance="high" Condition="!Exists('$(UnluacDestinationPath)')" />
-    
-  </Target>
+		<Message Text="🔧 Building LGB-Parser from submodule..." Importance="high" />
+
+		<PropertyGroup>
+			<!-- ✅ FIXED: Use submodule path (not sibling directory) -->
+			<LgbParserProjectPath>$(MSBuildProjectDirectory)\LGB-Parser</LgbParserProjectPath>
+			<LgbParserBinPath>$(LgbParserProjectPath)\bin\$(Configuration)\net8.0</LgbParserBinPath>
+			<LgbParserExePath>$(LgbParserBinPath)\LGB-Parser.exe</LgbParserExePath>
+			<LgbParserCsprojPath>$(LgbParserProjectPath)\LGB-Parser.csproj</LgbParserCsprojPath>
+		</PropertyGroup>
+
+		<!-- ✅ ENHANCED: Check if LGB-Parser submodule exists -->
+		<Message Text="🔍 Checking LGB-Parser submodule..." Importance="high" />
+		<Message Text="Looking for: $(LgbParserProjectPath)" Importance="high" />
+		
+		<Warning Text="⚠️ LGB-Parser submodule not found at: $(LgbParserProjectPath)" 
+				 Condition="!Exists('$(LgbParserCsprojPath)')" />
+		<Warning Text="ℹ️ Expected LGB-Parser.csproj at: $(LgbParserCsprojPath)" 
+				 Condition="!Exists('$(LgbParserCsprojPath)')" />
+		<Warning Text="💡 Run 'git submodule update --init --recursive' to initialize submodule" 
+				 Condition="!Exists('$(LgbParserCsprojPath)')" />
+
+		<!-- ✅ CONDITIONAL: Only proceed if project exists -->
+		<PropertyGroup>
+			<ShouldBuildLgbParser Condition="Exists('$(LgbParserCsprojPath)')">true</ShouldBuildLgbParser>
+			<ShouldBuildLgbParser Condition="!Exists('$(LgbParserCsprojPath)')">false</ShouldBuildLgbParser>
+		</PropertyGroup>
+
+		<!-- Build LGB-Parser if it exists -->
+		<Message Text="🧹 Cleaning LGB-Parser..." Importance="high" 
+				 Condition="'$(ShouldBuildLgbParser)' == 'true'" />
+		<Exec Command="dotnet clean &quot;$(LgbParserCsprojPath)&quot; --configuration $(Configuration)" 
+			  ContinueOnError="true" 
+			  WorkingDirectory="$(LgbParserProjectPath)"
+			  Condition="'$(ShouldBuildLgbParser)' == 'true'" />
+
+		<Message Text="🔨 Building LGB-Parser (submodule commit: bf8f983)..." Importance="high" 
+				 Condition="'$(ShouldBuildLgbParser)' == 'true'" />
+		<Exec Command="dotnet build &quot;$(LgbParserCsprojPath)&quot; --configuration $(Configuration) --no-restore" 
+			  ContinueOnError="true" 
+			  WorkingDirectory="$(LgbParserProjectPath)"
+			  Condition="'$(ShouldBuildLgbParser)' == 'true'">
+			<Output TaskParameter="ExitCode" PropertyName="LgbParserExitCode" />
+		</Exec>
+
+		<!-- ✅ DEBUG: Show build result -->
+		<Message Text="📊 LGB-Parser build result: ExitCode=$(LgbParserExitCode), Exe exists: $(Exists('$(LgbParserExePath)'))" 
+				 Importance="high" 
+				 Condition="'$(ShouldBuildLgbParser)' == 'true'" />
+
+		<!-- Create directories -->
+		<MakeDir Directories="$(OutputPath)Tools" />
+
+		<!-- ✅ ENHANCED: Copy files with detailed logging -->
+		<PropertyGroup>
+			<LgbParserBuildSucceeded Condition="'$(LgbParserExitCode)' == '0' And Exists('$(LgbParserExePath)')">true</LgbParserBuildSucceeded>
+			<LgbParserBuildSucceeded Condition="'$(LgbParserExitCode)' != '0' Or !Exists('$(LgbParserExePath)')">false</LgbParserBuildSucceeded>
+		</PropertyGroup>
+
+		<!-- Define files to copy -->
+		<ItemGroup Condition="'$(LgbParserBuildSucceeded)' == 'true'">
+			<!-- Essential files for Tools directory -->
+			<LgbParserEssentialFiles Include="$(LgbParserExePath)" />
+			<LgbParserEssentialFiles Include="$(LgbParserBinPath)\LGB-Parser.runtimeconfig.json" Condition="Exists('$(LgbParserBinPath)\LGB-Parser.runtimeconfig.json')" />
+			<LgbParserEssentialFiles Include="$(LgbParserBinPath)\LGB-Parser.deps.json" Condition="Exists('$(LgbParserBinPath)\LGB-Parser.deps.json')" />
+			
+			<!-- All DLLs for root directory -->
+			<LgbParserDlls Include="$(LgbParserBinPath)\*.dll" />
+		</ItemGroup>
+
+		<!-- ✅ COPY: Essential files to Tools directory -->
+		<Copy SourceFiles="@(LgbParserEssentialFiles)" 
+			  DestinationFolder="$(OutputPath)Tools" 
+			  SkipUnchangedFiles="true" 
+			  Condition="'$(LgbParserBuildSucceeded)' == 'true'" />
+
+		<!-- ✅ COPY: DLLs to root directory (only if they don't exist) -->
+		<Copy SourceFiles="%(LgbParserDlls.Identity)" 
+			  DestinationFolder="$(OutputPath)" 
+			  SkipUnchangedFiles="true" 
+			  ContinueOnError="true"
+			  Condition="'$(LgbParserBuildSucceeded)' == 'true' And !Exists('$(OutputPath)%(LgbParserDlls.Filename)%(LgbParserDlls.Extension)')" />
+
+		<!-- ✅ REPORTING: Detailed success/failure messages -->
+		<Message Text="✅ Successfully built and copied LGB-Parser from submodule:" Importance="high" 
+				 Condition="'$(LgbParserBuildSucceeded)' == 'true'" />
+		<Message Text="   📁 LGB-Parser.exe → Tools/" Importance="high" 
+				 Condition="'$(LgbParserBuildSucceeded)' == 'true'" />
+		<Message Text="   📚 Shared DLLs → Root directory" Importance="high" 
+				 Condition="'$(LgbParserBuildSucceeded)' == 'true'" />
+		<Message Text="   🏷️  Submodule commit: bf8f983 (v1.0.5~11)" Importance="high" 
+				 Condition="'$(LgbParserBuildSucceeded)' == 'true'" />
+		
+		<Warning Text="❌ LGB-Parser submodule not found or build failed" 
+				 Condition="'$(ShouldBuildLgbParser)' == 'false'" />
+		<Warning Text="❌ LGB-Parser build failed (exit code: $(LgbParserExitCode))" 
+				 Condition="'$(ShouldBuildLgbParser)' == 'true' And '$(LgbParserBuildSucceeded)' == 'false'" />
+		
+		<!-- ✅ HELP: Provide troubleshooting info -->
+		<Message Text="💡 To fix LGB-Parser submodule issues:" Importance="high" 
+				 Condition="'$(LgbParserBuildSucceeded)' != 'true'" />
+		<Message Text="   1. Initialize submodule: git submodule update --init --recursive" Importance="high" 
+				 Condition="'$(LgbParserBuildSucceeded)' != 'true'" />
+		<Message Text="   2. Update to latest: cd LGB-Parser && git pull origin main" Importance="high" 
+				 Condition="'$(LgbParserBuildSucceeded)' != 'true'" />
+		<Message Text="   3. Test build independently: cd LGB-Parser && dotnet build" Importance="high" 
+				 Condition="'$(LgbParserBuildSucceeded)' != 'true'" />
+
+	</Target>
+
+	<!-- Build and copy unluac -->
+	<Target Name="BuildAndCopyUnluac" AfterTargets="BuildAndCopyLgbParser">
+
+		<Message Text="🔧 Building unluac from submodule..." Importance="high" />
+
+		<PropertyGroup>
+			<UnluacSubmodulePath>$(MSBuildProjectDirectory)\unluac</UnluacSubmodulePath>
+			<UnluacBuildScript>$(UnluacSubmodulePath)\build.sh</UnluacBuildScript>
+			<UnluacBinJarPath>$(UnluacSubmodulePath)\bin\unluac.jar</UnluacBinJarPath>
+			<UnluacDestinationPath>$(OutputPath)Tools\unluac.jar</UnluacDestinationPath>
+		</PropertyGroup>
+
+		<!-- Check if submodule exists and has content -->
+		<Message Text="🔍 Checking unluac submodule at: $(UnluacSubmodulePath)" Importance="high" />
+
+		<!-- Initialize submodule if it doesn't exist or is empty -->
+		<Exec Command="git submodule update --init --recursive"
+			  ContinueOnError="true"
+			  WorkingDirectory="$(MSBuildProjectDirectory)"
+			  Condition="!Exists('$(UnluacSubmodulePath)\src')" />
+
+		<!-- Check if the submodule has source files -->
+		<ItemGroup>
+			<UnluacSourceFiles Include="$(UnluacSubmodulePath)\src\**\*.java" />
+		</ItemGroup>
+
+		<Message Text="📂 Found $(UnluacSourceFiles-&gt;Count()) Java source files in unluac submodule" Importance="high" />
+
+		<!-- Create Tools directory -->
+		<MakeDir Directories="$(OutputPath)Tools" />
+
+		<!-- Method 1: Try using the build.sh script (preferred) -->
+		<Message Text="🛠️ Attempting to build unluac using build.sh script..." Importance="high"
+				 Condition="Exists('$(UnluacBuildScript)') And '@(UnluacSourceFiles)' != ''" />
+
+		<!-- Try with bash (Git Bash, WSL, Linux, macOS) -->
+		<Exec Command="bash build.sh"
+			  ContinueOnError="true"
+			  WorkingDirectory="$(UnluacSubmodulePath)"
+			  Condition="Exists('$(UnluacBuildScript)') And '@(UnluacSourceFiles)' != ''" />
+
+		<!-- Try with sh if bash failed -->
+		<Exec Command="sh build.sh"
+			  ContinueOnError="true"
+			  WorkingDirectory="$(UnluacSubmodulePath)"
+			  Condition="Exists('$(UnluacBuildScript)') And '@(UnluacSourceFiles)' != '' And !Exists('$(UnluacBinJarPath)')" />
+
+		<!-- Method 2: Manual Java compilation if build.sh failed -->
+		<Message Text="🔨 build.sh failed, trying manual Java compilation..." Importance="high"
+				 Condition="'@(UnluacSourceFiles)' != '' And !Exists('$(UnluacBinJarPath)')" />
+
+		<!-- Create build directories -->
+		<MakeDir Directories="$(UnluacSubmodulePath)\build"
+				 Condition="'@(UnluacSourceFiles)' != '' And !Exists('$(UnluacBinJarPath)')" />
+		<MakeDir Directories="$(UnluacSubmodulePath)\bin"
+				 Condition="'@(UnluacSourceFiles)' != '' And !Exists('$(UnluacBinJarPath)')" />
+
+		<!-- Compile Java source files -->
+		<Exec Command="javac -deprecation -d build -sourcepath src src\unluac\*.java"
+			  ContinueOnError="true"
+			  WorkingDirectory="$(UnluacSubmodulePath)"
+			  Condition="'@(UnluacSourceFiles)' != '' And !Exists('$(UnluacBinJarPath)')" />
+
+		<!-- Create JAR file with manifest -->
+		<Exec Command="jar -cfm bin\unluac.jar src\unluac\Manifest.mf -C build ."
+			  ContinueOnError="true"
+			  WorkingDirectory="$(UnluacSubmodulePath)"
+			  Condition="Exists('$(UnluacSubmodulePath)\build') And !Exists('$(UnluacBinJarPath)')" />
+
+		<!-- Method 3: Look for pre-built JAR files -->
+		<ItemGroup Condition="!Exists('$(UnluacBinJarPath)')">
+			<PossibleUnluacJars Include="$(UnluacSubmodulePath)\**\unluac*.jar" />
+			<PossibleUnluacJars Include="$(UnluacSubmodulePath)\**\*.jar" />
+		</ItemGroup>
+
+		<PropertyGroup Condition="'@(PossibleUnluacJars)' != '' And !Exists('$(UnluacBinJarPath)')">
+			<UnluacBinJarPath>@(PossibleUnluacJars -&gt; '%(FullPath)' -&gt; FirstOrDefault())</UnluacBinJarPath>
+		</PropertyGroup>
+
+		<!-- Copy the JAR file to Tools directory -->
+		<Copy SourceFiles="$(UnluacBinJarPath)"
+			  DestinationFiles="$(UnluacDestinationPath)"
+			  SkipUnchangedFiles="true"
+			  Condition="Exists('$(UnluacBinJarPath)')" />
+
+		<!-- Report build results -->
+		<Message Text="Successfully built and copied unluac.jar to Tools directory!"
+				 Importance="high"
+				 Condition="Exists('$(UnluacDestinationPath)')" />
+
+		<Message Text="unluac.jar available at: $(UnluacDestinationPath)"
+				 Importance="high"
+				 Condition="Exists('$(UnluacDestinationPath)')" />
+
+		<Warning Text="unluac.jar could not be built automatically. Check if Java compiler (javac) is installed and in PATH."
+				 Condition="'@(UnluacSourceFiles)' != '' And !Exists('$(UnluacDestinationPath)')" />
+
+		<Warning Text="unluac submodule appears to be empty. Run 'git submodule update --init --recursive' manually."
+				 Condition="'@(UnluacSourceFiles)' == ''" />
+
+		<Message Text="Manual setup: You can also download unluac.jar from https://sourceforge.net/projects/unluac/ and place it in the Tools directory"
+				 Importance="high"
+				 Condition="!Exists('$(UnluacDestinationPath)')" />
+
+	</Target>
 </Project>
