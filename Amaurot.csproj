@@ -161,13 +161,13 @@
 		<Folder Include="Tools\" />
 	</ItemGroup>
 
-	<!-- ✅ CORRECTED: Build and copy LGB-Parser from submodule (not sibling directory) -->
+	<!-- ✅ CORRECTED: Build and copy LGB-Parser from submodule -->
 	<Target Name="BuildAndCopyLgbParser" AfterTargets="Build">
 
 		<Message Text="🔧 Building LGB-Parser from submodule..." Importance="high" />
 
 		<PropertyGroup>
-			<!-- ✅ FIXED: Use submodule path (not sibling directory) -->
+			<!-- ✅ FIXED: Use submodule path -->
 			<LgbParserProjectPath>$(MSBuildProjectDirectory)\LGB-Parser</LgbParserProjectPath>
 			<LgbParserBinPath>$(LgbParserProjectPath)\bin\$(Configuration)\net8.0</LgbParserBinPath>
 			<LgbParserExePath>$(LgbParserBinPath)\LGB-Parser.exe</LgbParserExePath>
@@ -177,12 +177,12 @@
 		<!-- ✅ ENHANCED: Check if LGB-Parser submodule exists -->
 		<Message Text="🔍 Checking LGB-Parser submodule..." Importance="high" />
 		<Message Text="Looking for: $(LgbParserProjectPath)" Importance="high" />
-		
-		<Warning Text="⚠️ LGB-Parser submodule not found at: $(LgbParserProjectPath)" 
+
+		<Warning Text="⚠️ LGB-Parser submodule not found at: $(LgbParserProjectPath)"
 				 Condition="!Exists('$(LgbParserCsprojPath)')" />
-		<Warning Text="ℹ️ Expected LGB-Parser.csproj at: $(LgbParserCsprojPath)" 
+		<Warning Text="ℹ️ Expected LGB-Parser.csproj at: $(LgbParserCsprojPath)"
 				 Condition="!Exists('$(LgbParserCsprojPath)')" />
-		<Warning Text="💡 Run 'git submodule update --init --recursive' to initialize submodule" 
+		<Warning Text="💡 Run 'git submodule update --init --recursive' to initialize submodule"
 				 Condition="!Exists('$(LgbParserCsprojPath)')" />
 
 		<!-- ✅ CONDITIONAL: Only proceed if project exists -->
@@ -192,25 +192,25 @@
 		</PropertyGroup>
 
 		<!-- Build LGB-Parser if it exists -->
-		<Message Text="🧹 Cleaning LGB-Parser..." Importance="high" 
+		<Message Text="🧹 Cleaning LGB-Parser..." Importance="high"
 				 Condition="'$(ShouldBuildLgbParser)' == 'true'" />
-		<Exec Command="dotnet clean &quot;$(LgbParserCsprojPath)&quot; --configuration $(Configuration)" 
-			  ContinueOnError="true" 
+		<Exec Command="dotnet clean &quot;$(LgbParserCsprojPath)&quot; --configuration $(Configuration)"
+			  ContinueOnError="true"
 			  WorkingDirectory="$(LgbParserProjectPath)"
 			  Condition="'$(ShouldBuildLgbParser)' == 'true'" />
 
-		<Message Text="🔨 Building LGB-Parser (submodule commit: bf8f983)..." Importance="high" 
+		<Message Text="🔨 Building LGB-Parser (submodule commit: bf8f983)..." Importance="high"
 				 Condition="'$(ShouldBuildLgbParser)' == 'true'" />
-		<Exec Command="dotnet build &quot;$(LgbParserCsprojPath)&quot; --configuration $(Configuration) --no-restore" 
-			  ContinueOnError="true" 
+		<Exec Command="dotnet build &quot;$(LgbParserCsprojPath)&quot; --configuration $(Configuration) --no-restore"
+			  ContinueOnError="true"
 			  WorkingDirectory="$(LgbParserProjectPath)"
 			  Condition="'$(ShouldBuildLgbParser)' == 'true'">
 			<Output TaskParameter="ExitCode" PropertyName="LgbParserExitCode" />
 		</Exec>
 
 		<!-- ✅ DEBUG: Show build result -->
-		<Message Text="📊 LGB-Parser build result: ExitCode=$(LgbParserExitCode), Exe exists: $(Exists('$(LgbParserExePath)'))" 
-				 Importance="high" 
+		<Message Text="📊 LGB-Parser build result: ExitCode=$(LgbParserExitCode), Exe exists: $(Exists('$(LgbParserExePath)'))"
+				 Importance="high"
 				 Condition="'$(ShouldBuildLgbParser)' == 'true'" />
 
 		<!-- Create directories -->
@@ -228,47 +228,47 @@
 			<LgbParserEssentialFiles Include="$(LgbParserExePath)" />
 			<LgbParserEssentialFiles Include="$(LgbParserBinPath)\LGB-Parser.runtimeconfig.json" Condition="Exists('$(LgbParserBinPath)\LGB-Parser.runtimeconfig.json')" />
 			<LgbParserEssentialFiles Include="$(LgbParserBinPath)\LGB-Parser.deps.json" Condition="Exists('$(LgbParserBinPath)\LGB-Parser.deps.json')" />
-			
+
 			<!-- All DLLs for root directory -->
 			<LgbParserDlls Include="$(LgbParserBinPath)\*.dll" />
 		</ItemGroup>
 
 		<!-- ✅ COPY: Essential files to Tools directory -->
-		<Copy SourceFiles="@(LgbParserEssentialFiles)" 
-			  DestinationFolder="$(OutputPath)Tools" 
-			  SkipUnchangedFiles="true" 
+		<Copy SourceFiles="@(LgbParserEssentialFiles)"
+			  DestinationFolder="$(OutputPath)Tools"
+			  SkipUnchangedFiles="true"
 			  Condition="'$(LgbParserBuildSucceeded)' == 'true'" />
 
 		<!-- ✅ COPY: DLLs to root directory (only if they don't exist) -->
-		<Copy SourceFiles="%(LgbParserDlls.Identity)" 
-			  DestinationFolder="$(OutputPath)" 
-			  SkipUnchangedFiles="true" 
+		<Copy SourceFiles="%(LgbParserDlls.Identity)"
+			  DestinationFolder="$(OutputPath)"
+			  SkipUnchangedFiles="true"
 			  ContinueOnError="true"
 			  Condition="'$(LgbParserBuildSucceeded)' == 'true' And !Exists('$(OutputPath)%(LgbParserDlls.Filename)%(LgbParserDlls.Extension)')" />
 
 		<!-- ✅ REPORTING: Detailed success/failure messages -->
-		<Message Text="✅ Successfully built and copied LGB-Parser from submodule:" Importance="high" 
+		<Message Text="✅ Successfully built and copied LGB-Parser from submodule:" Importance="high"
 				 Condition="'$(LgbParserBuildSucceeded)' == 'true'" />
-		<Message Text="   📁 LGB-Parser.exe → Tools/" Importance="high" 
+		<Message Text="   📁 LGB-Parser.exe -&gt; Tools/" Importance="high"
 				 Condition="'$(LgbParserBuildSucceeded)' == 'true'" />
-		<Message Text="   📚 Shared DLLs → Root directory" Importance="high" 
+		<Message Text="   📚 Shared DLLs -&gt; Root directory" Importance="high"
 				 Condition="'$(LgbParserBuildSucceeded)' == 'true'" />
-		<Message Text="   🏷️  Submodule commit: bf8f983 (v1.0.5~11)" Importance="high" 
+		<Message Text="   🏷️  Submodule commit: bf8f983 (v1.0.5~11)" Importance="high"
 				 Condition="'$(LgbParserBuildSucceeded)' == 'true'" />
-		
-		<Warning Text="❌ LGB-Parser submodule not found or build failed" 
+
+		<Warning Text="❌ LGB-Parser submodule not found or build failed"
 				 Condition="'$(ShouldBuildLgbParser)' == 'false'" />
-		<Warning Text="❌ LGB-Parser build failed (exit code: $(LgbParserExitCode))" 
+		<Warning Text="❌ LGB-Parser build failed (exit code: $(LgbParserExitCode))"
 				 Condition="'$(ShouldBuildLgbParser)' == 'true' And '$(LgbParserBuildSucceeded)' == 'false'" />
-		
+
 		<!-- ✅ HELP: Provide troubleshooting info -->
-		<Message Text="💡 To fix LGB-Parser submodule issues:" Importance="high" 
+		<Message Text="💡 To fix LGB-Parser submodule issues:" Importance="high"
 				 Condition="'$(LgbParserBuildSucceeded)' != 'true'" />
-		<Message Text="   1. Initialize submodule: git submodule update --init --recursive" Importance="high" 
+		<Message Text="   1. Initialize submodule: git submodule update --init --recursive" Importance="high"
 				 Condition="'$(LgbParserBuildSucceeded)' != 'true'" />
-		<Message Text="   2. Update to latest: cd LGB-Parser && git pull origin main" Importance="high" 
+		<Message Text="   2. Update to latest: cd LGB-Parser &amp;&amp; git pull origin main" Importance="high"
 				 Condition="'$(LgbParserBuildSucceeded)' != 'true'" />
-		<Message Text="   3. Test build independently: cd LGB-Parser && dotnet build" Importance="high" 
+		<Message Text="   3. Test build independently: cd LGB-Parser &amp;&amp; dotnet build" Importance="high"
 				 Condition="'$(LgbParserBuildSucceeded)' != 'true'" />
 
 	</Target>
