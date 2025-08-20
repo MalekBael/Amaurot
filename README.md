@@ -1,4 +1,4 @@
-﻿# Amaurot - FFXIV Map Editor
+﻿# Amaurot - Quest Editor
 
 A work in progress tool for visualizing and navigating Final Fantasy XIV map data, territories, quests, NPCs, and game content.
 
