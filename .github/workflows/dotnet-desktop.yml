@@ -12,7 +12,7 @@ jobs:
   build:
     strategy:
       matrix:
-        configuration: [Release]
+        configuration: [Debug]
 
     runs-on: windows-latest
 
@@ -260,9 +260,9 @@ jobs:
       uses: softprops/action-gh-release@v1
       with:
         tag_name: ${{ steps.version.outputs.VERSION }}
-        name: "Amaurot Map Editor ${{ steps.version.outputs.VERSION }}"
+        name: "Amaurot Quest Editor ${{ steps.version.outputs.VERSION }}"
         body: |
-          ## Amaurot FFXIV Map Editor ${{ steps.version.outputs.VERSION }}
+          ## Amaurot FFXIV Quest Editor ${{ steps.version.outputs.VERSION }}
           
           **Auto-generated release from commit:** [`${{ steps.commit.outputs.SHORT_SHA }}`](${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }})
           

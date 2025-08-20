@@ -51,21 +51,12 @@ namespace Amaurot.Services
                 string appDirectory = GetApplicationDirectory();
                 string appRootSettings = Path.Combine(appDirectory, "settings.json");
                 
-                if (CanWriteToDirectory(appDirectory))
+                if (!Directory.Exists(appDirectory))
                 {
-                    return appRootSettings;
+                    Directory.CreateDirectory(appDirectory);
                 }
                 
-                string userDirectory = GetUserDirectory();
-                string userSettings = Path.Combine(userDirectory, ".ffxiv-map-editor", "settings.json");
-                
-                if (CanWriteToDirectory(Path.GetDirectoryName(userSettings)!))
-                {
-                    return userSettings;
-                }
-                
-                string tempSettings = Path.Combine(Path.GetTempPath(), "ffxiv-map-editor", "settings.json");
-                return tempSettings;
+                return appRootSettings;
             }
             catch (Exception)
             {

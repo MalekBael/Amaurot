@@ -90,11 +90,7 @@ namespace Amaurot
 
         private void UpdateSettingsLocationText()
         {
-            string settingsPath = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                "FFXIVMapEditor",
-                "settings.json");
-
+            string settingsPath = _settingsService.GetSettingsLocation();
             SettingsLocationText.Text = $"Settings are stored at: {settingsPath}";
         }
 
