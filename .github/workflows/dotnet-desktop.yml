@@ -1,4 +1,4 @@
-﻿name: Build and Release Amaurot Quest Editor
+name: Build and Release Amaurot Quest Editor
 permissions:
   contents: write
 
@@ -217,7 +217,8 @@ jobs:
         Get-ChildItem "./publish/win-x64" -File | Select-Object Name, Length | Format-Table
         Write-Host "Tools directory:"
         if (Test-Path "./publish/win-x64/Tools") {
-          Get-ChildItem "./publish/win-x64/Tools" | Format-Table Name, Length
+          $toolsSize = (Get-ChildItem "./publish/win-x64/Tools" -Recurse | Measure-Object -Property Length -Sum).Sum
+          Write-Host "   Tools: $([math]::Round($toolsSize/1MB, 2)) MB"
         }
         Write-Host "Directories:"
         Get-ChildItem "./publish/win-x64" -Directory | Select-Object Name | Format-Table
@@ -273,7 +274,7 @@ jobs:
       uses: softprops/action-gh-release@v1
       with:
         tag_name: ${{ steps.version.outputs.VERSION }}
-        name: "Amaurot Map Editor ${{ steps.version.outputs.VERSION }}"
+        name: "Amaurot Quest Editor ${{ steps.version.outputs.VERSION }}"
         body: |
           ## Amaurot FFXIV Map Editor ${{ steps.version.outputs.VERSION }}
           
