@@ -104,8 +104,8 @@ jobs:
           Write-Host "⚠️ LGB-Parser.exe not in root, searching..."
           
           $lgbParserLocations = @(
-            "./bin/Release/net8.0-windows/win-x64/LGB-Parser.exe",
-            "./LGB-Parser/bin/Release/net8.0/LGB-Parser.exe"
+            "./bin/${{ matrix.configuration }}/net8.0-windows/LGB-Parser.exe",
+            "./LGB-Parser/bin/${{ matrix.configuration }}/net8.0/LGB-Parser.exe"
           )
           
           foreach ($location in $lgbParserLocations) {
@@ -132,7 +132,7 @@ jobs:
         New-Item -ItemType Directory -Force -Path ./publish/win-x64/Tools
         
         $unluacLocations = @(
-          "./bin/Release/net8.0-windows/win-x64/Tools/unluac.jar",
+          "./bin/${{ matrix.configuration }}/net8.0-windows/Tools/unluac.jar",
           "./Tools/unluac.jar",
           "./unluac/bin/unluac.jar"
         )
@@ -145,21 +145,12 @@ jobs:
           }
         }
         
-        # Explicitly copy LGB-Parser.dll if it exists
-        $lgbDllPath = "$lgbBuildDir/LGB-Parser.dll"
-        if (Test-Path $lgbDllPath) {
-          Copy-Item $lgbDllPath "./publish/win-x64/" -Force
-          Write-Host "✅ Copied LGB-Parser.dll"
-        } else {
-          Write-Host "❌ LGB-Parser.dll not found at: $lgbDllPath"
-        }
-        
         # Copy all other LGB-Parser dependency DLLs
         Write-Host "🔧 Copying LGB-Parser dependencies..."
         
         $lgbDepLocations = @(
-          "./bin/Release/net8.0-windows/win-x64/",
-          "./LGB-Parser/bin/Release/net8.0/"
+          "./bin/${{ matrix.configuration }}/net8.0-windows/",
+          "./LGB-Parser/bin/${{ matrix.configuration }}/net8.0/"
         )
         
         foreach ($depDir in $lgbDepLocations) {
@@ -212,16 +203,16 @@ jobs:
     - name: Create Windows ZIP
       run: |
         $version = "v1.0.${{ github.run_number }}"
-        Compress-Archive -Path ./publish/win-x64/* -DestinationPath "./Amaurot-Map-Editor-$version-win-x64.zip" -Force
+        Compress-Archive -Path ./publish/win-x64/* -DestinationPath "./Amaurot-Map-Editor-$version-win-x64-debug.zip" -Force
         
-        $zipSize = (Get-Item "./Amaurot-Map-Editor-$version-win-x64.zip").Length
-        Write-Host "✅ Created clean release archive: Amaurot-Map-Editor-$version-win-x64.zip ($([math]::Round($zipSize/1MB, 2)) MB)"
+        $zipSize = (Get-Item "./Amaurot-Map-Editor-$version-win-x64-debug.zip").Length
+        Write-Host "✅ Created clean debug archive: Amaurot-Map-Editor-$version-win-x64-debug.zip ($([math]::Round($zipSize/1MB, 2)) MB)"
 
     - name: Upload Windows artifacts
       uses: actions/upload-artifact@v4
       with:
         name: Amaurot-Map-Editor-Windows-${{ matrix.configuration }}
-        path: ./Amaurot-Map-Editor-*-win-x64.zip
+        path: ./Amaurot-Map-Editor-*-win-x64-debug.zip
 
     - name: Upload Windows executables
       uses: actions/upload-artifact@v4
@@ -243,7 +234,7 @@ jobs:
     - name: Download Windows artifacts
       uses: actions/download-artifact@v4
       with:
-        name: Amaurot-Map-Editor-Windows-Release
+        name: Amaurot-Map-Editor-Windows-Debug
         path: ./release-assets/
 
     - name: Generate version number
@@ -260,31 +251,32 @@ jobs:
       uses: softprops/action-gh-release@v1
       with:
         tag_name: ${{ steps.version.outputs.VERSION }}
-        name: "Amaurot Quest Editor ${{ steps.version.outputs.VERSION }}"
+        name: "Amaurot Quest Editor ${{ steps.version.outputs.VERSION }} (Debug)"
         body: |
-          ## Amaurot FFXIV Quest Editor ${{ steps.version.outputs.VERSION }}
+          ## Amaurot FFXIV Quest Editor ${{ steps.version.outputs.VERSION }} (Debug Build)
           
-          **Auto-generated release from commit:** [`${{ steps.commit.outputs.SHORT_SHA }}`](${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }})
+          **Auto-generated debug release from commit:** [`${{ steps.commit.outputs.SHORT_SHA }}`](${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }})
           
           **Latest changes:** ${{ steps.commit.outputs.COMMIT_MESSAGE }}
           
-          ### 🎯 Clean Framework-Dependent Build
-          This release uses framework-dependent deployment for a cleaner package:
+          ### 🐛 Debug Framework-Dependent Build
+          This is a **DEBUG BUILD** for development and testing purposes:
           - **Requires**: .NET 8.0 Desktop Runtime
           - **Download Runtime**: https://dotnet.microsoft.com/download/dotnet/8.0
+          - **Debug Features**: Enhanced logging, debug symbols, unoptimized code
           
           ### 📦 Package Contents
-          - `Amaurot.exe` - Main application  
+          - `Amaurot.exe` - Main application (Debug build)
           - `LGB-Parser.exe` - LGB file parser
           - `Libs/` - SQLite database and data files
           - `Definitions/` - FFXIV data definitions  
           - `Tools/unluac.jar` - Lua decompiler
-          - Essential application DLLs only
+          - Debug symbols and development DLLs
           
           ---
         draft: false
-        prerelease: false
+        prerelease: true
         files: |
-          ./release-assets/Amaurot-Map-Editor-${{ steps.version.outputs.VERSION }}-win-x64.zip
+          ./release-assets/Amaurot-Map-Editor-${{ steps.version.outputs.VERSION }}-win-x64-debug.zip
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
