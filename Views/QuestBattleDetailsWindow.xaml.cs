@@ -66,14 +66,12 @@ namespace Amaurot
             AddDetailRow("Layer Name:", questBattleInfo.LayerName, row++);
             AddDetailRow("Asset Type:", questBattleInfo.AssetType, row++);
 
-            // Script section with enhanced functionality
             if (!string.IsNullOrEmpty(questBattleInfo.Source))
             {
                 AddSectionHeader("Script Information", row++);
                 AddQuestBattleScriptRowWithButtons("Script File:", questBattleInfo.Source, questBattleInfo, row++);
             }
 
-            // Territory information
             if (questBattleInfo.TerritoryId > 0 || !string.IsNullOrEmpty(questBattleInfo.TerritoryName))
             {
                 AddSectionHeader("Territory Information", row++);
@@ -94,7 +92,6 @@ namespace Amaurot
                 }
             }
 
-            // Technical information
             AddSectionHeader("Technical Information", row++);
 
             if (questBattleInfo.IconId > 0)
@@ -107,7 +104,6 @@ namespace Amaurot
                 AddDetailRow("Icon Path:", questBattleInfo.IconPath, row++);
             }
 
-            // Coordinate information (if available)
             if (questBattleInfo.MapX != 0 || questBattleInfo.MapY != 0 || questBattleInfo.MapZ != 0)
             {
                 AddSectionHeader("Location", row++);
@@ -192,7 +188,6 @@ namespace Amaurot
                         valuePanel.Children.Add(vsButton);
                     }
 
-                    // Add navigation button to show location on map
                     if (questBattleInfo.MapId > 0)
                     {
                         var mapButton = new System.Windows.Controls.Button
@@ -212,7 +207,6 @@ namespace Amaurot
                     }
                 }
 
-                // Status indicator
                 if (scriptInfo.Exists)
                 {
                     var infoText = new TextBlock
@@ -374,7 +368,6 @@ namespace Amaurot
 
                 mainWindow.TerritoryList.SelectedItem = targetTerritory;
 
-                // Add quest battle marker to map
                 AddQuestBattleMarkerToMap(questBattleInfo, mainWindow);
 
                 if (DebugModeManager.IsDebugModeEnabled)
@@ -416,7 +409,7 @@ namespace Amaurot
             {
                 var questBattleMarker = new MapMarker
                 {
-                    Id = 2000000 + questBattleInfo.QuestBattleId, // Use different ID range for quest battles
+                    Id = 2000000 + questBattleInfo.QuestBattleId,        
                     MapId = questBattleInfo.MapId,
                     PlaceNameId = 0,
                     PlaceName = $"{questBattleInfo.QuestBattleName} (Quest Battle)",

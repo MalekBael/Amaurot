@@ -164,6 +164,7 @@
 		</None>
 	</ItemGroup>
 	<ItemGroup>
+		<Folder Include="Styles\" />
 		<Folder Include="Resources\" />
 	</ItemGroup>
 

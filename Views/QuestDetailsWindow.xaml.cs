@@ -231,7 +231,7 @@ namespace Amaurot
                 {
                     var importButton = new System.Windows.Controls.Button
                     {
-                        Content = "📥 Import Script",
+                        Content = " Import Script",
                         Padding = new Thickness(8, 4, 8, 4),
                         Background = new SolidColorBrush(System.Windows.Media.Color.FromRgb(255, 140, 0)),  
                         Foreground = new SolidColorBrush(Colors.White),
@@ -310,7 +310,7 @@ namespace Amaurot
                 {
                     var infoText = new TextBlock
                     {
-                        Text = "⚠ Script available in generated output",
+                        Text = " Script available in generated output",
                         FontSize = 10,
                         Foreground = new SolidColorBrush(Colors.Orange),
                         VerticalAlignment = VerticalAlignment.Center,
@@ -337,7 +337,7 @@ namespace Amaurot
             {
                 var infoText = new TextBlock
                 {
-                    Text = "⚠ Sapphire path not configured",
+                    Text = " Sapphire path not configured",
                     FontSize = 10,
                     Foreground = new SolidColorBrush(Colors.Orange),
                     VerticalAlignment = VerticalAlignment.Center,
@@ -379,7 +379,7 @@ namespace Amaurot
                 if (importResult.Success)
                 {
                     System.Windows.MessageBox.Show(
-                        $"✅ {importResult.Message}\n\n" +
+                        $" {importResult.Message}\n\n" +
                         $"The script is now available in your Sapphire repository and can be opened for editing.",
                         "Import Successful",
                         MessageBoxButton.OK,
@@ -390,7 +390,7 @@ namespace Amaurot
                 else
                 {
                     System.Windows.MessageBox.Show(
-                        $"❌ Import failed:\n\n{importResult.ErrorMessage}",
+                        $" Import failed:\n\n{importResult.ErrorMessage}",
                         "Import Failed",
                         MessageBoxButton.OK,
                         MessageBoxImage.Error);
@@ -399,7 +399,7 @@ namespace Amaurot
             catch (Exception ex)
             {
                 System.Windows.MessageBox.Show(
-                    $"❌ An error occurred during import:\n\n{ex.Message}",
+                    $" An error occurred during import:\n\n{ex.Message}",
                     "Import Error",
                     MessageBoxButton.OK,
                     MessageBoxImage.Error);
@@ -439,20 +439,13 @@ namespace Amaurot
             }
             else
             {
-                success = true;
-                foreach (var file in scriptFiles)
+                if (scriptFiles.Length > 1)
                 {
-                    var fileSuccess = _questScriptService.OpenInVisualStudio(file);
-                    if (!fileSuccess)
-                    {
-                        success = false;
-                        break;
-                    }
-                    
-                    if (scriptFiles.Length > 1)
-                    {
-                        System.Threading.Thread.Sleep(500);
-                    }
+                    success = _questScriptService.OpenMultipleInVisualStudio(scriptFiles);
+                }
+                else
+                {
+                    success = _questScriptService.OpenInVisualStudio(scriptFiles[0]);
                 }
             }
 
@@ -465,6 +458,12 @@ namespace Amaurot
 
                 System.Windows.MessageBox.Show($"Failed to open script files in {editorName}.\n\n{commandHint}",
                                "Error Opening Scripts", MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
+            else
+            {
+                string editorShortName = useVSCode ? "VS Code" : "Visual Studio";
+                var fileCount = scriptFiles.Length;
+                _logDebug?.Invoke($"Opened {fileCount} file(s) for {scriptInfo.QuestIdString} in {editorShortName}");
             }
         }
 

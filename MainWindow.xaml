@@ -9,11 +9,35 @@
         Height="1200"
         Width="2000"
         WindowStartupLocation="CenterScreen"
-        Icon="amaurot.ico">
+        Icon="amaurot.ico"
+        FontFamily="Segoe UI">
 
     <!--  Window Resources with the converter -->
     <Window.Resources>
         <local:QuestHasLocationConverter x:Key="QuestHasLocationConverter" />
+
+        <!-- Modern ListBoxItem Style for better spacing -->
+        <Style x:Key="ModernListBoxItem" TargetType="ListBoxItem">
+            <Setter Property="Padding" Value="8,6" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ListBoxItem">
+                        <Border Background="{TemplateBinding Background}"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="Background" Value="#FFF5F5F5" />
+                            </Trigger>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter Property="Background" Value="#FFE3F2FD" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
     </Window.Resources>
 
     <Grid>
@@ -114,7 +138,8 @@
                           ToolTip="Hide territories with duplicate territory IDs, keeping only the first occurrence" />
                 <ListBox x:Name="TerritoryList"
                          ItemsSource="{Binding FilteredTerritories}"
-                         SelectionChanged="TerritoryList_SelectionChanged">
+                         SelectionChanged="TerritoryList_SelectionChanged"
+                         ItemContainerStyle="{StaticResource ModernListBoxItem}">
                     <ListBox.ItemTemplate>
                         <DataTemplate>
                             <TextBlock Text="{Binding}" />
@@ -252,7 +277,8 @@
                          MouseDoubleClick="QuestList_MouseDoubleClick"
                          Margin="2"
                          ScrollViewer.VerticalScrollBarVisibility="Auto"
-                         ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                         ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                         ItemContainerStyle="{StaticResource ModernListBoxItem}">
                     <ListBox.ItemTemplate>
                         <DataTemplate>
                             <Grid>
@@ -329,7 +355,8 @@
                          MouseDoubleClick="NpcList_MouseDoubleClick"
                          Margin="2"
                          ScrollViewer.VerticalScrollBarVisibility="Auto"
-                         ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                         ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                         ItemContainerStyle="{StaticResource ModernListBoxItem}">
                     <ListBox.ItemTemplate>
                         <DataTemplate>
                             <StackPanel Margin="2">
@@ -359,7 +386,8 @@
                          SelectionChanged="BNpcList_SelectionChanged"
                          Margin="2"
                          ScrollViewer.VerticalScrollBarVisibility="Auto"
-                         ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                         ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                         ItemContainerStyle="{StaticResource ModernListBoxItem}">
                     <ListBox.ItemTemplate>
                         <DataTemplate>
                             <TextBlock Text="{Binding}" ToolTip="{Binding BNpcName}" />
@@ -385,7 +413,8 @@
                          SelectionChanged="FateList_SelectionChanged"
                          Margin="2"
                          ScrollViewer.VerticalScrollBarVisibility="Auto"
-                         ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                         ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                         ItemContainerStyle="{StaticResource ModernListBoxItem}">
                     <ListBox.ItemTemplate>
                         <DataTemplate>
                             <TextBlock Text="{Binding}" ToolTip="{Binding Name}" />
@@ -408,7 +437,8 @@
                          ToolTip="Search Eobjs by name or ID" />
                 <ListBox Name="EobjList" Margin="2"
                          ScrollViewer.VerticalScrollBarVisibility="Auto"
-                         ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                         ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                         ItemContainerStyle="{StaticResource ModernListBoxItem}">
                     <ListBox.ItemTemplate>
                         <DataTemplate>
                             <StackPanel Margin="2">
@@ -420,8 +450,6 @@
                 </ListBox>
             </DockPanel>
 
-            <!-- ✅ REMOVED: EventItem Panel completely removed -->
-
             <!-- InstanceContent Panel - Updated with TabControl -->
             <DockPanel x:Name="InstanceContentPanel" Visibility="Visible" Margin="2">
                 <Border DockPanel.Dock="Top" Background="LightBlue" Padding="5" Margin="0,0,0,2">
@@ -430,7 +458,7 @@
                         <TextBlock x:Name="InstanceContentCountText" Text="(0)" Margin="5,0,0,0" Foreground="Gray" VerticalAlignment="Center" />
                     </StackPanel>
                 </Border>
-                
+
                 <!-- TabControl to separate Instance Content and Quest Battles -->
                 <TabControl Margin="2">
                     <!-- Instance Content Tab -->
@@ -445,7 +473,8 @@
                                      SelectionChanged="InstanceContentList_SelectionChanged"
                                      Margin="2"
                                      ScrollViewer.VerticalScrollBarVisibility="Auto"
-                                     ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                                     ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                     ItemContainerStyle="{StaticResource ModernListBoxItem}">
                                 <ListBox.ItemTemplate>
                                     <DataTemplate>
                                         <Grid>
@@ -488,7 +517,7 @@
                             </ListBox>
                         </DockPanel>
                     </TabItem>
-                    
+
                     <!-- Quest Battles Tab -->
                     <TabItem Header="Quest Battles">
                         <DockPanel>
@@ -505,7 +534,8 @@
                                      SelectionChanged="QuestBattleList_SelectionChanged"
                                      Margin="2"
                                      ScrollViewer.VerticalScrollBarVisibility="Auto"
-                                     ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                                     ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                     ItemContainerStyle="{StaticResource ModernListBoxItem}">
                                 <ListBox.ItemTemplate>
                                     <DataTemplate>
                                         <Grid>
