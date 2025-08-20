@@ -21,14 +21,13 @@ namespace Amaurot.Services
     public class DataLoaderService
     {
         private readonly ARealmReversed? _realm;
-        private readonly Action<string> _logDebug;
         private readonly QuestLocationService? _questLocationService;
 
-        public DataLoaderService(ARealmReversed? realm, Action<string> logDebug)
+        public DataLoaderService(ARealmReversed? realm)
         {
             _realm = realm;
-            _logDebug = logDebug;
-            _questLocationService = new QuestLocationService(_realm, _logDebug);
+            // ✅ FIXED: Use parameterless constructor
+            _questLocationService = new QuestLocationService(_realm);
         }
 
         public async Task<List<QuestInfo>> LoadQuestsAsync()
@@ -41,17 +40,16 @@ namespace Amaurot.Services
                 {
                     if (_realm != null)
                     {
-                        _logDebug("Loading quests from SaintCoinach...");
+                        DebugModeManager.LogDataLoading("quests", 0, "Starting from SaintCoinach...");
                         var questSheet = _realm.GameData.GetSheet<Quest>();
 
                         int processedCount = 0;
                         int errorCount = 0;
                         int totalCount = questSheet.Count;
 
-                        _logDebug($"Found {totalCount} quests in sheet");
+                        DebugModeManager.LogDebug($"Found {totalCount} quests in sheet");
 
-                        foreach (var quest in questSheet
-                        .OrderBy(q => q.Key))
+                        foreach (var quest in questSheet.OrderBy(q => q.Key))
                         {
                             try
                             {
@@ -136,12 +134,13 @@ namespace Amaurot.Services
 
                                 if (processedCount <= 10)
                                 {
-                                    _logDebug($"  Added quest: '{questName}' (ID: {questId}) Location: '{questInfo.PlaceName}' MapId: {questInfo.MapId}");
+                                    DebugModeManager.LogQuestProcessing(questId, questName, "loaded", true, 
+                                        $"Location: '{questInfo.PlaceName}' MapId: {questInfo.MapId}");
                                 }
 
                                 if (processedCount % 1000 == 0)
                                 {
-                                    _logDebug($"Processed {processedCount}/{totalCount} quests (errors: {errorCount})...");
+                                    DebugModeManager.LogDebug($"Processed {processedCount}/{totalCount} quests (errors: {errorCount})...");
                                 }
                             }
                             catch (Exception ex)
@@ -149,18 +148,18 @@ namespace Amaurot.Services
                                 errorCount++;
                                 if (errorCount <= 10)
                                 {
-                                    _logDebug($"Error processing quest {quest?.Key}: {ex.Message}");
+                                    DebugModeManager.LogError($"Error processing quest {quest?.Key}: {ex.Message}");
                                 }
                             }
                         }
 
                         tempQuests.Sort((a, b) => a.Id.CompareTo(b.Id));
-                        _logDebug($"Loaded {tempQuests.Count} quests successfully (skipped {errorCount} problematic quests)");
+                        DebugModeManager.LogDataLoading("quests", tempQuests.Count, $"Skipped {errorCount} problematic quests");
                     }
                 }
                 catch (Exception ex)
                 {
-                    _logDebug($"Error loading quests: {ex.Message}");
+                    DebugModeManager.LogError($"Error loading quests: {ex.Message}");
                 }
 
                 return tempQuests;
@@ -244,7 +243,7 @@ namespace Amaurot.Services
             }
             catch (Exception ex)
             {
-                _logDebug($"Error extracting NPC data: {ex.Message}");
+                DebugModeManager.LogError($"Error extracting NPC data: {ex.Message}");
                 return null;
             }
         }
@@ -255,7 +254,7 @@ namespace Amaurot.Services
 
             if (isDebugQuest)
             {
-                _logDebug($"=== Extracting details for Quest {questInfo.Id}: '{questInfo.Name}' ===");
+                DebugModeManager.LogDebug($"=== Extracting details for Quest {questInfo.Id}: '{questInfo.Name}' ===");
             }
 
             try
@@ -267,7 +266,7 @@ namespace Amaurot.Services
 
                     if (isDebugQuest)
                     {
-                        _logDebug($"  QuestIdString: '{questInfo.QuestIdString}'");
+                        DebugModeManager.LogDebug($"  QuestIdString: '{questInfo.QuestIdString}'");
                     }
                 }
             }
@@ -275,7 +274,7 @@ namespace Amaurot.Services
             {
                 if (isDebugQuest)
                 {
-                    _logDebug($"  QuestIdString extraction failed: {ex.Message}");
+                    DebugModeManager.LogDebug($"  QuestIdString extraction failed: {ex.Message}");
                 }
             }
 
@@ -283,7 +282,7 @@ namespace Amaurot.Services
             {
                 if (isDebugQuest)
                 {
-                    _logDebug($"  Extracting Quest Giver from index 37 using research method...");
+                    DebugModeManager.LogDebug($"  Extracting Quest Giver from index 37 using research method...");
                 }
 
                 var questGiverValue = quest[37];
@@ -291,7 +290,7 @@ namespace Amaurot.Services
                 {
                     if (isDebugQuest)
                     {
-                        _logDebug($"  Quest Giver NPC ID from index 37: {questGiverValue}");
+                        DebugModeManager.LogDebug($"  Quest Giver NPC ID from index 37: {questGiverValue}");
                     }
 
                     if (uint.TryParse(questGiverValue.ToString(), out uint npcId) && npcId > 0)
@@ -303,12 +302,12 @@ namespace Amaurot.Services
 
                             if (isDebugQuest)
                             {
-                                _logDebug($"  ✅ Research-based Quest Giver: {questGiver.NpcName} at {questGiver.TerritoryName} ({questGiver.MapX:F1}, {questGiver.MapY:F1})");
+                                DebugModeManager.LogDebug($"  Research-based Quest Giver: {questGiver.NpcName} at {questGiver.TerritoryName} ({questGiver.MapX:F1}, {questGiver.MapY:F1})");
                             }
                         }
                         else if (isDebugQuest)
                         {
-                            _logDebug($"  ⚠️ Could not extract coordinates for NPC ID: {npcId}");
+                            DebugModeManager.LogWarning($"  Could not extract coordinates for NPC ID: {npcId}");
                         }
                     }
                     else
@@ -329,7 +328,7 @@ namespace Amaurot.Services
 
                         if (isDebugQuest)
                         {
-                            _logDebug($"  ✅ Fallback Quest Giver: {fallbackQuestGiver.NpcName}");
+                            DebugModeManager.LogDebug($"  Fallback Quest Giver: {fallbackQuestGiver.NpcName}");
                         }
                     }
                 }
@@ -338,7 +337,7 @@ namespace Amaurot.Services
             {
                 if (isDebugQuest)
                 {
-                    _logDebug($"  ❌ Quest Giver extraction failed: {npcEx.Message}");
+                    DebugModeManager.LogError($"  Quest Giver extraction failed: {npcEx.Message}");
                 }
             }
 
@@ -349,14 +348,14 @@ namespace Amaurot.Services
 
                 if (isDebugQuest)
                 {
-                    _logDebug($"  ClassJobLevel: {questInfo.ClassJobLevelRequired}");
+                    DebugModeManager.LogDebug($"  ClassJobLevel: {questInfo.ClassJobLevelRequired}");
                 }
             }
             catch (Exception ex)
             {
                 if (isDebugQuest)
                 {
-                    _logDebug($"  ClassJobLevel extraction failed: {ex.Message}");
+                    DebugModeManager.LogDebug($"  ClassJobLevel extraction failed: {ex.Message}");
                 }
             }
 
@@ -367,14 +366,14 @@ namespace Amaurot.Services
 
                 if (isDebugQuest)
                 {
-                    _logDebug($"  GilReward: {questInfo.GilReward}");
+                    DebugModeManager.LogDebug($"  GilReward: {questInfo.GilReward}");
                 }
             }
             catch (Exception ex)
             {
                 if (isDebugQuest)
                 {
-                    _logDebug($"  GilReward extraction failed: {ex.Message}");
+                    DebugModeManager.LogDebug($"  GilReward extraction failed: {ex.Message}");
                 }
             }
 
@@ -384,7 +383,7 @@ namespace Amaurot.Services
 
                 if (isDebugQuest)
                 {
-                    _logDebug($"  PlaceName object: {(placeNameObj != null ? "Found" : "NULL")}");
+                    DebugModeManager.LogDebug($"  PlaceName object: {(placeNameObj != null ? "Found" : "NULL")}");
                 }
 
                 if (placeNameObj != null)
@@ -399,7 +398,7 @@ namespace Amaurot.Services
 
                         if (isDebugQuest)
                         {
-                            _logDebug($"  PlaceName: '{placeName}' (ID: {placeNameKey})");
+                            DebugModeManager.LogDebug($"  PlaceName: '{placeName}' (ID: {placeNameKey})");
                         }
 
                         if (placeNameKey > 0)
@@ -408,7 +407,7 @@ namespace Amaurot.Services
 
                             if (isDebugQuest)
                             {
-                                _logDebug($"  MapId lookup result: {questInfo.MapId}");
+                                DebugModeManager.LogDebug($"  MapId lookup result: {questInfo.MapId}");
                             }
                         }
                     }
@@ -418,7 +417,7 @@ namespace Amaurot.Services
             {
                 if (isDebugQuest)
                 {
-                    _logDebug($"  PlaceName extraction failed: {ex.Message}");
+                    DebugModeManager.LogDebug($"  PlaceName extraction failed: {ex.Message}");
                 }
             }
 
@@ -429,14 +428,14 @@ namespace Amaurot.Services
 
                 if (isDebugQuest)
                 {
-                    _logDebug($"  IconId: {questInfo.IconId}");
+                    DebugModeManager.LogDebug($"  IconId: {questInfo.IconId}");
                 }
             }
             catch (Exception ex)
             {
                 if (isDebugQuest)
                 {
-                    _logDebug($"  IconId extraction failed: {ex.Message}");
+                    DebugModeManager.LogDebug($"  IconId extraction failed: {ex.Message}");
                 }
             }
 
@@ -447,30 +446,30 @@ namespace Amaurot.Services
 
                 if (isDebugQuest)
                 {
-                    _logDebug($"  IsRepeatable: {questInfo.IsRepeatable}");
+                    DebugModeManager.LogDebug($"  IsRepeatable: {questInfo.IsRepeatable}");
                 }
             }
             catch (Exception ex)
             {
                 if (isDebugQuest)
                 {
-                    _logDebug($"  IsRepeatable extraction failed: {ex.Message}");
+                    DebugModeManager.LogDebug($"  IsRepeatable extraction failed: {ex.Message}");
                 }
             }
 
             if (isDebugQuest)
             {
-                _logDebug($"=== Final Quest {questInfo.Id} Details ===");
-                _logDebug($"  Name: '{questInfo.Name}'");
-                _logDebug($"  QuestIdString: '{questInfo.QuestIdString}'");
-                _logDebug($"  Start NPCs: {questInfo.StartNpcs.Count}");
+                DebugModeManager.LogDebug($"=== Final Quest {questInfo.Id} Details ===");
+                DebugModeManager.LogDebug($"  Name: '{questInfo.Name}'");
+                DebugModeManager.LogDebug($"  QuestIdString: '{questInfo.QuestIdString}'");
+                DebugModeManager.LogDebug($"  Start NPCs: {questInfo.StartNpcs.Count}");
                 foreach (var npc in questInfo.StartNpcs)
                 {
-                    _logDebug($"    - {npc.NpcName}: MapId={npc.MapId}, Coords=({npc.MapX:F1}, {npc.MapY:F1}), Territory={npc.TerritoryName}");
+                    DebugModeManager.LogDebug($"    - {npc.NpcName}: MapId={npc.MapId}, Coords=({npc.MapX:F1}, {npc.MapY:F1}), Territory={npc.TerritoryName}");
                 }
-                _logDebug($"  PlaceName: '{questInfo.PlaceName}' (ID: {questInfo.PlaceNameId})");
-                _logDebug($"  MapId: {questInfo.MapId}");
-                _logDebug($"===============================");
+                DebugModeManager.LogDebug($"  PlaceName: '{questInfo.PlaceName}' (ID: {questInfo.PlaceNameId})");
+                DebugModeManager.LogDebug($"  MapId: {questInfo.MapId}");
+                DebugModeManager.LogDebug($"===============================");
             }
         }
 
@@ -514,7 +513,7 @@ namespace Amaurot.Services
                     }
                     catch (Exception ex)
                     {
-                        _logDebug($"    Error getting map properties: {ex.Message}");
+                        DebugModeManager.LogDebug($"    Error getting map properties: {ex.Message}");
                     }
 
                     double c = sizeFactor / 100.0;
@@ -531,12 +530,12 @@ namespace Amaurot.Services
                 }
                 else
                 {
-                    _logDebug($"    Map {mapId} not found in map sheet");
+                    DebugModeManager.LogDebug($"    Map {mapId} not found in map sheet");
                 }
             }
             catch (Exception ex)
             {
-                _logDebug($"Error converting coordinates for MapId {mapId}: {ex.Message}");
+                DebugModeManager.LogError($"Error converting coordinates for MapId {mapId}: {ex.Message}");
             }
 
             return (0, 0, 0);
@@ -565,7 +564,7 @@ namespace Amaurot.Services
                                 if (territory.Map != null)
                                 {
                                     uint mapId = (uint)territory.Map.Key;
-                                    _logDebug($"  Found MapId {mapId} for PlaceNameId {placeNameId} (checked {checkedTerritories} territories)");
+                                    DebugModeManager.LogDebug($"  Found MapId {mapId} for PlaceNameId {placeNameId} (checked {checkedTerritories} territories)");
                                     return mapId;
                                 }
                             }
@@ -575,12 +574,12 @@ namespace Amaurot.Services
                         }
                     }
 
-                    _logDebug($"  No MapId found for PlaceNameId {placeNameId} (checked {checkedTerritories} territories)");
+                    DebugModeManager.LogDebug($"  No MapId found for PlaceNameId {placeNameId} (checked {checkedTerritories} territories)");
                 }
             }
             catch (Exception ex)
             {
-                _logDebug($"  Error in FindMapIdForPlaceName for PlaceNameId {placeNameId}: {ex.Message}");
+                DebugModeManager.LogError($"  Error in FindMapIdForPlaceName for PlaceNameId {placeNameId}: {ex.Message}");
             }
 
             return 0;
@@ -590,7 +589,7 @@ namespace Amaurot.Services
         {
             return await Task.Run(() =>
             {
-                _logDebug("Loading BNpcs from CSV...");
+                DebugModeManager.LogDebug("Loading BNpcs from CSV...");
                 var tempBNpcs = new List<BNpcInfo>();
 
                 try
@@ -610,11 +609,11 @@ namespace Amaurot.Services
                     }
 
                     tempBNpcs.Sort((a, b) => string.Compare(a.BNpcName, b.BNpcName, StringComparison.OrdinalIgnoreCase));
-                    _logDebug($"Loaded {tempBNpcs.Count} BNpcs from CSV");
+                    DebugModeManager.LogDataLoading("BNpcs", tempBNpcs.Count, "from CSV");
                 }
                 catch (Exception ex)
                 {
-                    _logDebug($"Error loading BNpcs: {ex.Message}");
+                    DebugModeManager.LogError($"Error loading BNpcs: {ex.Message}");
                 }
 
                 return tempBNpcs;
@@ -668,14 +667,14 @@ namespace Amaurot.Services
         {
             return await Task.Run(() =>
             {
-                _logDebug("Starting to load events...");
+                DebugModeManager.LogDebug("Starting to load events...");
                 var tempEvents = new List<EventInfo>();
 
                 try
                 {
                     if (_realm != null)
                     {
-                        _logDebug("Loading events from SaintCoinach...");
+                        DebugModeManager.LogDebug("Loading events from SaintCoinach...");
                         var eventSheet = _realm.GameData.GetSheet("Event");
 
                         if (eventSheet != null)
@@ -702,25 +701,25 @@ namespace Amaurot.Services
                                 }
                                 catch (Exception ex)
                                 {
-                                    _logDebug($"Failed to process event with key {eventRow.Key}. Error: {ex.Message}");
+                                    DebugModeManager.LogDebug($"Failed to process event with key {eventRow.Key}. Error: {ex.Message}");
                                 }
                             }
 
                             tempEvents.Sort((a, b) => a.EventId.CompareTo(b.EventId));
-                            _logDebug($"Loaded {tempEvents.Count} events");
+                            DebugModeManager.LogDataLoading("events", tempEvents.Count);
                         }
                     }
                     else
                     {
-                        _logDebug("Realm is null, cannot load events");
+                        DebugModeManager.LogDebug("Realm is null, cannot load events");
                     }
                 }
                 catch (Exception ex)
                 {
-                    _logDebug($"Critical error loading events: {ex.Message}\n{ex.StackTrace}");
+                    DebugModeManager.LogError($"Critical error loading events: {ex.Message}\n{ex.StackTrace}");
                 }
 
-                _logDebug($"Returning {tempEvents.Count} events from LoadEventsAsync");
+                DebugModeManager.LogDebug($"Returning {tempEvents.Count} events from LoadEventsAsync");
                 return tempEvents;
             });
         }
@@ -768,14 +767,14 @@ namespace Amaurot.Services
                             }
                             catch (Exception ex)
                             {
-                                _logDebug($"Failed to process fate with key {fateRow.Key}. Error: {ex.Message}");
+                                DebugModeManager.LogDebug($"Failed to process fate with key {fateRow.Key}. Error: {ex.Message}");
                             }
                         }
                     }
                 }
                 catch (Exception ex)
                 {
-                    _logDebug($"Critical error loading fates: {ex.Message}");
+                    DebugModeManager.LogError($"Critical error loading fates: {ex.Message}");
                 }
 
                 return tempFates;
@@ -786,19 +785,19 @@ namespace Amaurot.Services
         {
             return await Task.Run(() =>
             {
-                _logDebug("Starting to load territories...");
+                DebugModeManager.LogDebug("Starting to load territories...");
                 var tempTerritories = new List<TerritoryInfo>();
 
                 try
                 {
                     if (_realm != null)
                     {
-                        _logDebug("Loading territories from SaintCoinach...");
+                        DebugModeManager.LogDebug("Loading territories from SaintCoinach...");
                         var territorySheet = _realm.GameData.GetSheet<SaintCoinach.Xiv.TerritoryType>();
 
                         int processedCount = 0;
                         int totalCount = territorySheet.Count;
-                        _logDebug($"Found {totalCount} territories in game data");
+                        DebugModeManager.LogDebug($"Found {totalCount} territories in game data");
 
                         foreach (var territory in territorySheet)
                         {
@@ -842,7 +841,7 @@ namespace Amaurot.Services
 
                                             if (territory.Key == 128)       
                                             {
-                                                _logDebug($"Territory 128: PlaceNameRegion (index 3) -> PlaceName ID {regionId} = '{regionName}'");
+                                                DebugModeManager.LogDebug($"Territory 128: PlaceNameRegion (index 3) -> PlaceName ID {regionId} = '{regionName}'");
                                             }
                                         }
                                     }
@@ -851,7 +850,7 @@ namespace Amaurot.Services
                                 {
                                     if (territory.Key == 128)
                                     {
-                                        _logDebug($"Territory 128: Error accessing PlaceNameRegion (index 3): {ex.Message}");
+                                        DebugModeManager.LogDebug($"Territory 128: Error accessing PlaceNameRegion (index 3): {ex.Message}");
                                     }
                                 }
 
@@ -900,7 +899,7 @@ namespace Amaurot.Services
                                         
                                         if (territory.Key == 128)       
                                         {
-                                            _logDebug($"Territory 128: Bg (index 1) = '{bgPath}'");
+                                            DebugModeManager.LogDebug($"Territory 128: Bg (index 1) = '{bgPath}'");
                                         }
                                     }
                                 }
@@ -908,7 +907,7 @@ namespace Amaurot.Services
                                 {
                                     if (territory.Key == 128)
                                     {
-                                        _logDebug($"Territory 128: Error accessing Bg (index 1): {ex.Message}");
+                                        DebugModeManager.LogDebug($"Territory 128: Error accessing Bg (index 1): {ex.Message}");
                                     }
                                 }
 
@@ -927,7 +926,7 @@ namespace Amaurot.Services
 
                                             if (territory.Key == 128)       
                                             {
-                                                _logDebug($"Territory 128: PlaceNameZone (index 4) -> PlaceName ID {placeNameZoneId} = '{placeNameZone}'");
+                                                DebugModeManager.LogDebug($"Territory 128: PlaceNameZone (index 4) -> PlaceName ID {placeNameZoneId} = '{placeNameZone}'");
                                             }
                                         }
                                     }
@@ -936,7 +935,7 @@ namespace Amaurot.Services
                                 {
                                     if (territory.Key == 128)
                                     {
-                                        _logDebug($"Territory 128: Error accessing PlaceNameZone (index 4): {ex.Message}");
+                                        DebugModeManager.LogDebug($"Territory 128: Error accessing PlaceNameZone (index 4): {ex.Message}");
                                     }
                                 }
 
@@ -950,7 +949,7 @@ namespace Amaurot.Services
                                 }
                                 catch (KeyNotFoundException)
                                 {
-                                    _logDebug($"Territory {territory.Key} ('{placeName}') has no Map. Defaulting to 0.");
+                                    DebugModeManager.LogDebug($"Territory {territory.Key} ('{placeName}') has no Map. Defaulting to 0.");
                                 }
 
                                 var territoryInfo = new TerritoryInfo
@@ -973,35 +972,35 @@ namespace Amaurot.Services
 
                                 if (processedCount < 10 || territory.Key == 128)
                                 {
-                                    _logDebug($"  Territory {territory.Key}: Name='{placeName}', TerritoryNameId='{territoryNameId}', PlaceNameId={placeNameId}, Region='{regionName}' (ID: {regionId}), Bg='{bgPath}', PlaceNameZone='{placeNameZone}' (ID: {placeNameZoneId})");
+                                    DebugModeManager.LogDebug($"  Territory {territory.Key}: Name='{placeName}', TerritoryNameId='{territoryNameId}', PlaceNameId={placeNameId}, Region='{regionName}' (ID: {regionId}), Bg='{bgPath}', PlaceNameZone='{placeNameZone}' (ID: {placeNameZoneId})");
                                 }
 
                                 processedCount++;
                                 if (processedCount % 100 == 0)
                                 {
-                                    _logDebug($"Processed {processedCount}/{totalCount} territories...");
+                                    DebugModeManager.LogDebug($"Processed {processedCount}/{totalCount} territories...");
                                 }
                             }
                             catch (Exception ex)
                             {
-                                _logDebug($"Failed to process territory with key {territory.Key}. Error: {ex.Message}");
+                                DebugModeManager.LogDebug($"Failed to process territory with key {territory.Key}. Error: {ex.Message}");
                             }
                         }
 
-                        _logDebug($"Finished processing {tempTerritories.Count} territories");
+                        DebugModeManager.LogDebug($"Finished processing {tempTerritories.Count} territories");
                         tempTerritories.Sort((a, b) => a.Id.CompareTo(b.Id));
                     }
                     else
                     {
-                        _logDebug("Realm is null, cannot load territories");
+                        DebugModeManager.LogDebug("Realm is null, cannot load territories");
                     }
                 }
                 catch (Exception ex)
                 {
-                    _logDebug($"Critical error loading territories: {ex.Message}\n{ex.StackTrace}");
+                    DebugModeManager.LogError($"Critical error loading territories: {ex.Message}\n{ex.StackTrace}");
                 }
 
-                _logDebug($"Returning {tempTerritories.Count} territories from LoadTerritoriesAsync");
+                DebugModeManager.LogDataLoading("territories", tempTerritories.Count, "from LoadTerritoriesAsync");
                 return tempTerritories;
             });
         }
@@ -1010,13 +1009,13 @@ namespace Amaurot.Services
         {
             if (_questLocationService == null)
             {
-                _logDebug("Quest location service is null");
+                DebugModeManager.LogDebug("Quest location service is null");
                 return;
             }
 
             try
             {
-                _logDebug("🎯 Starting quest location extraction using Libra Eorzea...");
+                DebugModeManager.LogDebug("Starting quest location extraction using Libra Eorzea...");
 
                 await _questLocationService.ExtractQuestLocationsAsync();
 
@@ -1074,28 +1073,28 @@ namespace Amaurot.Services
 
                             if (updatedQuests <= 10)
                             {
-                                _logDebug($"  ✅ Updated quest {quest.Id} '{quest.Name}' with location: {quest.PlaceName} (Map: {quest.MapId}, Coords: {quest.MapX:F1}, {quest.MapY:F1})");
+                                DebugModeManager.LogDebug($"  Updated quest {quest.Id} '{quest.Name}' with location: {quest.PlaceName} (Map: {quest.MapId}, Coords: {quest.MapX:F1}, {quest.MapY:F1})");
                             }
                         }
                     }
                     catch (Exception ex)
                     {
-                        _logDebug($"Error updating quest {quest.Id} with location data: {ex.Message}");
+                        DebugModeManager.LogDebug($"Error updating quest {quest.Id} with location data: {ex.Message}");
                     }
                 }
 
-                _logDebug($"🎯 Quest location update complete!");
-                _logDebug($"📊 Found location data for {questsWithLocationData} out of {quests.Count} quests");
-                _logDebug($"📊 Successfully updated {updatedQuests} quest entities with location data");
+                DebugModeManager.LogDebug($"Quest location update complete!");
+                DebugModeManager.LogDebug($"Found location data for {questsWithLocationData} out of {quests.Count} quests");
+                DebugModeManager.LogDebug($"Successfully updated {updatedQuests} quest entities with location data");
 
                 if (questsWithLocationData < quests.Count)
                 {
-                    _logDebug($"ℹ️ {quests.Count - questsWithLocationData} quests have no location data in Libra database (this is normal for some quest types)");
+                    DebugModeManager.LogDebug($"INFO: {quests.Count - questsWithLocationData} quests have no location data in Libra database (normal for some quest types)");
                 }
             }
             catch (Exception ex)
             {
-                _logDebug($"❌ Error in quest location extraction: {ex.Message}");
+                DebugModeManager.LogError($"Error in quest location extraction: {ex.Message}");
             }
         }
 
@@ -1120,7 +1119,7 @@ namespace Amaurot.Services
             }
             catch (Exception ex)
             {
-                _logDebug($"Error finding territory {territoryId}: {ex.Message}");
+                DebugModeManager.LogError($"Error finding territory {territoryId}: {ex.Message}");
             }
 
             return null;
@@ -1139,7 +1138,7 @@ namespace Amaurot.Services
             }
             catch (Exception ex)
             {
-                _logDebug($"Error getting NPC name for {npcId}: {ex.Message}");
+                DebugModeManager.LogError($"Error getting NPC name for {npcId}: {ex.Message}");
                 return $"NPC_{npcId}";
             }
         }
@@ -1175,15 +1174,15 @@ namespace Amaurot.Services
             {
                 if (_realm == null) return null;
 
-                _logDebug($"    Research method: Looking up NPC ID {npcId} for Quest {questId}...");
+                DebugModeManager.LogDebug($"    Research method: Looking up NPC ID {npcId} for Quest {questId}...");
 
                 if (_questLocationService != null)
                 {
                     var questLocationData = _questLocationService.GetQuestLocationData(questId);
                     if (questLocationData != null)
                     {
-                        _logDebug($"    ✅ Using quest location service data for Quest {questId}");
-                        _logDebug($"    Coordinates: ({questLocationData.MapX:F1}, {questLocationData.MapY:F1}) - should be (11.7, 13.5) for Mother Miounne");
+                        DebugModeManager.LogDebug($"    Using quest location service data for Quest {questId}");
+                        DebugModeManager.LogDebug($"    Coordinates: ({questLocationData.MapX:F1}, {questLocationData.MapY:F1}) - should be (11.7, 13.5) for Mother Miounne");
 
                         string npcName = $"NPC_{npcId}";
                         try
@@ -1197,7 +1196,7 @@ namespace Amaurot.Services
                         }
                         catch (Exception ex)
                         {
-                            _logDebug($"    Warning: Could not get NPC name: {ex.Message}");
+                            DebugModeManager.LogDebug($"    Warning: Could not get NPC name: {ex.Message}");
                         }
 
                         var questGiver = new QuestNpcInfo
@@ -1216,12 +1215,12 @@ namespace Amaurot.Services
                             Role = "Quest Giver"
                         };
 
-                         _logDebug($"    ✅ Created Quest Giver from location service data: {questGiver.NpcName} at {questGiver.TerritoryName} ({questGiver.MapX:F1}, {questGiver.MapY:F1})");
+                         DebugModeManager.LogDebug($"    Created Quest Giver from location service data: {questGiver.NpcName} at {questGiver.TerritoryName} ({questGiver.MapX:F1}, {questGiver.MapY:F1})");
                         return questGiver;
                     }
                     else
                     {
-                        _logDebug($"    ⚠️ Quest location service has no location data for Quest {questId}");
+                        DebugModeManager.LogWarning($"    Quest location service has no location data for Quest {questId}");
                     }
                 }
 
@@ -1230,12 +1229,12 @@ namespace Amaurot.Services
 
                 if (npcData2 == null)
                 {
-                    _logDebug($"    NPC ID {npcId} not found in ENpcResident sheet");
+                    DebugModeManager.LogDebug($"    NPC ID {npcId} not found in ENpcResident sheet");
                     return null;
                 }
 
                 string npcName2 = npcData2.Singular?.ToString() ?? $"NPC_{npcId}";
-                _logDebug($"    Found NPC: {npcName2} but no location data from quest location service");
+                DebugModeManager.LogDebug($"    Found NPC: {npcName2} but no location data from quest location service");
 
                 return new QuestNpcInfo
                 {
@@ -1251,7 +1250,7 @@ namespace Amaurot.Services
             }
             catch (Exception ex)
             {
-                _logDebug($"    Error in research method for NPC {npcId}: {ex.Message}");
+                DebugModeManager.LogError($"    Error in research method for NPC {npcId}: {ex.Message}");
                 return null;
             }
         }
@@ -1262,11 +1261,11 @@ namespace Amaurot.Services
 
             try
             {
-                _logDebug("🏛️ Loading Instance Content from Saint Coinach...");
+                DebugModeManager.LogDebug("Loading Instance Content from Saint Coinach...");
 
                 if (_realm?.GameData == null)
                 {
-                    _logDebug("❌ Realm or GameData is null - cannot load Instance Content");
+                    DebugModeManager.LogError("Realm or GameData is null - cannot load Instance Content");
                     return instanceContents;
                 }
 
@@ -1275,7 +1274,7 @@ namespace Amaurot.Services
                     var instanceContentSheet = _realm.GameData.GetSheet<SaintCoinach.Xiv.InstanceContent>();
                     var contentFinderSheet = _realm.GameData.GetSheet<SaintCoinach.Xiv.ContentFinderCondition>();
 
-                    _logDebug($"📊 Found {instanceContentSheet.Count} Instance Content entries");
+                    DebugModeManager.LogDebug($"Found {instanceContentSheet.Count} Instance Content entries");
 
                     foreach (var instance in instanceContentSheet)
                     {
@@ -1289,7 +1288,7 @@ namespace Amaurot.Services
                             }
                             catch (Exception ex)
                             {
-                                _logDebug($"Could not access index 4 for instance {instance.Key}: {ex.Message}");
+                                DebugModeManager.LogDebug($"Could not access index 4 for instance {instance.Key}: {ex.Message}");
                             }
                             
                             if (string.IsNullOrEmpty(instanceName) || instanceName == "0")
@@ -1338,7 +1337,7 @@ namespace Amaurot.Services
                                     }
                                     catch (Exception ex)
                                     {
-                                        _logDebug($"Could not get level from ContentFinderCondition {parsedContentFinder}: {ex.Message}");
+                                        DebugModeManager.LogDebug($"Could not get level from ContentFinderCondition {parsedContentFinder}: {ex.Message}");
                                     }
                                 }
                             }
@@ -1405,12 +1404,12 @@ namespace Amaurot.Services
                             
                             if (instanceContents.Count <= 5)
                             {
-                                _logDebug($"  📋 Loaded: {instanceInfo.DisplayName} (Level: {levelRequired}, Gil: {instanceClearGil})");
+                                DebugModeManager.LogDebug($"  Loaded: {instanceInfo.DisplayName} (Level: {levelRequired}, Gil: {instanceClearGil})");
                             }
                         }
                         catch (Exception ex)
                         {
-                            _logDebug($"❌ Error processing Instance Content {instance.Key}: {ex.Message}");
+                            DebugModeManager.LogError($"Error processing Instance Content {instance.Key}: {ex.Message}");
                         }
                     }
                 });
@@ -1420,14 +1419,70 @@ namespace Amaurot.Services
                     .OrderBy(i => i.Id)
                     .ToList();
 
-                _logDebug($"🏛️ Loaded {instanceContents.Count} Instance Content entries (sorted by Row ID)");
+                DebugModeManager.LogDataLoading("Instance Content", instanceContents.Count, "sorted by Row ID");
             }
             catch (Exception ex)
             {
-                _logDebug($"❌ Error loading Instance Content: {ex.Message}");
+                DebugModeManager.LogError($"Error loading Instance Content: {ex.Message}");
             }
 
             return instanceContents;
+        }
+
+        public async Task<List<Entities.QuestBattleInfo>> LoadQuestBattlesAsync()
+        {
+            var questBattles = new List<Entities.QuestBattleInfo>();
+
+            try
+            {
+                DebugModeManager.LogDebug("Loading Quest Battles from Sapphire repository scripts...");
+
+                // ✅ IMPROVED: Use a hardcoded settings approach for simplicity
+                // This avoids complex dependency injection changes
+                var questBattleService = CreateQuestBattleScriptService();
+                
+                if (questBattleService != null)
+                {
+                    questBattles = await questBattleService.LoadQuestBattlesFromScriptsAsync();
+                }
+                else
+                {
+                    DebugModeManager.LogWarning("Could not create Quest Battle script service - Sapphire path may not be configured");
+                }
+                
+                DebugModeManager.LogDataLoading("Quest Battle Scripts", questBattles.Count, "from Sapphire repository");
+            }
+            catch (Exception ex)
+            {
+                DebugModeManager.LogError($"Error loading Quest Battles: {ex.Message}");
+            }
+
+            return questBattles;
+        }
+
+        // ✅ NEW: Helper method to create QuestBattleScriptService
+        private QuestBattleScriptService? CreateQuestBattleScriptService()
+        {
+            try
+            {
+                // Create a minimal SettingsService instance to access Sapphire path
+                var settingsService = new SettingsService();
+                
+                if (settingsService.IsValidSapphireServerPath())
+                {
+                    return new QuestBattleScriptService(settingsService);
+                }
+                else
+                {
+                    DebugModeManager.LogDebug("Sapphire Server path not configured in settings");
+                    return null;
+                }
+            }
+            catch (Exception ex)
+            {
+                DebugModeManager.LogError($"Error creating QuestBattleScriptService: {ex.Message}");
+                return null;
+            }
         }
     }
 }

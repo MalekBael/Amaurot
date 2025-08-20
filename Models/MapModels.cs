@@ -53,7 +53,8 @@ namespace Amaurot
         Entrance,
         Symbol,
         Custom,
-        Fate
+        Fate,
+        QuestBattle
     }
 
     public class MapInfo
@@ -143,6 +144,7 @@ namespace Amaurot
                 MarkerType.Symbol => Colors.Teal,
                 MarkerType.Custom => Colors.Magenta,
                 MarkerType.Fate => Colors.Orange,
+                MarkerType.QuestBattle => Colors.DarkRed, // ✅ NEW: Quest Battle color
                 _ => Colors.Red,
             };
         }
@@ -159,6 +161,7 @@ namespace Amaurot
                 MarkerType.Symbol => Colors.Cyan,
                 MarkerType.Custom => Colors.Pink,
                 MarkerType.Fate => Colors.DarkOrange,
+                MarkerType.QuestBattle => Colors.Red, // ✅ NEW: Quest Battle stroke
                 _ => Colors.Yellow,
             };
         }
@@ -175,6 +178,7 @@ namespace Amaurot
                 MarkerType.Symbol => "Ellipse",
                 MarkerType.Custom => "Star",
                 MarkerType.Fate => "Diamond",
+                MarkerType.QuestBattle => "Hexagon", // ✅ NEW: Quest Battle shape
                 _ => "Ellipse",
             };
         }

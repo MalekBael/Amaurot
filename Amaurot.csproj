@@ -14,6 +14,9 @@
 
 		<DisableWPFHardwareAcceleration>true</DisableWPFHardwareAcceleration>
 		<WpfDisableAnimations>false</WpfDisableAnimations>
+		
+		<!-- ✅ Suppress CA1416 warnings for Windows-targeted WPF application -->
+		<NoWarn>$(NoWarn);CA1416</NoWarn>
 	</PropertyGroup>
 
 	<ItemGroup>
@@ -49,18 +52,22 @@
 		<Compile Remove="LGB-Parser\**" />
 		<Compile Remove="notes\**" />
 		<Compile Remove="Resources\LgbData\**" />
+		<Compile Remove="Tools\**" />
 		<Compile Remove="unluac\**" />
 		<EmbeddedResource Remove="LGB-Parser\**" />
 		<EmbeddedResource Remove="notes\**" />
 		<EmbeddedResource Remove="Resources\LgbData\**" />
+		<EmbeddedResource Remove="Tools\**" />
 		<EmbeddedResource Remove="unluac\**" />
 		<None Remove="LGB-Parser\**" />
 		<None Remove="notes\**" />
 		<None Remove="Resources\LgbData\**" />
+		<None Remove="Tools\**" />
 		<None Remove="unluac\**" />
 		<Page Remove="LGB-Parser\**" />
 		<Page Remove="notes\**" />
 		<Page Remove="Resources\LgbData\**" />
+		<Page Remove="Tools\**" />
 		<Page Remove="unluac\**" />
 
 	</ItemGroup>
@@ -158,16 +165,14 @@
 	</ItemGroup>
 	<ItemGroup>
 		<Folder Include="Resources\" />
-		<Folder Include="Tools\" />
 	</ItemGroup>
 
-	<!-- ✅ CORRECTED: Build and copy LGB-Parser from submodule -->
+	<!-- ✅ CORRECTED: Build and copy LGB-Parser files to ROOT directory -->
 	<Target Name="BuildAndCopyLgbParser" AfterTargets="Build">
 
 		<Message Text="🔧 Building LGB-Parser from submodule..." Importance="high" />
 
 		<PropertyGroup>
-			<!-- ✅ FIXED: Use submodule path -->
 			<LgbParserProjectPath>$(MSBuildProjectDirectory)\LGB-Parser</LgbParserProjectPath>
 			<LgbParserBinPath>$(LgbParserProjectPath)\bin\$(Configuration)\net8.0</LgbParserBinPath>
 			<LgbParserExePath>$(LgbParserBinPath)\LGB-Parser.exe</LgbParserExePath>
@@ -178,12 +183,9 @@
 		<Message Text="🔍 Checking LGB-Parser submodule..." Importance="high" />
 		<Message Text="Looking for: $(LgbParserProjectPath)" Importance="high" />
 
-		<Warning Text="⚠️ LGB-Parser submodule not found at: $(LgbParserProjectPath)"
-				 Condition="!Exists('$(LgbParserCsprojPath)')" />
-		<Warning Text="ℹ️ Expected LGB-Parser.csproj at: $(LgbParserCsprojPath)"
-				 Condition="!Exists('$(LgbParserCsprojPath)')" />
-		<Warning Text="💡 Run 'git submodule update --init --recursive' to initialize submodule"
-				 Condition="!Exists('$(LgbParserCsprojPath)')" />
+		<Warning Text="⚠️ LGB-Parser submodule not found at: $(LgbParserProjectPath)" Condition="!Exists('$(LgbParserCsprojPath)')" />
+		<Warning Text="ℹ️ Expected LGB-Parser.csproj at: $(LgbParserCsprojPath)" Condition="!Exists('$(LgbParserCsprojPath)')" />
+		<Warning Text="💡 Run 'git submodule update --init --recursive' to initialize submodule" Condition="!Exists('$(LgbParserCsprojPath)')" />
 
 		<!-- ✅ CONDITIONAL: Only proceed if project exists -->
 		<PropertyGroup>
@@ -192,28 +194,18 @@
 		</PropertyGroup>
 
 		<!-- Build LGB-Parser if it exists -->
-		<Message Text="🧹 Cleaning LGB-Parser..." Importance="high"
-				 Condition="'$(ShouldBuildLgbParser)' == 'true'" />
-		<Exec Command="dotnet clean &quot;$(LgbParserCsprojPath)&quot; --configuration $(Configuration)"
-			  ContinueOnError="true"
-			  WorkingDirectory="$(LgbParserProjectPath)"
-			  Condition="'$(ShouldBuildLgbParser)' == 'true'" />
+		<Message Text="🧹 Cleaning LGB-Parser..." Importance="high" Condition="'$(ShouldBuildLgbParser)' == 'true'" />
+		<Exec Command="dotnet clean &quot;$(LgbParserCsprojPath)&quot; --configuration $(Configuration)" ContinueOnError="true" WorkingDirectory="$(LgbParserProjectPath)" Condition="'$(ShouldBuildLgbParser)' == 'true'" />
 
-		<Message Text="🔨 Building LGB-Parser (submodule commit: bf8f983)..." Importance="high"
-				 Condition="'$(ShouldBuildLgbParser)' == 'true'" />
-		<Exec Command="dotnet build &quot;$(LgbParserCsprojPath)&quot; --configuration $(Configuration) --no-restore"
-			  ContinueOnError="true"
-			  WorkingDirectory="$(LgbParserProjectPath)"
-			  Condition="'$(ShouldBuildLgbParser)' == 'true'">
+		<Message Text="🔨 Building LGB-Parser (submodule commit: bf8f983)..." Importance="high" Condition="'$(ShouldBuildLgbParser)' == 'true'" />
+		<Exec Command="dotnet build &quot;$(LgbParserCsprojPath)&quot; --configuration $(Configuration) --no-restore" ContinueOnError="true" WorkingDirectory="$(LgbParserProjectPath)" Condition="'$(ShouldBuildLgbParser)' == 'true'">
 			<Output TaskParameter="ExitCode" PropertyName="LgbParserExitCode" />
 		</Exec>
 
 		<!-- ✅ DEBUG: Show build result -->
-		<Message Text="📊 LGB-Parser build result: ExitCode=$(LgbParserExitCode), Exe exists: $(Exists('$(LgbParserExePath)'))"
-				 Importance="high"
-				 Condition="'$(ShouldBuildLgbParser)' == 'true'" />
+		<Message Text="📊 LGB-Parser build result: ExitCode=$(LgbParserExitCode), Exe exists: $(Exists('$(LgbParserExePath)'))" Importance="high" Condition="'$(ShouldBuildLgbParser)' == 'true'" />
 
-		<!-- Create directories -->
+		<!-- Create Tools directory (for unluac only) -->
 		<MakeDir Directories="$(OutputPath)Tools" />
 
 		<!-- ✅ ENHANCED: Copy files with detailed logging -->
@@ -222,54 +214,38 @@
 			<LgbParserBuildSucceeded Condition="'$(LgbParserExitCode)' != '0' Or !Exists('$(LgbParserExePath)')">false</LgbParserBuildSucceeded>
 		</PropertyGroup>
 
-		<!-- Define files to copy -->
+		<!-- ✅ FIXED: Define files to copy to ROOT directory (alongside Amaurot.exe) -->
 		<ItemGroup Condition="'$(LgbParserBuildSucceeded)' == 'true'">
-			<!-- Essential files for Tools directory -->
+			<!-- Essential files for ROOT directory (same as Amaurot.exe) -->
 			<LgbParserEssentialFiles Include="$(LgbParserExePath)" />
 			<LgbParserEssentialFiles Include="$(LgbParserBinPath)\LGB-Parser.runtimeconfig.json" Condition="Exists('$(LgbParserBinPath)\LGB-Parser.runtimeconfig.json')" />
 			<LgbParserEssentialFiles Include="$(LgbParserBinPath)\LGB-Parser.deps.json" Condition="Exists('$(LgbParserBinPath)\LGB-Parser.deps.json')" />
 
-			<!-- All DLLs for root directory -->
+			<!-- All DLLs also go to ROOT directory -->
 			<LgbParserDlls Include="$(LgbParserBinPath)\*.dll" />
 		</ItemGroup>
 
-		<!-- ✅ COPY: Essential files to Tools directory -->
-		<Copy SourceFiles="@(LgbParserEssentialFiles)"
-			  DestinationFolder="$(OutputPath)Tools"
-			  SkipUnchangedFiles="true"
-			  Condition="'$(LgbParserBuildSucceeded)' == 'true'" />
+		<!-- ✅ COPY: Essential files to ROOT directory (NOT Tools) -->
+		<Copy SourceFiles="@(LgbParserEssentialFiles)" DestinationFolder="$(OutputPath)" SkipUnchangedFiles="true" Condition="'$(LgbParserBuildSucceeded)' == 'true'" />
 
 		<!-- ✅ COPY: DLLs to root directory (only if they don't exist) -->
-		<Copy SourceFiles="%(LgbParserDlls.Identity)"
-			  DestinationFolder="$(OutputPath)"
-			  SkipUnchangedFiles="true"
-			  ContinueOnError="true"
-			  Condition="'$(LgbParserBuildSucceeded)' == 'true' And !Exists('$(OutputPath)%(LgbParserDlls.Filename)%(LgbParserDlls.Extension)')" />
+		<Copy SourceFiles="%(LgbParserDlls.Identity)" DestinationFolder="$(OutputPath)" SkipUnchangedFiles="true" ContinueOnError="true" Condition="'$(LgbParserBuildSucceeded)' == 'true' And !Exists('$(OutputPath)%(LgbParserDlls.Filename)%(LgbParserDlls.Extension)')" />
 
-		<!-- ✅ REPORTING: Detailed success/failure messages -->
-		<Message Text="✅ Successfully built and copied LGB-Parser from submodule:" Importance="high"
-				 Condition="'$(LgbParserBuildSucceeded)' == 'true'" />
-		<Message Text="   📁 LGB-Parser.exe -&gt; Tools/" Importance="high"
-				 Condition="'$(LgbParserBuildSucceeded)' == 'true'" />
-		<Message Text="   📚 Shared DLLs -&gt; Root directory" Importance="high"
-				 Condition="'$(LgbParserBuildSucceeded)' == 'true'" />
-		<Message Text="   🏷️  Submodule commit: bf8f983 (v1.0.5~11)" Importance="high"
-				 Condition="'$(LgbParserBuildSucceeded)' == 'true'" />
+		<!-- ✅ REPORTING: Updated success messages -->
+		<Message Text="✅ Successfully built and copied LGB-Parser from submodule:" Importance="high" Condition="'$(LgbParserBuildSucceeded)' == 'true'" />
+		<Message Text="   📁 LGB-Parser.exe -&gt; ROOT directory (alongside Amaurot.exe)" Importance="high" Condition="'$(LgbParserBuildSucceeded)' == 'true'" />
+		<Message Text="   ⚙️ Runtime configs -&gt; ROOT directory" Importance="high" Condition="'$(LgbParserBuildSucceeded)' == 'true'" />
+		<Message Text="   📚 Shared DLLs -&gt; ROOT directory" Importance="high" Condition="'$(LgbParserBuildSucceeded)' == 'true'" />
+		<Message Text="   🏷️  Submodule commit: bf8f983 (v1.0.5~11)" Importance="high" Condition="'$(LgbParserBuildSucceeded)' == 'true'" />
 
-		<Warning Text="❌ LGB-Parser submodule not found or build failed"
-				 Condition="'$(ShouldBuildLgbParser)' == 'false'" />
-		<Warning Text="❌ LGB-Parser build failed (exit code: $(LgbParserExitCode))"
-				 Condition="'$(ShouldBuildLgbParser)' == 'true' And '$(LgbParserBuildSucceeded)' == 'false'" />
+		<Warning Text="❌ LGB-Parser submodule not found or build failed" Condition="'$(ShouldBuildLgbParser)' == 'false'" />
+		<Warning Text="❌ LGB-Parser build failed (exit code: $(LgbParserExitCode))" Condition="'$(ShouldBuildLgbParser)' == 'true' And '$(LgbParserBuildSucceeded)' == 'false'" />
 
 		<!-- ✅ HELP: Provide troubleshooting info -->
-		<Message Text="💡 To fix LGB-Parser submodule issues:" Importance="high"
-				 Condition="'$(LgbParserBuildSucceeded)' != 'true'" />
-		<Message Text="   1. Initialize submodule: git submodule update --init --recursive" Importance="high"
-				 Condition="'$(LgbParserBuildSucceeded)' != 'true'" />
-		<Message Text="   2. Update to latest: cd LGB-Parser &amp;&amp; git pull origin main" Importance="high"
-				 Condition="'$(LgbParserBuildSucceeded)' != 'true'" />
-		<Message Text="   3. Test build independently: cd LGB-Parser &amp;&amp; dotnet build" Importance="high"
-				 Condition="'$(LgbParserBuildSucceeded)' != 'true'" />
+		<Message Text="💡 To fix LGB-Parser submodule issues:" Importance="high" Condition="'$(LgbParserBuildSucceeded)' != 'true'" />
+		<Message Text="   1. Initialize submodule: git submodule update --init --recursive" Importance="high" Condition="'$(LgbParserBuildSucceeded)' != 'true'" />
+		<Message Text="   2. Update to latest: cd LGB-Parser &amp;&amp; git pull origin main" Importance="high" Condition="'$(LgbParserBuildSucceeded)' != 'true'" />
+		<Message Text="   3. Test build independently: cd LGB-Parser &amp;&amp; dotnet build" Importance="high" Condition="'$(LgbParserBuildSucceeded)' != 'true'" />
 
 	</Target>
 
@@ -289,10 +265,7 @@
 		<Message Text="🔍 Checking unluac submodule at: $(UnluacSubmodulePath)" Importance="high" />
 
 		<!-- Initialize submodule if it doesn't exist or is empty -->
-		<Exec Command="git submodule update --init --recursive"
-			  ContinueOnError="true"
-			  WorkingDirectory="$(MSBuildProjectDirectory)"
-			  Condition="!Exists('$(UnluacSubmodulePath)\src')" />
+		<Exec Command="git submodule update --init --recursive" ContinueOnError="true" WorkingDirectory="$(MSBuildProjectDirectory)" Condition="!Exists('$(UnluacSubmodulePath)\src')" />
 
 		<!-- Check if the submodule has source files -->
 		<ItemGroup>
@@ -305,42 +278,26 @@
 		<MakeDir Directories="$(OutputPath)Tools" />
 
 		<!-- Method 1: Try using the build.sh script (preferred) -->
-		<Message Text="🛠️ Attempting to build unluac using build.sh script..." Importance="high"
-				 Condition="Exists('$(UnluacBuildScript)') And '@(UnluacSourceFiles)' != ''" />
+		<Message Text="🛠️ Attempting to build unluac using build.sh script..." Importance="high" Condition="Exists('$(UnluacBuildScript)') And '@(UnluacSourceFiles)' != ''" />
 
 		<!-- Try with bash (Git Bash, WSL, Linux, macOS) -->
-		<Exec Command="bash build.sh"
-			  ContinueOnError="true"
-			  WorkingDirectory="$(UnluacSubmodulePath)"
-			  Condition="Exists('$(UnluacBuildScript)') And '@(UnluacSourceFiles)' != ''" />
+		<Exec Command="bash build.sh" ContinueOnError="true" WorkingDirectory="$(UnluacSubmodulePath)" Condition="Exists('$(UnluacBuildScript)') And '@(UnluacSourceFiles)' != ''" />
 
 		<!-- Try with sh if bash failed -->
-		<Exec Command="sh build.sh"
-			  ContinueOnError="true"
-			  WorkingDirectory="$(UnluacSubmodulePath)"
-			  Condition="Exists('$(UnluacBuildScript)') And '@(UnluacSourceFiles)' != '' And !Exists('$(UnluacBinJarPath)')" />
+		<Exec Command="sh build.sh" ContinueOnError="true" WorkingDirectory="$(UnluacSubmodulePath)" Condition="Exists('$(UnluacBuildScript)') And '@(UnluacSourceFiles)' != '' And !Exists('$(UnluacBinJarPath)')" />
 
 		<!-- Method 2: Manual Java compilation if build.sh failed -->
-		<Message Text="🔨 build.sh failed, trying manual Java compilation..." Importance="high"
-				 Condition="'@(UnluacSourceFiles)' != '' And !Exists('$(UnluacBinJarPath)')" />
+		<Message Text="🔨 build.sh failed, trying manual Java compilation..." Importance="high" Condition="'@(UnluacSourceFiles)' != '' And !Exists('$(UnluacBinJarPath)')" />
 
 		<!-- Create build directories -->
-		<MakeDir Directories="$(UnluacSubmodulePath)\build"
-				 Condition="'@(UnluacSourceFiles)' != '' And !Exists('$(UnluacBinJarPath)')" />
-		<MakeDir Directories="$(UnluacSubmodulePath)\bin"
-				 Condition="'@(UnluacSourceFiles)' != '' And !Exists('$(UnluacBinJarPath)')" />
+		<MakeDir Directories="$(UnluacSubmodulePath)\build" Condition="'@(UnluacSourceFiles)' != '' And !Exists('$(UnluacBinJarPath)')" />
+		<MakeDir Directories="$(UnluacSubmodulePath)\bin" Condition="'@(UnluacSourceFiles)' != '' And !Exists('$(UnluacBinJarPath)')" />
 
 		<!-- Compile Java source files -->
-		<Exec Command="javac -deprecation -d build -sourcepath src src\unluac\*.java"
-			  ContinueOnError="true"
-			  WorkingDirectory="$(UnluacSubmodulePath)"
-			  Condition="'@(UnluacSourceFiles)' != '' And !Exists('$(UnluacBinJarPath)')" />
+		<Exec Command="javac -deprecation -d build -sourcepath src src\unluac\*.java" ContinueOnError="true" WorkingDirectory="$(UnluacSubmodulePath)" Condition="'@(UnluacSourceFiles)' != '' And !Exists('$(UnluacBinJarPath)')" />
 
 		<!-- Create JAR file with manifest -->
-		<Exec Command="jar -cfm bin\unluac.jar src\unluac\Manifest.mf -C build ."
-			  ContinueOnError="true"
-			  WorkingDirectory="$(UnluacSubmodulePath)"
-			  Condition="Exists('$(UnluacSubmodulePath)\build') And !Exists('$(UnluacBinJarPath)')" />
+		<Exec Command="jar -cfm bin\unluac.jar src\unluac\Manifest.mf -C build ." ContinueOnError="true" WorkingDirectory="$(UnluacSubmodulePath)" Condition="Exists('$(UnluacSubmodulePath)\build') And !Exists('$(UnluacBinJarPath)')" />
 
 		<!-- Method 3: Look for pre-built JAR files -->
 		<ItemGroup Condition="!Exists('$(UnluacBinJarPath)')">
@@ -353,29 +310,18 @@
 		</PropertyGroup>
 
 		<!-- Copy the JAR file to Tools directory -->
-		<Copy SourceFiles="$(UnluacBinJarPath)"
-			  DestinationFiles="$(UnluacDestinationPath)"
-			  SkipUnchangedFiles="true"
-			  Condition="Exists('$(UnluacBinJarPath)')" />
+		<Copy SourceFiles="$(UnluacBinJarPath)" DestinationFiles="$(UnluacDestinationPath)" SkipUnchangedFiles="true" Condition="Exists('$(UnluacBinJarPath)')" />
 
 		<!-- Report build results -->
-		<Message Text="Successfully built and copied unluac.jar to Tools directory!"
-				 Importance="high"
-				 Condition="Exists('$(UnluacDestinationPath)')" />
+		<Message Text="Successfully built and copied unluac.jar to Tools directory!" Importance="high" Condition="Exists('$(UnluacDestinationPath)')" />
 
-		<Message Text="unluac.jar available at: $(UnluacDestinationPath)"
-				 Importance="high"
-				 Condition="Exists('$(UnluacDestinationPath)')" />
+		<Message Text="unluac.jar available at: $(UnluacDestinationPath)" Importance="high" Condition="Exists('$(UnluacDestinationPath)')" />
 
-		<Warning Text="unluac.jar could not be built automatically. Check if Java compiler (javac) is installed and in PATH."
-				 Condition="'@(UnluacSourceFiles)' != '' And !Exists('$(UnluacDestinationPath)')" />
+		<Warning Text="unluac.jar could not be built automatically. Check if Java compiler (javac) is installed and in PATH." Condition="'@(UnluacSourceFiles)' != '' And !Exists('$(UnluacDestinationPath)')" />
 
-		<Warning Text="unluac submodule appears to be empty. Run 'git submodule update --init --recursive' manually."
-				 Condition="'@(UnluacSourceFiles)' == ''" />
+		<Warning Text="unluac submodule appears to be empty. Run 'git submodule update --init --recursive' manually." Condition="'@(UnluacSourceFiles)' == ''" />
 
-		<Message Text="Manual setup: You can also download unluac.jar from https://sourceforge.net/projects/unluac/ and place it in the Tools directory"
-				 Importance="high"
-				 Condition="!Exists('$(UnluacDestinationPath)')" />
+		<Message Text="Manual setup: You can also download unluac.jar from https://sourceforge.net/projects/unluac/ and place it in the Tools directory" Importance="high" Condition="!Exists('$(UnluacDestinationPath)')" />
 
 	</Target>
 </Project>

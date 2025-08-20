@@ -3,7 +3,6 @@ using System.IO;
 using System.Linq;
 using System.Windows;
 using Amaurot.Services;
-using WinForms = System.Windows.Forms;
 using WpfMessageBox = System.Windows.MessageBox;
 
 namespace Amaurot
@@ -12,6 +11,7 @@ namespace Amaurot
     {
         private readonly SettingsService _settingsService;
         private readonly Action<string>? _logDebug;
+        private readonly IFileDialogService? _fileDialogService;
 
         // ✅ Updated with C# 12 collection initialization syntax
         private static readonly string[] GamePathIndicators = ["game", "boot"];
@@ -24,6 +24,9 @@ namespace Amaurot
             InitializeComponent();
             _settingsService = settingsService;
             _logDebug = logDebug;
+
+            // ✅ Initialize cross-platform file dialog service (CA1416 suppressed at project level)
+            _fileDialogService = new CrossPlatformFileDialogService();
 
             LoadCurrentSettings();
             UpdatePathStatus();
@@ -97,48 +100,66 @@ namespace Amaurot
 
         private void BrowseButton_Click(object sender, RoutedEventArgs e)
         {
-            var dialog = new WinForms.FolderBrowserDialog
+            if (_fileDialogService == null)
             {
-                Description = "Select FFXIV game installation folder",
-                UseDescriptionForTitle = true,
-                SelectedPath = GamePathTextBox.Text
-            };
+                _logDebug?.Invoke("File dialog service not available");
+                return;
+            }
 
-            if (dialog.ShowDialog() == WinForms.DialogResult.OK)
+            var selectedPath = _fileDialogService.SelectFolder(
+                "Select FFXIV game installation folder",
+                !string.IsNullOrEmpty(GamePathTextBox.Text)
+                    ? GamePathTextBox.Text
+                    : Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles)
+            );
+
+            if (!string.IsNullOrEmpty(selectedPath))
             {
-                GamePathTextBox.Text = dialog.SelectedPath;
+                GamePathTextBox.Text = selectedPath;
                 UpdatePathStatus();
             }
         }
 
         private void BrowseSapphireButton_Click(object sender, RoutedEventArgs e)
         {
-            var dialog = new WinForms.FolderBrowserDialog
+            if (_fileDialogService == null)
             {
-                Description = "Select Sapphire Server repository folder",
-                UseDescriptionForTitle = true,
-                SelectedPath = SapphirePathTextBox.Text
-            };
+                _logDebug?.Invoke("File dialog service not available");
+                return;
+            }
 
-            if (dialog.ShowDialog() == WinForms.DialogResult.OK)
+            var selectedPath = _fileDialogService.SelectFolder(
+                "Select Sapphire Server repository folder",
+                !string.IsNullOrEmpty(SapphirePathTextBox.Text)
+                    ? SapphirePathTextBox.Text
+                    : Environment.GetFolderPath(Environment.SpecialFolder.UserProfile)
+            );
+
+            if (!string.IsNullOrEmpty(selectedPath))
             {
-                SapphirePathTextBox.Text = dialog.SelectedPath;
+                SapphirePathTextBox.Text = selectedPath;
                 UpdateSapphirePathStatus();
             }
         }
 
         private void BrowseSapphireBuildButton_Click(object sender, RoutedEventArgs e)
         {
-            var dialog = new WinForms.FolderBrowserDialog
+            if (_fileDialogService == null)
             {
-                Description = "Select Sapphire Server build directory",
-                UseDescriptionForTitle = true,
-                SelectedPath = SapphireBuildPathTextBox.Text
-            };
+                _logDebug?.Invoke("File dialog service not available");
+                return;
+            }
 
-            if (dialog.ShowDialog() == WinForms.DialogResult.OK)
+            var selectedPath = _fileDialogService.SelectFolder(
+                "Select Sapphire Server build directory",
+                !string.IsNullOrEmpty(SapphireBuildPathTextBox.Text)
+                    ? SapphireBuildPathTextBox.Text
+                    : Environment.GetFolderPath(Environment.SpecialFolder.UserProfile)
+            );
+
+            if (!string.IsNullOrEmpty(selectedPath))
             {
-                SapphireBuildPathTextBox.Text = dialog.SelectedPath;
+                SapphireBuildPathTextBox.Text = selectedPath;
                 UpdateSapphireBuildPathStatus();
             }
         }

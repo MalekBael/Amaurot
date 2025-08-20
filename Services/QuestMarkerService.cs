@@ -1,7 +1,7 @@
 ﻿using SaintCoinach;
+using SaintCoinach.Xiv;
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Threading.Tasks;
 
 namespace Amaurot.Services
@@ -9,14 +9,12 @@ namespace Amaurot.Services
     public class QuestMarkerService
     {
         private readonly ARealmReversed? _realm;
-        private readonly Action<string> _logDebug;
         private readonly QuestLocationService _questLocationService;
 
-        public QuestMarkerService(ARealmReversed? realm, Action<string> logDebug)
+        public QuestMarkerService(ARealmReversed? realm)
         {
             _realm = realm;
-            _logDebug = logDebug ?? (msg => { });
-            _questLocationService = new QuestLocationService(realm, logDebug);
+            _questLocationService = new QuestLocationService(realm);
         }
 
         /// <summary>
@@ -28,13 +26,13 @@ namespace Amaurot.Services
 
             if (_realm?.GameData == null)
             {
-                _logDebug("Realm is null, cannot extract quest markers");
+                DebugModeManager.LogError("Realm is null, cannot extract quest markers");
                 return questMarkers;
             }
 
             try
             {
-                _logDebug("🎯 QUEST MARKER EXTRACTION: Using Libra Eorzea database approach...");
+                DebugModeManager.LogDebug("QUEST MARKER EXTRACTION: Using Libra Eorzea database approach...");
 
                 var questLocationData = await _questLocationService.ExtractQuestLocationsAsync();
 
@@ -60,11 +58,11 @@ namespace Amaurot.Services
                     questMarkers.Add(questMarker);
                 }
 
-                _logDebug($"🎯 QUEST MARKER EXTRACTION: Complete! Created {questMarkers.Count} quest markers using Libra Eorzea");
+                DebugModeManager.LogMarkerCreation("Quest", questMarkers.Count);
             }
             catch (Exception ex)
             {
-                _logDebug($"❌ Error in quest marker extraction: {ex.Message}");
+                DebugModeManager.LogError($"Error in quest marker extraction: {ex.Message}");
             }
 
             return questMarkers;

@@ -26,10 +26,12 @@ using QuestInfo = Amaurot.Services.Entities.QuestInfo;
 using ServiceNpcInfo = Amaurot.Services.NpcInfo;
 using ServiceNpcQuestInfo = Amaurot.Services.NpcQuestInfo;
 using TerritoryInfo = Amaurot.Services.Entities.TerritoryInfo;
+using QuestBattleInfo = Amaurot.Services.Entities.QuestBattleInfo;
+using System.ComponentModel;
 
 namespace Amaurot
 {
-    public partial class MainWindow : Window
+    public partial class MainWindow : Window, INotifyPropertyChanged
     {
         #region Fields
 
@@ -57,7 +59,10 @@ namespace Amaurot
         public ObservableCollection<BNpcInfo> FilteredBNpcs => _entities.FilteredBNpcs;
         public ObservableCollection<FateInfo> FilteredFates => _entities.FilteredFates;
         public ObservableCollection<InstanceContentInfo> FilteredInstanceContents => _entities.FilteredInstanceContents;
+        public ObservableCollection<QuestBattleInfo> FilteredQuestBattles => _entities.FilteredQuestBattles;
         public double CurrentScale => _mapState.CurrentScale;
+        public bool IsDebugModeEnabled => DebugModeManager.IsDebugModeEnabled;
+        public event PropertyChangedEventHandler? PropertyChanged;
 
         #endregion Properties
 
@@ -75,6 +80,13 @@ namespace Amaurot
             Loaded += OnWindowLoaded;
 
             this.Closing += MainWindow_Closing;
+            
+            DebugModeManager.DebugModeChanged += OnDebugModeChanged;
+        }
+
+        private void OnDebugModeChanged(bool isEnabled)
+        {
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsDebugModeEnabled)));
         }
 
         private void SafeShutdown()
@@ -118,23 +130,22 @@ namespace Amaurot
             {
                 _services.Register(new SettingsService());
                 
-                // ✅ CORRECT: Initialize DebugModeManager instead of registering DebugHelper
                 DebugModeManager.Initialize(this);
                 
                 _services.Register(new MapRenderer(_realm));
                 _services.Register(new UIUpdateService());
 
-                _filterService = new FilterService(LogDebug);
+                _filterService = new FilterService(DebugModeManager.LogDebug);
                 _services.Register(_filterService);
 
-                _services.Register(new MapInteractionService(LogDebug));
+                _services.Register(new MapInteractionService(DebugModeManager.LogDebug));
                 _services.Register<IFileDialogService>(new CrossPlatformFileDialogService());
 
-                LogDebug("Services initialized successfully");
+                DebugModeManager.LogDebug("Services initialized successfully");
             }
             catch (Exception ex)
             {
-                LogDebug($"Error initializing services: {ex.Message}");
+                DebugModeManager.LogDebug($"Error initializing services: {ex.Message}");
             }
         }
 
@@ -142,20 +153,24 @@ namespace Amaurot
         {
             if (_realm == null) return;
 
-            _services.Register(new DataLoaderService(_realm, LogDebug));
-            _services.Register(new QuestMarkerService(_realm, LogDebug));
-            _services.Register(new QuestLocationService(_realm, LogDebug));
-            _services.Register(new MapService(_realm, LogDebug));
-            _services.Register(new NpcService(_realm, LogDebug));
-            _services.Register(new QuestScriptService(_services.Get<SettingsService>()!, LogDebug));
-            _services.Register(new InstanceScriptService(_services.Get<SettingsService>()!, LogDebug));
+            _services.Register(new DataLoaderService(_realm));
+            _services.Register(new QuestMarkerService(_realm));
+            _services.Register(new QuestLocationService(_realm));
+            _services.Register(new MapService(_realm));
+            _services.Register(new NpcService(_realm));
+            _services.Register(new QuestScriptService(_services.Get<SettingsService>()!));
+            _services.Register(new InstanceScriptService(_services.Get<SettingsService>()!));
+
+            _services.Register(new QuestBattleScriptService(_services.Get<SettingsService>()!));
+
+            _services.Register(new QuestBattleLgbService(_realm));
 
             var mapRenderer = _services.Get<MapRenderer>();
             if (mapRenderer != null && _realm != null)
             {
                 mapRenderer.UpdateRealm(_realm);
             }
-            LogDebug("Realm-dependent services initialized");
+            DebugModeManager.LogServiceInitialization("RealmDependentServices", true);
         }
 
         private async void OnWindowLoaded(object sender, RoutedEventArgs e)
@@ -241,7 +256,6 @@ namespace Amaurot
 
         private async void LoadGameData_Click(object sender, RoutedEventArgs e)
         {
-            // REPLACE: Microsoft.Win32.OpenFileDialog with IFileDialogService
             var fileDialogService = _services.Get<IFileDialogService>();
             if (fileDialogService == null)
             {
@@ -347,6 +361,12 @@ namespace Amaurot
                 _entities.InstanceContents,
                 _entities.FilteredInstanceContents,
                 "Loading instance content...");
+
+            await LoadEntityData<QuestBattleInfo>(
+                () => dataLoader.LoadQuestBattlesAsync(),
+                _entities.QuestBattles,
+                _entities.FilteredQuestBattles,
+                "Loading quest battles...");
 
             await LoadNpcsAsync();
 
@@ -621,22 +641,30 @@ namespace Amaurot
 
             var mapService = _services.Get<MapService>();
 
-            // Load both marker types in parallel
             var originalMarkersTask = Task.Run(() =>
                 mapService?.LoadMapMarkers(territory.MapId) ?? new List<MapMarker>());
 
             var npcMarkersTask = CreateNpcMarkersWithScriptCheckingAsync(territory.MapId);
 
-            // Wait for both to complete
+            var questBattleMarkersTask = Task.Run(async () =>
+            {
+                var questBattleService = _services.Get<QuestBattleLgbService>();
+                return questBattleService != null
+                    ? await questBattleService.LoadQuestBattleMarkersFromLgbAsync(territory.MapId)
+                    : new List<MapMarker>();
+            });
+
             var originalMarkers = await originalMarkersTask;
             var npcMarkers = await npcMarkersTask;
+            var questBattleMarkers = await questBattleMarkersTask;
 
             _mapState.CurrentMapMarkers.Clear();
             _mapState.CurrentMapMarkers.AddRange(originalMarkers);
             _mapState.CurrentMapMarkers.AddRange(npcMarkers);
+            _mapState.CurrentMapMarkers.AddRange(questBattleMarkers);
 
             LogDebug($"Loaded {_mapState.CurrentMapMarkers.Count} markers " +
-                     $"({originalMarkers.Count} original, {npcMarkers.Count} NPC)");
+                     $"({originalMarkers.Count} original, {npcMarkers.Count} NPC, {questBattleMarkers.Count} quest battle)");
 
             RefreshMarkerDisplay();
 
@@ -644,7 +672,6 @@ namespace Amaurot
                               $"{_mapState.CurrentMapMarkers.Count} markers found";
         }
 
-        // Fixed async method that doesn't cause deadlocks
         private async Task<List<MapMarker>> CreateNpcMarkersWithScriptCheckingAsync(uint mapId)
         {
             return await Task.Run(() =>
@@ -658,7 +685,6 @@ namespace Amaurot
 
                 if (questScriptService == null)
                 {
-                    // No script service - create all markers with default icon
                     foreach (var npc in npcsForMap)
                     {
                         markers.Add(CreateNpcMarker(npc, 71031, "ui/icon/071000/071031.tex", 0, npc.QuestCount));
@@ -667,16 +693,14 @@ namespace Amaurot
                     return markers;
                 }
 
-                // Build script cache efficiently
                 var scriptCache = BuildOptimizedScriptCacheForMap(npcsForMap, questScriptService);
 
                 foreach (var npc in npcsForMap)
                 {
-                    uint iconId = 71031; // Default: no scripts found
+                    uint iconId = 71031;     
                     string iconPath = "ui/icon/071000/071031.tex";
                     int scriptsAvailable = 0;
 
-                    // Check cached script availability for this NPC's quests
                     foreach (var quest in npc.Quests)
                     {
                         var fullQuestInfo = _entities.Quests.FirstOrDefault(q => q.Id == quest.QuestId);
@@ -689,7 +713,6 @@ namespace Amaurot
                         }
                     }
 
-                    // Use script-available icon if any quest has scripts
                     if (scriptsAvailable > 0)
                     {
                         iconId = 61411;
@@ -706,7 +729,6 @@ namespace Amaurot
             });
         }
 
-        // Optimized cache building with limits to prevent excessive file system calls
         private Dictionary<string, bool> BuildOptimizedScriptCacheForMap(List<EntityNpcInfo> npcsForMap, QuestScriptService questScriptService)
         {
             var scriptCache = new Dictionary<string, bool>();
@@ -719,17 +741,15 @@ namespace Amaurot
                     .Where(quest => quest != null && !string.IsNullOrEmpty(quest.QuestIdString))
                     .Select(quest => quest.QuestIdString!)
                     .Distinct()
-                    .Take(100) // Reasonable limit to prevent excessive calls
+                    .Take(100)       
                     .ToList();
 
                 LogDebug($"Checking script availability for {uniqueQuestIds.Count} unique quests on this map");
 
-                // Use the cached method from QuestScriptService
                 foreach (var questIdString in uniqueQuestIds)
                 {
                     try
                     {
-                        // This method already has caching built-in, so it's fast on subsequent calls
                         bool hasScript = questScriptService.HasQuestScriptInRepo(questIdString);
                         scriptCache[questIdString] = hasScript;
                     }
@@ -805,6 +825,7 @@ namespace Amaurot
                     MarkerType.Landmark => ShowLandmarkMarkersCheckBox?.IsChecked == true,
                     MarkerType.Fate => ShowFateMarkersCheckBox?.IsChecked == true,
                     MarkerType.Entrance => ShowEntranceMarkersCheckBox?.IsChecked == true,
+                    MarkerType.QuestBattle => ShowQuestBattleMarkersCheckBox?.IsChecked == true,
                     _ => ShowGenericMarkersCheckBox?.IsChecked == true
                 };
             }).ToList();
@@ -942,6 +963,11 @@ namespace Amaurot
                     UpdateEntityCount<InstanceContentInfo>();
                     break;
 
+                case "QuestBattleSearchBox":
+                    filterService?.FilterQuestBattles(searchText, _entities.QuestBattles, _entities.FilteredQuestBattles);
+                    UpdateEntityCount<QuestBattleInfo>();
+                    break;
+
                 case "TerritorySearchBox":
                     DebouncedSearch(() => ApplyTerritoryFilters());
                     break;
@@ -1033,14 +1059,15 @@ namespace Amaurot
 
         #region UI Updates
 
-        private static readonly Dictionary<Type, (string TextBlockName, Func<EntityCollectionManager, int> GetCount)> EntityCountConfig = new()
+        private static readonly Dictionary<Type, (String TextBlockName, Func<EntityCollectionManager, Int32> GetCount)> EntityCountConfig = new()
         {
             [typeof(TerritoryInfo)] = ("TerritoryCountText", e => e.FilteredTerritories.Count),
             [typeof(QuestInfo)] = ("QuestCountText", e => e.FilteredQuests.Count),
             [typeof(EntityNpcInfo)] = ("NpcCountText", e => e.FilteredNpcs.Count),
             [typeof(BNpcInfo)] = ("BNpcCountText", e => e.FilteredBNpcs.Count),
             [typeof(FateInfo)] = ("FateCountText", e => e.FilteredFates.Count),
-            [typeof(InstanceContentInfo)] = ("InstanceContentCountText", e => e.FilteredInstanceContents.Count)
+            [typeof(InstanceContentInfo)] = ("InstanceContentCountText", e => e.FilteredInstanceContents.Count),
+            [typeof(QuestBattleInfo)] = ("QuestBattleCountText", e => e.FilteredQuestBattles.Count)
         };
 
         private void UpdateEntityCount<T>()
@@ -1137,11 +1164,29 @@ namespace Amaurot
                 bool enabled = checkBox.IsChecked == true;
                 DebugModeManager.IsDebugModeEnabled = enabled;
 
-                _services.Get<MapService>()?.SetVerboseDebugMode(enabled);
-                _services.Get<DataLoaderService>()?.SetVerboseDebugMode(enabled);
                 _services.Get<SettingsService>()?.UpdateDebugMode(enabled);
 
-                LogDebug($"Debug mode {(enabled ? "enabled" : "disabled")}");
+                DebugModeManager.LogInfo($"Debug mode {(enabled ? "enabled" : "disabled")}");
+                
+                RefreshQuestListPinVisibility();
+            }
+        }
+
+        private void RefreshQuestListPinVisibility()
+        {
+            try
+            {
+                var questList = FindName("QuestList") as System.Windows.Controls.ListBox;      
+                if (questList?.ItemsSource != null)
+                {
+                    var currentSource = questList.ItemsSource;
+                    questList.ItemsSource = null;
+                    questList.ItemsSource = currentSource;
+                }
+            }
+            catch (Exception ex)
+            {
+                LogDebug($"Error refreshing quest list pin visibility: {ex.Message}");
             }
         }
 
@@ -1322,6 +1367,47 @@ namespace Amaurot
             LogDebug(logMessage);
         }
 
+        private void QuestBattleList_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (sender is System.Windows.Controls.ListBox questBattleListBox && questBattleListBox.SelectedItem is QuestBattleInfo selectedQuestBattle)
+            {
+                LogDebug($"Quest Battle selected: {selectedQuestBattle.QuestBattleName} (ID: {selectedQuestBattle.QuestBattleId})");
+            }
+        }
+
+        private void QuestBattleDetailsButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is System.Windows.Controls.Button button && button.Tag is QuestBattleInfo questBattle)
+            {
+                ShowQuestBattleDetails(questBattle);
+            }
+        }
+
+        private void ShowQuestBattleDetails(QuestBattleInfo questBattle)
+        {
+            try
+            {
+                var details = $"Quest Battle: {questBattle.QuestBattleName}\n" +
+                             $"ID: {questBattle.QuestBattleId}\n" +
+                             $"Territory: {questBattle.TerritoryName}\n" +
+                             $"Layer: {questBattle.LayerName}\n" +
+                             $"Asset Type: {questBattle.AssetType}\n" +
+                             $"Source: {questBattle.Source}\n" +
+                             $"Coordinates: ({questBattle.MapX:F1}, {questBattle.MapY:F1}, {questBattle.MapZ:F1})";
+
+                System.Windows.MessageBox.Show(details, "Quest Battle Details", 
+                    MessageBoxButton.OK, MessageBoxImage.Information);
+
+                LogDebug($"Showed quest battle details for: {questBattle.QuestBattleName}");
+            }
+            catch (Exception ex)
+            {
+                LogDebug($"Error showing quest battle details: {ex.Message}");
+                System.Windows.MessageBox.Show($"Error: {ex.Message}", "Error",
+                    MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
         #endregion List Event Handlers
 
         #region Tool Methods
@@ -1411,7 +1497,6 @@ namespace Amaurot
 
                             if (confirmBatch == MessageBoxResult.Yes)
                             {
-                                // ✅ SIMPLE: Always use JSON format when run from tools menu
                                 await RunToolWithProgress(toolPath, $"--game \"{gamePath}\" --batch lgb_output json", "LGB Batch Processing (JSON)");
                             }
                             break;
@@ -1444,9 +1529,33 @@ namespace Amaurot
 
                 toolPath = Path.Combine(buildPath, "tools", toolName);
             }
+            else if (toolName == "lgb-parser.exe")
+            {
+                toolPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, toolName);
+                
+                if (!File.Exists(toolPath))
+                {
+                    var fallbackPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Tools", toolName);
+                    if (File.Exists(fallbackPath))
+                    {
+                        toolPath = fallbackPath;
+                        LogDebug($"⚠️ Using LGB-Parser from legacy Tools directory: {fallbackPath}");
+                    }
+                }
+            }
             else
             {
                 toolPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Tools", toolName);
+                
+                if (!File.Exists(toolPath))
+                {
+                    var rootPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, toolName);
+                    if (File.Exists(rootPath))
+                    {
+                        toolPath = rootPath;
+                        LogDebug($"Using {toolName} from root directory: {rootPath}");
+                    }
+                }
             }
 
             if (!File.Exists(toolPath))
@@ -1659,13 +1768,11 @@ namespace Amaurot
 
         #region Helper Methods
 
-        // ✅ CORRECT: Use DebugModeManager directly
         public void LogDebug(string message)
         {
             DebugModeManager.LogDebug(message);
         }
 
-        // ✅ CORRECT: Use DebugModeManager directly  
         private bool ValidateGameDirectory(string directory)
         {
             return DebugModeManager.ValidateGameDirectory(directory);
@@ -1678,7 +1785,6 @@ namespace Amaurot
                 var targetNpc = _entities.FilteredNpcs.FirstOrDefault(n => n.Id == npcId);
                 if (targetNpc != null)
                 {
-                    // ✅ PERFORMANCE FIX: Create popup asynchronously to avoid UI blocking
                     Task.Run(() =>
                     {
                         Dispatcher.BeginInvoke(() =>
@@ -1700,7 +1806,6 @@ namespace Amaurot
             }
         }
 
-        // ✅ ADD: Performance-optimized method to get QuestScriptService without reflection
         public QuestScriptService? GetQuestScriptService()
         {
             return _services?.Get<QuestScriptService>();
@@ -1972,6 +2077,7 @@ namespace Amaurot
         public ObservableCollection<BNpcInfo> BNpcs { get; } = new();
         public ObservableCollection<FateInfo> Fates { get; } = new();
         public ObservableCollection<InstanceContentInfo> InstanceContents { get; } = new();
+        public ObservableCollection<QuestBattleInfo> QuestBattles { get; } = new();
 
         public ObservableCollection<TerritoryInfo> FilteredTerritories { get; } = new();
         public ObservableCollection<QuestInfo> FilteredQuests { get; } = new();
@@ -1979,6 +2085,7 @@ namespace Amaurot
         public ObservableCollection<BNpcInfo> FilteredBNpcs { get; } = new();
         public ObservableCollection<FateInfo> FilteredFates { get; } = new();
         public ObservableCollection<InstanceContentInfo> FilteredInstanceContents { get; } = new();
+        public ObservableCollection<QuestBattleInfo> FilteredQuestBattles { get; } = new();
 
         public List<EntityNpcInfo> AllNpcs { get; } = new();
 

@@ -338,6 +338,27 @@ namespace Amaurot.Services
         }
 
         #endregion Instance Content Filtering
+
+        #region Quest Battle Filtering
+
+        public void FilterQuestBattles(string searchText, ObservableCollection<QuestBattleInfo> source, ObservableCollection<QuestBattleInfo> target)
+        {
+            try
+            {
+                FilterEntities(searchText, source, target, (questBattle, text) =>
+                    questBattle.QuestBattleName.Contains(text, StringComparison.OrdinalIgnoreCase) ||
+                    questBattle.LayerName.Contains(text, StringComparison.OrdinalIgnoreCase) ||
+                    questBattle.TerritoryName.Contains(text, StringComparison.OrdinalIgnoreCase) ||
+                    questBattle.QuestBattleId.ToString().Contains(text) ||
+                    questBattle.AssetType.Contains(text, StringComparison.OrdinalIgnoreCase));
+            }
+            catch (Exception ex)
+            {
+                _logDebug($"Error filtering Quest Battles: {ex.Message}");
+            }
+        }
+
+        #endregion Quest Battle Filtering
     }
 
     #region Legacy Classes (for backward compatibility)

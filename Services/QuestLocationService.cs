@@ -20,23 +20,21 @@ namespace Amaurot.Services
     public class QuestLocationService
     {
         private readonly ARealmReversed? _realm;
-        private readonly Action<string> _logDebug;
         private readonly Dictionary<uint, QuestLocationData> _questLocationCache = new();
         private readonly Dictionary<uint, uint> _territoryMappingCache = new();
         private bool _verboseDebugMode = false;
         private string? _libraDbPath = null;
 
-        public QuestLocationService(ARealmReversed? realm, Action<string> logDebug)
+        public QuestLocationService(ARealmReversed? realm)
         {
             _realm = realm;
-            _logDebug = logDebug ?? (msg => { });
             InitializeLibraDatabase();
         }
 
         public void SetVerboseDebugMode(bool enabled)
         {
             _verboseDebugMode = enabled;
-            _logDebug($"Quest location service verbose debug mode set to: {enabled}");
+            DebugModeManager.LogDebug($"Quest location service verbose debug mode set to: {enabled}");
         }
 
         /// <summary>
@@ -46,7 +44,7 @@ namespace Amaurot.Services
         {
             try
             {
-                _logDebug("🔍 Searching for Libra Eorzea database...");
+                DebugModeManager.LogDebug("Searching for Libra Eorzea database...");
 
                 var possiblePaths = new[]
                 {
@@ -62,15 +60,15 @@ namespace Amaurot.Services
 
                 foreach (var path in possiblePaths)
                 {
-                    _logDebug($"  Checking: {path}");
+                    DebugModeManager.LogDebug($"  Checking: {path}");
                     if (File.Exists(path))
                     {
                         _libraDbPath = path;
                         var fileInfo = new FileInfo(path);
-                        _logDebug($"✅ Found Libra Eorzea database!");
-                        _logDebug($"   📍 Location: {path}");
-                        _logDebug($"   📏 Size: {fileInfo.Length / (1024 * 1024):F1} MB");
-                        _logDebug($"   📅 Modified: {fileInfo.LastWriteTime}");
+                        DebugModeManager.LogFileOperation("Found", "Libra Eorzea database", true);
+                        DebugModeManager.LogDebug($"   Location: {path}");
+                        DebugModeManager.LogDebug($"   Size: {fileInfo.Length / (1024 * 1024):F1} MB");
+                        DebugModeManager.LogDebug($"   Modified: {fileInfo.LastWriteTime}");
 
                         try
                         {
@@ -87,12 +85,12 @@ namespace Amaurot.Services
                                 testTables.Add(testReader.GetString(0));
                             }
 
-                            _logDebug($"   🔍 Database test successful! Sample tables: {string.Join(", ", testTables)}");
+                            DebugModeManager.LogDebug($"   Database test successful! Sample tables: {string.Join(", ", testTables)}");
                             break;
                         }
                         catch (Exception testEx)
                         {
-                            _logDebug($"   ❌ Database test failed: {testEx.Message}");
+                            DebugModeManager.LogError($"   Database test failed: {testEx.Message}");
                             _libraDbPath = null;
                             continue;
                         }
@@ -101,13 +99,13 @@ namespace Amaurot.Services
 
                 if (_libraDbPath == null)
                 {
-                    _logDebug("❌ Libra Eorzea database not found in any location!");
-                    _logDebug("🔄 Will use Saint Coinach sheet fallback (limited quest markers)");
+                    DebugModeManager.LogError("Libra Eorzea database not found in any location!");
+                    DebugModeManager.LogWarning("Will use Saint Coinach sheet fallback (limited quest markers)");
                 }
             }
             catch (Exception ex)
             {
-                _logDebug($"❌ Error searching for Libra database: {ex.Message}");
+                DebugModeManager.LogError($"Error searching for Libra database: {ex.Message}");
             }
         }
 
@@ -116,20 +114,20 @@ namespace Amaurot.Services
         /// </summary>
         public async Task<Dictionary<uint, QuestLocationData>> ExtractQuestLocationsAsync()
         {
-            _logDebug("🎯 Starting quest location extraction...");
+            DebugModeManager.LogDebug("Starting quest location extraction...");
 
             if (_libraDbPath != null)
             {
-                _logDebug("📊 Using Libra Eorzea database (preferred method)");
+                DebugModeManager.LogDebug("Using Libra Eorzea database (preferred method)");
                 await ExtractFromLibraDatabase();
             }
             else
             {
-                _logDebug("📋 Libra database not available, using Saint Coinach Quest[37] fallback...");
+                DebugModeManager.LogDebug("Libra database not available, using Saint Coinach Quest[37] fallback...");
                 await ExtractFromSaintCoinachQuests();
             }
 
-            _logDebug($"🎯 Quest location extraction complete! Found {_questLocationCache.Count} quest locations");
+            DebugModeManager.LogDebug($"Quest location extraction complete! Found {_questLocationCache.Count} quest locations");
 
             if (_verboseDebugMode)
             {
@@ -139,16 +137,16 @@ namespace Amaurot.Services
                     .Take(10)
                     .ToList();
 
-                _logDebug($"🗺️ MAP ID DISTRIBUTION (Top 10):");
+                DebugModeManager.LogDebug($"MAP ID DISTRIBUTION (Top 10):");
                 foreach (var group in mapIdCounts)
                 {
-                    _logDebug($"  MapId {group.Key}: {group.Count()} quests");
+                    DebugModeManager.LogDebug($"  MapId {group.Key}: {group.Count()} quests");
                 }
 
                 var mapId1Count = _questLocationCache.Values.Count(q => q.MapId == 1);
                 if (mapId1Count > 0)
                 {
-                    _logDebug($"⚠️ WARNING: {mapId1Count} quests have MapId=1 (likely incorrect default)");
+                    DebugModeManager.LogWarning($"WARNING: {mapId1Count} quests have MapId=1 (likely incorrect default)");
                 }
 
                 var coordRanges = _questLocationCache.Values.Where(q => q.MapX > 0 && q.MapY > 0).ToList();
@@ -159,13 +157,13 @@ namespace Amaurot.Services
                     var minY = coordRanges.Min(q => q.MapY);
                     var maxY = coordRanges.Max(q => q.MapY);
 
-                    _logDebug($"📍 COORDINATE RANGES:");
-                    _logDebug($"  X: {minX:F1} to {maxX:F1}");
-                    _logDebug($"  Y: {minY:F1} to {maxY:F1}");
+                    DebugModeManager.LogDebug($"COORDINATE RANGES:");
+                    DebugModeManager.LogDebug($"  X: {minX:F1} to {maxX:F1}");
+                    DebugModeManager.LogDebug($"  Y: {minY:F1} to {maxY:F1}");
 
                     if (maxX > 50 || maxY > 50)
                     {
-                        _logDebug($"⚠️ WARNING: Coordinates seem to large (should be 1-42 range)");
+                        DebugModeManager.LogWarning($"WARNING: Coordinates seem too large (should be 1-42 range)");
                     }
                 }
             }
@@ -177,7 +175,7 @@ namespace Amaurot.Services
         {
             try
             {
-                _logDebug("📊 Extracting quest locations from Libra Eorzea database...");
+                DebugModeManager.LogDebug("Extracting quest locations from Libra Eorzea database...");
 
                 await Task.Run(() =>
                 {
@@ -196,7 +194,7 @@ namespace Amaurot.Services
 
                     if (_verboseDebugMode)
                     {
-                        _logDebug($"📊 ENpcResident table columns: {string.Join(", ", columns)}");
+                        DebugModeManager.LogDebug($"ENpcResident table columns: {string.Join(", ", columns)}");
                     }
 
                     var query = @"
@@ -233,7 +231,7 @@ namespace Amaurot.Services
 
                             if (_verboseDebugMode && questCount < 5)
                             {
-                                _logDebug($"📊 Processing Quest {questId}: '{questName}' -> NPC {npcId}: '{npcName}'");
+                                DebugModeManager.LogDebug($"Processing Quest {questId}: '{questName}' -> NPC {npcId}: '{npcName}'");
                             }
 
                             var coordinateData = ParseNpcCoordinates(npcDataJson, npcId, connection, questId, territoryMappingFailures);
@@ -241,7 +239,7 @@ namespace Amaurot.Services
                             {
                                 if (_verboseDebugMode && questCount < 5)
                                 {
-                                    _logDebug($"📊 No valid coordinates found for Quest {questId}");
+                                    DebugModeManager.LogDebug($"No valid coordinates found for Quest {questId}");
                                 }
                                 continue;
                             }
@@ -254,8 +252,8 @@ namespace Amaurot.Services
                             var locationData = new QuestLocationData
                             {
                                 QuestId = questId,
-                                QuestName = questName,     
-                                NpcName = npcName,         
+                                QuestName = questName,
+                                NpcName = npcName,
                                 TerritoryId = coordinateData.TerritoryId,
                                 MapId = coordinateData.MapId,
                                 MapX = coordinateData.MapX,
@@ -275,39 +273,39 @@ namespace Amaurot.Services
 
                             if (_verboseDebugMode && questCount <= 5)
                             {
-                                _logDebug($"✅ Quest {questId} ({questName}) -> Territory {coordinateData.TerritoryId}, Map {coordinateData.MapId}, Coords ({coordinateData.MapX:F1}, {coordinateData.MapY:F1})");
+                                DebugModeManager.LogDebug($"Quest {questId} ({questName}) -> Territory {coordinateData.TerritoryId}, Map {coordinateData.MapId}, Coords ({coordinateData.MapX:F1}, {coordinateData.MapY:F1})");
                             }
                         }
                         catch (Exception rowEx)
                         {
-                            _logDebug($"❌ Error processing row: {rowEx.Message}");
+                            DebugModeManager.LogError($"Error processing row: {rowEx.Message}");
                         }
                     }
 
-                    _logDebug($"📊 Extracted {questCount} quest locations from Libra database");
+                    DebugModeManager.LogDataLoading("quest locations", questCount, "from Libra database");
 
                     if (mapId1Count > 0)
                     {
-                        _logDebug($"⚠️ WARNING: {mapId1Count}/{questCount} quests assigned MapId=1 (likely incorrect)");
+                        DebugModeManager.LogWarning($"WARNING: {mapId1Count}/{questCount} quests assigned MapId=1 (likely incorrect)");
                     }
 
                     if (territoryMappingFailures.Count > 0 && _verboseDebugMode)
                     {
-                        _logDebug($"🗺️ TERRITORY MAPPING FAILURES ({territoryMappingFailures.Count}):");
+                        DebugModeManager.LogDebug($"TERRITORY MAPPING FAILURES ({territoryMappingFailures.Count}):");
                         foreach (var failure in territoryMappingFailures.Take(10))
                         {
-                            _logDebug($"  Quest {failure.questId}: Libra PlaceName ID {failure.libraPlaceNameId} ('{failure.placeName}') → No matching SaintCoinach territory");
+                            DebugModeManager.LogDebug($"  Quest {failure.questId}: Libra PlaceName ID {failure.libraPlaceNameId} ('{failure.placeName}') -> No matching SaintCoinach territory");
                         }
                         if (territoryMappingFailures.Count > 10)
                         {
-                            _logDebug($"  ... and {territoryMappingFailures.Count - 10} more");
+                            DebugModeManager.LogDebug($"  ... and {territoryMappingFailures.Count - 10} more");
                         }
                     }
                 });
             }
             catch (Exception ex)
             {
-                _logDebug($"❌ Error extracting from Libra database: {ex.Message}");
+                DebugModeManager.LogError($"Error extracting from Libra database: {ex.Message}");
                 await ExtractFromSaintCoinachQuests();
             }
         }
@@ -316,12 +314,12 @@ namespace Amaurot.Services
         {
             try
             {
-                _logDebug("📋 Using Saint Coinach Quest[37] fallback...");
+                DebugModeManager.LogDebug("Using Saint Coinach Quest[37] fallback...");
                 await Task.Run(() =>
                 {
                     if (_realm?.GameData == null)
                     {
-                        _logDebug("❌ Realm or GameData is null");
+                        DebugModeManager.LogError("Realm or GameData is null");
                         return;
                     }
 
@@ -362,12 +360,12 @@ namespace Amaurot.Services
                         catch { }
                     }
 
-                    _logDebug($"📋 Saint Coinach fallback complete: {questCount} quests found (no coordinates)");
+                    DebugModeManager.LogDebug($"Saint Coinach fallback complete: {questCount} quests found (no coordinates)");
                 });
             }
             catch (Exception ex)
             {
-                _logDebug($"❌ Error in Saint Coinach fallback: {ex.Message}");
+                DebugModeManager.LogError($"Error in Saint Coinach fallback: {ex.Message}");
             }
         }
 
@@ -413,15 +411,15 @@ namespace Amaurot.Services
                     if (_verboseDebugMode && mapId == 1 && saintCoinachTerritoryId == 0)
                     {
                         string? placeName = GetLibraPlaceName(libraPlaceNameId, connection);
-                        _logDebug($"⚠️ Quest {questId} assigned MapId=1 due to failed territory mapping: Libra PlaceName ID {libraPlaceNameId} ('{placeName}')");
+                        DebugModeManager.LogWarning($"Quest {questId} assigned MapId=1 due to failed territory mapping: Libra PlaceName ID {libraPlaceNameId} ('{placeName}')");
                     }
 
                     var convertedCoords = ConvertLibraToMapMarkerCoordinates(rawLibraX, rawLibraY, mapId);
 
                     if (_verboseDebugMode)
                     {
-                        _logDebug($"📊 NPC {npcId}: Libra PlaceName {libraPlaceNameId} → Territory {saintCoinachTerritoryId}, Map {mapId}");
-                        _logDebug($"📊 Raw Libra coords: ({rawLibraX:F1}, {rawLibraY:F1}) → Map marker coords: ({convertedCoords.X:F1}, {convertedCoords.Y:F1})");
+                        DebugModeManager.LogDebug($"NPC {npcId}: Libra PlaceName {libraPlaceNameId} -> Territory {saintCoinachTerritoryId}, Map {mapId}");
+                        DebugModeManager.LogCoordinateConversion("Libra", "Map marker", convertedCoords.X, convertedCoords.Y, convertedCoords.Z, mapId);
                     }
 
                     return new NpcCoordinateData
@@ -441,13 +439,13 @@ namespace Amaurot.Services
             }
             catch (Exception ex)
             {
-                _logDebug($"❌ Error parsing NPC coordinates for NPC {npcId}: {ex.Message}");
+                DebugModeManager.LogError($"Error parsing NPC coordinates for NPC {npcId}: {ex.Message}");
                 return null;
             }
         }
 
         /// <summary>
-        /// ✅ COMPLETELY REWRITTEN: Convert Libra coordinates to match exactly what MapRenderer expects
+        /// COMPLETELY REWRITTEN: Convert Libra coordinates to match exactly what MapRenderer expects
         /// MapRenderer expects raw coordinates that when processed as (coord + offset) / 2048 give correct positions
         /// </summary>
         private (double X, double Y, double Z) ConvertLibraToMapMarkerCoordinates(double rawLibraX, double rawLibraY, uint mapId)
@@ -487,7 +485,7 @@ namespace Amaurot.Services
                     {
                         if (_verboseDebugMode)
                         {
-                            _logDebug($"    Error getting map properties: {ex.Message}");
+                            DebugModeManager.LogDebug($"    Error getting map properties: {ex.Message}");
                         }
                     }
 
@@ -497,17 +495,17 @@ namespace Amaurot.Services
 
                     if (_verboseDebugMode)
                     {
-                        _logDebug($"    ✅ COORDINATE CONVERSION (MATCHED TO MAPRENDERER):");
-                        _logDebug($"      Raw Libra: ({rawLibraX:F1}, {rawLibraY:F1})");
-                        _logDebug($"      Game Coords: ({gameCoordX:F1}, {gameCoordY:F1}) [1-42 range]");
-                        _logDebug($"      Map {mapId}: SizeFactor={sizeFactor}, OffsetX={offsetX}, OffsetY={offsetY}, c={c:F3}");
-                        _logDebug($"      Final Marker Coords: ({markerX:F1}, {markerY:F1})");
+                        DebugModeManager.LogDebug($"    COORDINATE CONVERSION (MATCHED TO MAPRENDERER):");
+                        DebugModeManager.LogDebug($"      Raw Libra: ({rawLibraX:F1}, {rawLibraY:F1})");
+                        DebugModeManager.LogDebug($"      Game Coords: ({gameCoordX:F1}, {gameCoordY:F1}) [1-42 range]");
+                        DebugModeManager.LogDebug($"      Map {mapId}: SizeFactor={sizeFactor}, OffsetX={offsetX}, OffsetY={offsetY}, c={c:F3}");
+                        DebugModeManager.LogDebug($"      Final Marker Coords: ({markerX:F1}, {markerY:F1})");
 
                         double verifyNormX = (markerX + offsetX) / 2048.0;
                         double verifyNormY = (markerY + offsetY) / 2048.0;
                         double verifyGameX = (41.0 / c) * verifyNormX + 1.0;
                         double verifyGameY = (41.0 / c) * verifyNormY + 1.0;
-                        _logDebug($"      Verification - MapRenderer will calculate: ({verifyGameX:F1}, {verifyGameY:F1}) [should match game coords]");
+                        DebugModeManager.LogDebug($"      Verification - MapRenderer will calculate: ({verifyGameX:F1}, {verifyGameY:F1}) [should match game coords]");
                     }
 
                     return (markerX, markerY, 0);
@@ -516,7 +514,7 @@ namespace Amaurot.Services
                 {
                     if (_verboseDebugMode)
                     {
-                        _logDebug($"    Map {mapId} not found in map sheet, using game coordinates directly");
+                        DebugModeManager.LogDebug($"    Map {mapId} not found in map sheet, using game coordinates directly");
                     }
 
                     return (gameCoordX, gameCoordY, 0);
@@ -524,7 +522,7 @@ namespace Amaurot.Services
             }
             catch (Exception ex)
             {
-                _logDebug($"Error converting coordinates for MapId {mapId}: {ex.Message}");
+                DebugModeManager.LogDebug($"Error converting coordinates for MapId {mapId}: {ex.Message}");
 
                 double gameCoordX = rawLibraX / 10.0;
                 double gameCoordY = rawLibraY / 10.0;
@@ -575,13 +573,13 @@ namespace Amaurot.Services
 
                         if (_verboseDebugMode)
                         {
-                            _logDebug($"❌ Failed to map Libra PlaceName ID {libraPlaceNameId} ('{placeName}') → No SaintCoinach territory found");
+                            DebugModeManager.LogError($"Failed to map Libra PlaceName ID {libraPlaceNameId} ('{placeName}') -> No SaintCoinach territory found");
                         }
                     }
                     else if (_verboseDebugMode)
                     {
                         string? placeName = GetLibraPlaceName(libraPlaceNameId, connection);
-                        _logDebug($"✅ Alternative mapping successful: Libra PlaceName ID {libraPlaceNameId} ('{placeName}') → Territory {saintCoinachTerritoryId}");
+                        DebugModeManager.LogDebug($"Alternative mapping successful: Libra PlaceName ID {libraPlaceNameId} ('{placeName}') -> Territory {saintCoinachTerritoryId}");
                     }
                 }
 
@@ -590,14 +588,14 @@ namespace Amaurot.Services
                 if (_verboseDebugMode && saintCoinachTerritoryId > 0)
                 {
                     string? placeName = GetLibraPlaceName(libraPlaceNameId, connection);
-                    _logDebug($"📊 Mapped Libra PlaceName ID {libraPlaceNameId} ('{placeName}') → SaintCoinach Territory {saintCoinachTerritoryId}");
+                    DebugModeManager.LogDebug($"Mapped Libra PlaceName ID {libraPlaceNameId} ('{placeName}') -> SaintCoinach Territory {saintCoinachTerritoryId}");
                 }
 
                 return saintCoinachTerritoryId;
             }
             catch (Exception ex)
             {
-                _logDebug($"❌ Error mapping Libra PlaceName ID {libraPlaceNameId}: {ex.Message}");
+                DebugModeManager.LogError($"Error mapping Libra PlaceName ID {libraPlaceNameId}: {ex.Message}");
                 _territoryMappingCache[libraPlaceNameId] = 0;
                 return 0;
             }
@@ -630,7 +628,7 @@ namespace Amaurot.Services
             {
                 if (_verboseDebugMode)
                 {
-                    _logDebug($"❌ Error in normalized name matching for '{libraPlaceName}': {ex.Message}");
+                    DebugModeManager.LogError($"Error in normalized name matching for '{libraPlaceName}': {ex.Message}");
                 }
                 return 0;
             }
@@ -679,7 +677,7 @@ namespace Amaurot.Services
                 {
                     if (_verboseDebugMode)
                     {
-                        _logDebug($"✅ Exact name match: '{placeName}' → Territory {territory.Key}");
+                        DebugModeManager.LogDebug($"Exact name match: '{placeName}' -> Territory {territory.Key}");
                     }
                     return (uint)territory.Key;
                 }
@@ -690,7 +688,7 @@ namespace Amaurot.Services
             {
                 if (_verboseDebugMode)
                 {
-                    _logDebug($"❌ Error finding SaintCoinach territory for '{placeName}': {ex.Message}");
+                    DebugModeManager.LogError($"Error finding SaintCoinach territory for '{placeName}': {ex.Message}");
                 }
                 return 0;
             }
@@ -721,7 +719,7 @@ namespace Amaurot.Services
                 {
                     if (_verboseDebugMode)
                     {
-                        _logDebug($"✅ Partial name match: '{libraPlaceName}' → Territory {territory.Key}");
+                        DebugModeManager.LogDebug($"Partial name match: '{libraPlaceName}' -> Territory {territory.Key}");
                     }
                     return (uint)territory.Key;
                 }
@@ -732,7 +730,7 @@ namespace Amaurot.Services
             {
                 if (_verboseDebugMode)
                 {
-                    _logDebug($"❌ Error in partial name matching for '{libraPlaceName}': {ex.Message}");
+                    DebugModeManager.LogError($"Error in partial name matching for '{libraPlaceName}': {ex.Message}");
                 }
                 return 0;
             }
@@ -753,7 +751,7 @@ namespace Amaurot.Services
                 {
                     if (_verboseDebugMode)
                     {
-                        _logDebug($"✅ Direct PlaceName ID match: {libraPlaceNameId} → Territory {territory.Key}");
+                        DebugModeManager.LogDebug($"Direct PlaceName ID match: {libraPlaceNameId} -> Territory {territory.Key}");
                     }
                     return (uint)territory.Key;
                 }
@@ -788,7 +786,7 @@ namespace Amaurot.Services
                 {
                     if (_verboseDebugMode)
                     {
-                        _logDebug($"✅ PlaceNameRegion/Zone ID match: {libraPlaceNameId} → Territory {territory.Key}");
+                        DebugModeManager.LogDebug($"PlaceNameRegion/Zone ID match: {libraPlaceNameId} -> Territory {territory.Key}");
                     }
                     return (uint)territory.Key;
                 }
@@ -799,7 +797,7 @@ namespace Amaurot.Services
             {
                 if (_verboseDebugMode)
                 {
-                    _logDebug($"❌ Error in PlaceName ID matching for ID {libraPlaceNameId}: {ex.Message}");
+                    DebugModeManager.LogError($"Error in PlaceName ID matching for ID {libraPlaceNameId}: {ex.Message}");
                 }
                 return 0;
             }
@@ -827,14 +825,14 @@ namespace Amaurot.Services
 
                 if (_verboseDebugMode && string.IsNullOrEmpty(placeName))
                 {
-                    _logDebug($"⚠️ No PlaceName found for ID {placeNameId} in Libra database");
+                    DebugModeManager.LogWarning($"No PlaceName found for ID {placeNameId} in Libra database");
                 }
 
                 return placeName;
             }
             catch (Exception ex)
             {
-                _logDebug($"❌ Error getting PlaceName for ID {placeNameId}: {ex.Message}");
+                DebugModeManager.LogError($"Error getting PlaceName for ID {placeNameId}: {ex.Message}");
                 return null;
             }
         }
@@ -853,7 +851,7 @@ namespace Amaurot.Services
 
                         if (_verboseDebugMode && mapId == 1)
                         {
-                            _logDebug($"⚠️ Territory {saintCoinachTerritoryId} → MapId {mapId} (check if this is correct)");
+                            DebugModeManager.LogWarning($"Territory {saintCoinachTerritoryId} -> MapId {mapId} (check if this is correct)");
                         }
 
                         return mapId;
@@ -862,19 +860,19 @@ namespace Amaurot.Services
 
                 if (_verboseDebugMode && saintCoinachTerritoryId > 0)
                 {
-                    _logDebug($"⚠️ No map found for territory {saintCoinachTerritoryId}, returning 0 instead of defaulting to 1");
+                    DebugModeManager.LogWarning($"No map found for territory {saintCoinachTerritoryId}, returning 0 instead of defaulting to 1");
                 }
 
-                return 0;           
+                return 0;
             }
             catch (Exception ex)
             {
-                _logDebug($"Error getting MapId for Territory {saintCoinachTerritoryId}: {ex.Message}");
-                return 0;      
+                DebugModeManager.LogDebug($"Error getting MapId for Territory {saintCoinachTerritoryId}: {ex.Message}");
+                return 0;
             }
         }
 
-        public void UpdateQuestLocations(IEnumerable<QuestInfo> quests)      
+        public void UpdateQuestLocations(IEnumerable<QuestInfo> quests)
         {
             int updatedCount = 0;
 
@@ -886,11 +884,11 @@ namespace Amaurot.Services
                     {
                         quest.MapId = locationData.MapId;
                         quest.TerritoryId = locationData.TerritoryId;
-                        quest.MapX = locationData.MapX;        
-                        quest.MapY = locationData.MapY;        
-                        quest.MapZ = locationData.MapZ;        
+                        quest.MapX = locationData.MapX;
+                        quest.MapY = locationData.MapY;
+                        quest.MapZ = locationData.MapZ;
 
-                        var questGiver = new QuestNpcInfo      
+                        var questGiver = new QuestNpcInfo
                         {
                             NpcId = locationData.ObjectId,
                             NpcName = GetNpcNameFromId(locationData.ObjectId),
@@ -913,11 +911,11 @@ namespace Amaurot.Services
                     }
                 }
 
-                _logDebug($"🎯 Updated {updatedCount} quests with NPC coordinate data from Libra");
+                DebugModeManager.LogDebug($"Updated {updatedCount} quests with NPC coordinate data from Libra");
             }
             catch (Exception ex)
             {
-                _logDebug($"❌ Error updating quest locations: {ex.Message}");
+                DebugModeManager.LogError($"Error updating quest locations: {ex.Message}");
             }
         }
 
@@ -974,8 +972,8 @@ namespace Amaurot.Services
         public class QuestLocationData
         {
             public uint QuestId { get; set; }
-            public string QuestName { get; set; } = string.Empty;   
-            public string NpcName { get; set; } = string.Empty;     
+            public string QuestName { get; set; } = string.Empty;
+            public string NpcName { get; set; } = string.Empty;
             public uint TerritoryId { get; set; }
             public uint MapId { get; set; }
             public double MapX { get; set; }

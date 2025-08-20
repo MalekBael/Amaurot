@@ -2,24 +2,22 @@
 using SaintCoinach.Xiv;
 using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
 using System.Data.SQLite;
 using System.IO;
+using System.Linq;
+using System.Threading.Tasks;
 
 namespace Amaurot.Services
 {
     public class NpcService
     {
         private readonly ARealmReversed? _realm;
-        private readonly Action<string> _logDebug;
         private readonly Dictionary<uint, NpcInfo> _npcCache = new();
         private string? _libraDbPath = null;
 
-        public NpcService(ARealmReversed? realm, Action<string> logDebug)
+        public NpcService(ARealmReversed? realm)
         {
             _realm = realm;
-            _logDebug = logDebug ?? (msg => { });
             InitializeLibraDatabase();
         }
 
@@ -30,7 +28,7 @@ namespace Amaurot.Services
         {
             try
             {
-                _logDebug("🧙 Initializing Libra database for NPC positions...");
+                DebugModeManager.LogDebug("Initializing Libra database for NPC positions...");
 
                 var possiblePaths = new[]
                 {
@@ -46,19 +44,19 @@ namespace Amaurot.Services
                     if (File.Exists(path))
                     {
                         _libraDbPath = path;
-                        _logDebug($"🧙 Found Libra database for NPCs: {path}");
+                        DebugModeManager.LogFileOperation("Found", "Libra database for NPCs", true, path);
                         break;
                     }
                 }
 
                 if (_libraDbPath == null)
                 {
-                    _logDebug("❌ Libra database not found - NPCs will have no position data");
+                    DebugModeManager.LogError("Libra database not found - NPCs will have no position data");
                 }
             }
             catch (Exception ex)
             {
-                _logDebug($"❌ Error initializing Libra database: {ex.Message}");
+                DebugModeManager.LogError($"Error initializing Libra database: {ex.Message}");
             }
         }
 
@@ -71,11 +69,11 @@ namespace Amaurot.Services
 
             try
             {
-                _logDebug("🧙 Starting enhanced NPC extraction with Libra Eorzea positions and quests...");
+                DebugModeManager.LogDebug("Starting enhanced NPC extraction with Libra Eorzea positions and quests...");
 
                 if (_realm?.GameData == null)
                 {
-                    _logDebug("❌ Realm or GameData is null - cannot extract NPCs");
+                    DebugModeManager.LogError("Realm or GameData is null - cannot extract NPCs");
                     return npcInfoList;
                 }
 
@@ -84,13 +82,13 @@ namespace Amaurot.Services
                     var enpcSheet = _realm.GameData.GetSheet<ENpcResident>();
                     var territorySheet = _realm.GameData.GetSheet<TerritoryType>();
 
-                    _logDebug($"📊 Found {enpcSheet.Count()} ENpcResident entries in Saint Coinach");
+                    DebugModeManager.LogDebug($"Found {enpcSheet.Count()} ENpcResident entries in Saint Coinach");
 
                     var npcPositions = ExtractNpcPositionsFromLibra();
-                    _logDebug($"📊 Found position data for {npcPositions.Count} NPCs in Libra database");
+                    DebugModeManager.LogDebug($"Found position data for {npcPositions.Count} NPCs in Libra database");
 
                     var npcQuests = ExtractNpcQuestsFromLibra();
-                    _logDebug($"📊 Found quest data for {npcQuests.Count} NPCs in Libra database");
+                    DebugModeManager.LogDebug($"Found quest data for {npcQuests.Count} NPCs in Libra database");
 
                     foreach (var enpc in enpcSheet)
                     {
@@ -160,7 +158,7 @@ namespace Amaurot.Services
                         }
                         catch (Exception ex)
                         {
-                            _logDebug($"❌ Error processing ENpc {enpc.Key}: {ex.Message}");
+                            DebugModeManager.LogError($"Error processing ENpc {enpc.Key}: {ex.Message}");
                         }
                     }
                 });
@@ -169,17 +167,17 @@ namespace Amaurot.Services
 
                 var npcsWithPositions = npcInfoList.Count(n => n.MapId > 0);
                 var npcsWithQuests = npcInfoList.Count(n => n.QuestCount > 0);
-                _logDebug($"🧙 Enhanced NPC extraction complete! Found {npcInfoList.Count} NPCs ({npcsWithPositions} with position data, {npcsWithQuests} with quest data)");
+                DebugModeManager.LogDataLoading("NPCs", npcInfoList.Count, $"{npcsWithPositions} with position data, {npcsWithQuests} with quest data");
 
                 var motherMiounne = npcInfoList.FirstOrDefault(n => n.NpcName.Contains("Mother Miounne"));
                 if (motherMiounne != null)
                 {
-                    _logDebug($"🧙 VERIFIED: Mother Miounne preserved - ID: {motherMiounne.NpcId}, Territory: {motherMiounne.TerritoryId}, Map: {motherMiounne.MapId}, Quests: {motherMiounne.QuestCount}");
+                    DebugModeManager.LogDebug($"VERIFIED: Mother Miounne preserved - ID: {motherMiounne.NpcId}, Territory: {motherMiounne.TerritoryId}, Map: {motherMiounne.MapId}, Quests: {motherMiounne.QuestCount}");
                 }
             }
             catch (Exception ex)
             {
-                _logDebug($"❌ Error in enhanced NPC extraction: {ex.Message}");
+                DebugModeManager.LogError($"Error in enhanced NPC extraction: {ex.Message}");
             }
 
             return npcInfoList;
@@ -194,7 +192,7 @@ namespace Amaurot.Services
 
             if (string.IsNullOrEmpty(_libraDbPath))
             {
-                _logDebug("❌ No Libra database available for NPC quest data");
+                DebugModeManager.LogError("No Libra database available for NPC quest data");
                 return npcQuests;
             }
 
@@ -274,37 +272,37 @@ namespace Amaurot.Services
 
                         if (debugNpcIds.Count < 5 && debugNpcIds.Add(npcId))
                         {
-                            _logDebug($"📊 NPC {npcId} ({npcName}) offers quest: '{questName}' (Level {levelRequired}, {journalGenreName})");
+                            DebugModeManager.LogDebug($"NPC {npcId} ({npcName}) offers quest: '{questName}' (Level {levelRequired}, {journalGenreName})");
                         }
 
                         if (npcName.Contains("Mother Miounne"))
                         {
-                            _logDebug($"🧙 Found quest for Mother Miounne (NPC {npcId}): '{questName}' (ID: {questId})");
+                            DebugModeManager.LogDebug($"Found quest for Mother Miounne (NPC {npcId}): '{questName}' (ID: {questId})");
                         }
                     }
                     catch (Exception rowEx)
                     {
-                        _logDebug($"❌ Error processing quest row: {rowEx.Message}");
+                        DebugModeManager.LogError($"Error processing quest row: {rowEx.Message}");
                     }
                 }
 
-                _logDebug($"📊 Processed {questCount} quests for {npcQuests.Count} NPCs from Libra database");
+                DebugModeManager.LogDebug($"Processed {questCount} quests for {npcQuests.Count} NPCs from Libra database");
 
                 if (npcQuests.Count > 0)
                 {
                     var topQuestGivers = npcQuests.OrderByDescending(kvp => kvp.Value.Count).Take(5).ToList();
-                    _logDebug($"📊 Top quest givers:");
+                    DebugModeManager.LogDebug($"Top quest givers:");
                     foreach (var (npcId, quests) in topQuestGivers)
                     {
                         var firstQuest = quests.FirstOrDefault();
                         var npcName = firstQuest?.PlaceName ?? $"NPC_{npcId}";
-                        _logDebug($"  NPC {npcId}: {quests.Count} quests");
+                        DebugModeManager.LogDebug($"  NPC {npcId}: {quests.Count} quests");
                     }
                 }
             }
             catch (Exception ex)
             {
-                _logDebug($"❌ Error extracting NPC quest data from Libra: {ex.Message}");
+                DebugModeManager.LogError($"Error extracting NPC quest data from Libra: {ex.Message}");
             }
 
             return npcQuests;
@@ -319,7 +317,7 @@ namespace Amaurot.Services
 
             if (string.IsNullOrEmpty(_libraDbPath))
             {
-                _logDebug("❌ No Libra database available for NPC positions");
+                DebugModeManager.LogError("No Libra database available for NPC positions");
                 return npcPositions;
             }
 
@@ -358,7 +356,7 @@ namespace Amaurot.Services
 
                         if (processedCount <= 5)
                         {
-                            _logDebug($"📊 Processing NPC {npcId}: '{npcName}'");
+                            DebugModeManager.LogDebug($"Processing NPC {npcId}: '{npcName}'");
                         }
 
                         var coordinateData = ParseNpcCoordinates(npcDataJson, npcId, connection);
@@ -369,7 +367,7 @@ namespace Amaurot.Services
                                 invalidMapIdCount++;
                                 if (npcName.Contains("Mother Miounne"))
                                 {
-                                    _logDebug($"⚠️ Mother Miounne has invalid Map ID 0, skipped coordinate data");
+                                    DebugModeManager.LogWarning("Mother Miounne has invalid Map ID 0, skipped coordinate data");
                                 }
                                 continue;
                             }
@@ -394,21 +392,21 @@ namespace Amaurot.Services
 
                             if (processedCount <= 5 || npcName.Contains("Mother Miounne"))
                             {
-                                _logDebug($"✅ NPC {npcId} ({npcName}) → Territory {coordinateData.TerritoryId}, Map {coordinateData.MapId}, Coords ({coordinateData.MapX:F1}, {coordinateData.MapY:F1})");
+                                DebugModeManager.LogDebug($"NPC {npcId} ({npcName}) -> Territory {coordinateData.TerritoryId}, Map {coordinateData.MapId}, Coords ({coordinateData.MapX:F1}, {coordinateData.MapY:F1})");
                             }
                         }
                     }
                     catch (Exception rowEx)
                     {
-                        _logDebug($"❌ Error processing NPC row: {rowEx.Message}");
+                        DebugModeManager.LogError($"Error processing NPC row: {rowEx.Message}");
                     }
                 }
 
-                _logDebug($"📊 Processed {processedCount} NPCs from Libra, found {validPositionsFound} with valid positions, skipped {invalidMapIdCount} with invalid Map ID 0");
+                DebugModeManager.LogDebug($"Processed {processedCount} NPCs from Libra, found {validPositionsFound} with valid positions, skipped {invalidMapIdCount} with invalid Map ID 0");
             }
             catch (Exception ex)
             {
-                _logDebug($"❌ Error extracting NPC positions from Libra: {ex.Message}");
+                DebugModeManager.LogError($"Error extracting NPC positions from Libra: {ex.Message}");
             }
 
             return npcPositions;
@@ -479,7 +477,7 @@ namespace Amaurot.Services
             }
             catch (Exception ex)
             {
-                _logDebug($"❌ Error parsing NPC coordinates for NPC {npcId}: {ex.Message}");
+                DebugModeManager.LogError($"Error parsing NPC coordinates for NPC {npcId}: {ex.Message}");
                 return null;
             }
         }
@@ -535,7 +533,7 @@ namespace Amaurot.Services
             }
             catch (Exception ex)
             {
-                _logDebug($"Error converting coordinates for MapId {mapId}: {ex.Message}");
+                DebugModeManager.LogDebug($"Error converting coordinates for MapId {mapId}: {ex.Message}");
 
                 double gameCoordX = rawLibraX / 10.0;
                 double gameCoordY = rawLibraY / 10.0;
@@ -637,18 +635,18 @@ namespace Amaurot.Services
 
             try
             {
-                _logDebug("🧙 Starting basic NPC extraction from Saint Coinach ENpcResident sheet...");
+                DebugModeManager.LogDebug("Starting basic NPC extraction from Saint Coinach ENpcResident sheet...");
 
                 if (_realm?.GameData == null)
                 {
-                    _logDebug("❌ Realm or GameData is null - cannot extract NPCs");
+                    DebugModeManager.LogError("Realm or GameData is null - cannot extract NPCs");
                     return npcInfoList;
                 }
 
                 await Task.Run(() =>
                 {
                     var enpcSheet = _realm.GameData.GetSheet<ENpcResident>();
-                    _logDebug($"📊 Found {enpcSheet.Count()} ENpcResident entries in Saint Coinach");
+                    DebugModeManager.LogDebug($"Found {enpcSheet.Count()} ENpcResident entries in Saint Coinach");
 
                     foreach (var enpc in enpcSheet)
                     {
@@ -680,17 +678,17 @@ namespace Amaurot.Services
                         }
                         catch (Exception ex)
                         {
-                            _logDebug($"❌ Error processing ENpc {enpc.Key}: {ex.Message}");
+                            DebugModeManager.LogError($"Error processing ENpc {enpc.Key}: {ex.Message}");
                         }
                     }
                 });
 
                 npcInfoList = npcInfoList.OrderBy(n => n.NpcName).ToList();
-                _logDebug($"🧙 Basic NPC extraction complete! Found {npcInfoList.Count} valid NPCs");
+                DebugModeManager.LogDataLoading("NPCs", npcInfoList.Count, "basic extraction complete");
             }
             catch (Exception ex)
             {
-                _logDebug($"❌ Error extracting NPCs from Saint Coinach: {ex.Message}");
+                DebugModeManager.LogError($"Error extracting NPCs from Saint Coinach: {ex.Message}");
             }
 
             return npcInfoList;
@@ -713,6 +711,7 @@ namespace Amaurot.Services
         }
     }
 
+    // Data classes
     public class NpcInfo
     {
         public uint NpcId { get; set; }
@@ -727,14 +726,7 @@ namespace Amaurot.Services
         public float WorldY { get; set; }
         public float WorldZ { get; set; }
         public int QuestCount { get; set; }
-        public List<NpcQuestInfo> Quests { get; set; } = new List<NpcQuestInfo>();
-
-        public override string ToString()
-        {
-            return $"{NpcName} (ID: {NpcId})";
-        }
-
-        public string DisplayName => $"{NpcName} (ID: {NpcId})";
+        public List<NpcQuestInfo> Quests { get; set; } = new();
     }
 
     public class NpcQuestInfo
@@ -746,9 +738,7 @@ namespace Amaurot.Services
         public double MapX { get; set; }
         public double MapY { get; set; }
         public double MapZ { get; set; }
-
         public string JournalGenre { get; set; } = string.Empty;
-
         public uint LevelRequired { get; set; }
         public bool IsMainScenario { get; set; }
         public bool IsFeatureQuest { get; set; }
@@ -756,16 +746,6 @@ namespace Amaurot.Services
         public uint GilReward { get; set; }
         public uint PlaceNameId { get; set; }
         public string PlaceName { get; set; } = string.Empty;
-
-        public override string ToString()
-        {
-            if (!string.IsNullOrEmpty(QuestName) && QuestName != $"Quest_{QuestId}")
-            {
-                var questType = IsMainScenario ? " [MSQ]" : IsFeatureQuest ? " [Feature]" : "";
-                return $"Quest {QuestId} - {QuestName}{questType}";
-            }
-            return $"Quest {QuestId}";
-        }
     }
 
     public class NpcLocationData
@@ -775,12 +755,12 @@ namespace Amaurot.Services
         public uint TerritoryId { get; set; }
         public string TerritoryName { get; set; } = string.Empty;
         public uint MapId { get; set; }
-        public double MapX { get; set; }
-        public double MapY { get; set; }
-        public double MapZ { get; set; }
         public float WorldX { get; set; }
         public float WorldY { get; set; }
         public float WorldZ { get; set; }
+        public double MapX { get; set; }
+        public double MapY { get; set; }
+        public double MapZ { get; set; }
     }
 
     public class NpcCoordinateData

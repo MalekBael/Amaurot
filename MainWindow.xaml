@@ -264,24 +264,14 @@
                                     <ColumnDefinition Width="Auto" />
                                 </Grid.ColumnDefinitions>
 
-                                <!-- Location Indicator -->
+                                <!-- Location Indicator - ✅ UPDATED: Only show in debug mode -->
                                 <TextBlock Grid.Column="0"
                                            Text="📍"
                                            FontSize="12"
                                            Margin="0,0,5,0"
                                            VerticalAlignment="Center"
-                                           ToolTip="Quest has location data">
-                                    <TextBlock.Style>
-                                        <Style TargetType="TextBlock">
-                                            <Setter Property="Visibility" Value="Collapsed" />
-                                            <Style.Triggers>
-                                                <DataTrigger Binding="{Binding Path=., Converter={StaticResource QuestHasLocationConverter}}" Value="True">
-                                                    <Setter Property="Visibility" Value="Visible" />
-                                                </DataTrigger>
-                                            </Style.Triggers>
-                                        </Style>
-                                    </TextBlock.Style>
-                                </TextBlock>
+                                           ToolTip="Quest has location data"
+                                           Visibility="{Binding Path=., Converter={StaticResource QuestHasLocationConverter}}" />
 
                                 <!-- Quest Name -->
                                 <TextBlock Grid.Column="1" Text="{Binding}" ToolTip="{Binding Name}"
@@ -428,64 +418,139 @@
 
             <!-- ✅ REMOVED: EventItem Panel completely removed -->
 
-            <!-- InstanceContent Panel -->
+            <!-- InstanceContent Panel - Updated with TabControl -->
             <DockPanel x:Name="InstanceContentPanel" Visibility="Visible" Margin="2">
                 <Border DockPanel.Dock="Top" Background="LightBlue" Padding="5" Margin="0,0,0,2">
                     <StackPanel Orientation="Horizontal">
-                        <TextBlock Text="Instance Content" FontWeight="Bold" VerticalAlignment="Center" />
+                        <TextBlock Text="Instance Content &amp; Quest Battles" FontWeight="Bold" VerticalAlignment="Center" />
                         <TextBlock x:Name="InstanceContentCountText" Text="(0)" Margin="5,0,0,0" Foreground="Gray" VerticalAlignment="Center" />
                     </StackPanel>
                 </Border>
-                <TextBox DockPanel.Dock="Top" x:Name="InstanceContentSearchBox" Margin="2"
-                         Text="" TextChanged="SearchBox_TextChanged"
-                         Background="White" BorderThickness="1" BorderBrush="Gray"
-                         ToolTip="Search instance content by name or ID" />
-                <ListBox Name="InstanceContentList"
-                         ItemsSource="{Binding FilteredInstanceContents}"
-                         SelectionChanged="InstanceContentList_SelectionChanged"
-                         Margin="2"
-                         ScrollViewer.VerticalScrollBarVisibility="Auto"
-                         ScrollViewer.HorizontalScrollBarVisibility="Disabled">
-                    <ListBox.ItemTemplate>
-                        <DataTemplate>
-                            <Grid>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="Auto" />
-                                </Grid.ColumnDefinitions>
+                
+                <!-- TabControl to separate Instance Content and Quest Battles -->
+                <TabControl Margin="2">
+                    <!-- Instance Content Tab -->
+                    <TabItem Header="Instances">
+                        <DockPanel>
+                            <TextBox DockPanel.Dock="Top" x:Name="InstanceContentSearchBox" Margin="2"
+                                     Text="" TextChanged="SearchBox_TextChanged"
+                                     Background="White" BorderThickness="1" BorderBrush="Gray"
+                                     ToolTip="Search instance content by name or ID" />
+                            <ListBox Name="InstanceContentList"
+                                     ItemsSource="{Binding FilteredInstanceContents}"
+                                     SelectionChanged="InstanceContentList_SelectionChanged"
+                                     Margin="2"
+                                     ScrollViewer.VerticalScrollBarVisibility="Auto"
+                                     ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate>
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
 
-                                <!-- Instance Content Name -->
-                                <TextBlock Grid.Column="0" Text="{Binding}" ToolTip="{Binding InstanceName}"
-                                           VerticalAlignment="Center" Margin="0,2" />
+                                            <!-- Instance Content Name -->
+                                            <TextBlock Grid.Column="0" Text="{Binding}" ToolTip="{Binding InstanceName}"
+                                                       VerticalAlignment="Center" Margin="0,2" />
 
-                                <!-- Cogwheel Icon for Instance Details -->
-                                <Button Grid.Column="1"
-                                        Width="20" Height="20"
-                                        Margin="5,0,0,0"
-                                        Background="Transparent"
-                                        BorderThickness="0"
-                                        VerticalAlignment="Center"
-                                        ToolTip="View instance content details"
-                                        Click="InstanceContentDetailsButton_Click"
-                                        Tag="{Binding}">
-                                    <Button.Content>
-                                        <TextBlock Text="⛭" FontSize="12" Foreground="Gray" />
-                                    </Button.Content>
-                                    <Button.Style>
-                                        <Style TargetType="Button">
-                                            <Setter Property="Cursor" Value="Hand" />
-                                            <Style.Triggers>
-                                                <Trigger Property="IsMouseOver" Value="True">
-                                                    <Setter Property="Background" Value="LightGray" />
-                                                </Trigger>
-                                            </Style.Triggers>
-                                        </Style>
-                                    </Button.Style>
-                                </Button>
-                            </Grid>
-                        </DataTemplate>
-                    </ListBox.ItemTemplate>
-                </ListBox>
+                                            <!-- Cogwheel Icon for Instance Details -->
+                                            <Button Grid.Column="1"
+                                                    Width="20" Height="20"
+                                                    Margin="5,0,0,0"
+                                                    Background="Transparent"
+                                                    BorderThickness="0"
+                                                    VerticalAlignment="Center"
+                                                    ToolTip="View instance content details"
+                                                    Click="InstanceContentDetailsButton_Click"
+                                                    Tag="{Binding}">
+                                                <Button.Content>
+                                                    <TextBlock Text="⛭" FontSize="12" Foreground="Gray" />
+                                                </Button.Content>
+                                                <Button.Style>
+                                                    <Style TargetType="Button">
+                                                        <Setter Property="Cursor" Value="Hand" />
+                                                        <Style.Triggers>
+                                                            <Trigger Property="IsMouseOver" Value="True">
+                                                                <Setter Property="Background" Value="LightGray" />
+                                                            </Trigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </Button.Style>
+                                            </Button>
+                                        </Grid>
+                                    </DataTemplate>
+                                </ListBox.ItemTemplate>
+                            </ListBox>
+                        </DockPanel>
+                    </TabItem>
+                    
+                    <!-- Quest Battles Tab -->
+                    <TabItem Header="Quest Battles">
+                        <DockPanel>
+                            <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="2">
+                                <TextBlock Text="Quest Battles" FontWeight="Bold" VerticalAlignment="Center" />
+                                <TextBlock x:Name="QuestBattleCountText" Text="(0)" Margin="5,0,0,0" Foreground="Gray" VerticalAlignment="Center" />
+                            </StackPanel>
+                            <TextBox DockPanel.Dock="Top" x:Name="QuestBattleSearchBox" Margin="2"
+                                     Text="" TextChanged="SearchBox_TextChanged"
+                                     Background="White" BorderThickness="1" BorderBrush="Gray"
+                                     ToolTip="Search quest battles by name, layer name, or territory" />
+                            <ListBox Name="QuestBattleList"
+                                     ItemsSource="{Binding FilteredQuestBattles}"
+                                     SelectionChanged="QuestBattleList_SelectionChanged"
+                                     Margin="2"
+                                     ScrollViewer.VerticalScrollBarVisibility="Auto"
+                                     ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate>
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+
+                                            <!-- Quest Battle Info -->
+                                            <StackPanel Grid.Column="0" Margin="2">
+                                                <TextBlock Text="{Binding QuestBattleName}" FontWeight="SemiBold" />
+                                                <StackPanel Orientation="Horizontal">
+                                                    <TextBlock Text="{Binding TerritoryName}" FontSize="10" Foreground="Gray" />
+                                                    <TextBlock Text=" • " FontSize="10" Foreground="Gray" />
+                                                    <TextBlock Text="{Binding AssetType}" FontSize="10" Foreground="DarkBlue" />
+                                                </StackPanel>
+                                            </StackPanel>
+
+                                            <!-- Cogwheel Icon for Quest Battle Details -->
+                                            <Button Grid.Column="1"
+                                                    Width="20" Height="20"
+                                                    Margin="5,0,0,0"
+                                                    Background="Transparent"
+                                                    BorderThickness="0"
+                                                    VerticalAlignment="Center"
+                                                    ToolTip="View quest battle details"
+                                                    Click="QuestBattleDetailsButton_Click"
+                                                    Tag="{Binding}">
+                                                <Button.Content>
+                                                    <TextBlock Text="⛭" FontSize="12" Foreground="Gray" />
+                                                </Button.Content>
+                                                <Button.Style>
+                                                    <Style TargetType="Button">
+                                                        <Setter Property="Cursor" Value="Hand" />
+                                                        <Style.Triggers>
+                                                            <Trigger Property="IsMouseOver" Value="True">
+                                                                <Setter Property="Background" Value="LightGray" />
+                                                            </Trigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </Button.Style>
+                                            </Button>
+                                        </Grid>
+                                    </DataTemplate>
+                                </ListBox.ItemTemplate>
+                            </ListBox>
+                        </DockPanel>
+                    </TabItem>
+                </TabControl>
             </DockPanel>
         </Grid>
 
@@ -506,6 +571,11 @@
                           Margin="5,0" Checked="MarkerVisibility_Changed" Unchecked="MarkerVisibility_Changed" />
                 <CheckBox x:Name="ShowGenericMarkersCheckBox" Content="Other" IsChecked="True"
                           Margin="5,0" Checked="MarkerVisibility_Changed" Unchecked="MarkerVisibility_Changed" />
+                <CheckBox Name="ShowQuestBattleMarkersCheckBox" 
+                          Content="Quest Battles" 
+                          IsChecked="True"
+                          Checked="MarkerVisibility_Changed" 
+                          Unchecked="MarkerVisibility_Changed" />
             </StackPanel>
         </GroupBox>
 

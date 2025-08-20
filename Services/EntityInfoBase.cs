@@ -144,6 +144,23 @@ namespace Amaurot.Services.Entities
         public override string DisplayName => $"{Id} - {InstanceName}";
     }
 
+    public class QuestBattleInfo : EntityInfoBase
+    {
+        public uint QuestBattleId => Id;
+        public string QuestBattleName { get; set; } = string.Empty;
+        public uint TerritoryId { get; set; }
+        public string TerritoryName { get; set; } = string.Empty;
+        public string LayerName { get; set; } = string.Empty;
+        public string AssetType { get; set; } = string.Empty;
+        public string Source { get; set; } = string.Empty;
+        public uint IconId { get; set; } = 61806;
+        public string IconPath { get; set; } = "ui/icon/061000/061806.tex";
+
+        public override string DisplayName => QuestBattleName;
+
+        public override string ToString() => $"{QuestBattleName} (Territory: {TerritoryName})";
+    }
+
     public class NpcQuestInfo
     {
         public uint QuestId { get; set; }

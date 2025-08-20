@@ -68,6 +68,33 @@ namespace Amaurot
             }
         }
 
+        public static void LogInfo(string message)
+        {
+            if (_isDebugModeEnabled)
+            {
+                System.Diagnostics.Debug.WriteLine($"[INFO] {message}");
+                LogToUI($"[INFO] {message}");
+            }
+        }
+
+        public static void LogWarning(string message)
+        {
+            if (_isDebugModeEnabled)
+            {
+                System.Diagnostics.Debug.WriteLine($"[WARNING] {message}");
+                LogToUI($"[WARNING] {message}");
+            }
+        }
+
+        public static void LogError(string message)
+        {
+            if (_isDebugModeEnabled)
+            {
+                System.Diagnostics.Debug.WriteLine($"[ERROR] {message}");
+                LogToUI($"[ERROR] {message}");
+            }
+        }
+
         /// <summary>
         /// Log message to the UI debug text box with timestamp and automatic scroll
         /// </summary>
@@ -100,6 +127,121 @@ namespace Amaurot
         }
 
         #endregion Basic Logging Methods
+
+        #region Service-Specific Logging Methods
+
+        public static void LogServiceInitialization(string serviceName, bool success, string? details = null)
+        {
+            if (!_isDebugModeEnabled) return;
+            
+            var status = success ? "SUCCESS" : "FAILED";
+            var message = $"{serviceName} initialization {status}";
+            if (!string.IsNullOrEmpty(details))
+            {
+                message += $": {details}";
+            }
+            LogDebug(message);
+        }
+
+        public static void LogDataLoading(string dataType, int count, string? details = null)
+        {
+            if (!_isDebugModeEnabled) return;
+            
+            var message = $"Loaded {count} {dataType}";
+            if (!string.IsNullOrEmpty(details))
+            {
+                message += $" - {details}";
+            }
+            LogDebug(message);
+        }
+
+        public static void LogMarkerCreation(string markerType, int count, uint? mapId = null)
+        {
+            if (!_isDebugModeEnabled) return;
+            
+            var message = $"Created {count} {markerType} markers";
+            if (mapId.HasValue)
+            {
+                message += $" for map {mapId.Value}";
+            }
+            LogDebug(message);
+        }
+
+        public static void LogCacheOperation(string operation, string cacheType, int count, uint? id = null)
+        {
+            if (!_isDebugModeEnabled) return;
+            
+            var message = $"{operation} {cacheType} cache";
+            if (id.HasValue)
+            {
+                message += $" for ID {id.Value}";
+            }
+            if (count > 0)
+            {
+                message += $": {count} items";
+            }
+            LogDebug(message);
+        }
+
+        public static void LogFileOperation(string operation, string fileName, bool success, string? details = null)
+        {
+            if (!_isDebugModeEnabled) return;
+            
+            var status = success ? "SUCCESS" : "FAILED";
+            var message = $"File {operation} {status}: {fileName}";
+            if (!string.IsNullOrEmpty(details))
+            {
+                message += $" - {details}";
+            }
+            LogDebug(message);
+        }
+
+        public static void LogCoordinateConversion(string sourceType, string targetType, double x, double y, double z, uint? mapId = null)
+        {
+            if (!_isDebugModeEnabled) return;
+            
+            var message = $"Coordinate conversion {sourceType} -> {targetType}: ({x:F1}, {y:F1}, {z:F1})";
+            if (mapId.HasValue)
+            {
+                message += $" for map {mapId.Value}";
+            }
+            LogDebug(message);
+        }
+
+        public static void LogQuestProcessing(uint questId, string questName, string operation, bool success, string? details = null)
+        {
+            if (!_isDebugModeEnabled) return;
+            
+            var status = success ? "SUCCESS" : "FAILED";
+            var message = $"Quest {questId} '{questName}' {operation} {status}";
+            if (!string.IsNullOrEmpty(details))
+            {
+                message += $": {details}";
+            }
+            LogDebug(message);
+        }
+
+        public static void LogLgbProcessing(string lgbType, string territoryFolder, uint territoryId, int layerCount)
+        {
+            if (!_isDebugModeEnabled) return;
+            
+            LogDebug($"Processing {lgbType} LGB for territory {territoryId} ({territoryFolder}): {layerCount} layers");
+        }
+
+        public static void LogNpcProcessing(uint npcId, string npcName, string operation, bool success, string? location = null)
+        {
+            if (!_isDebugModeEnabled) return;
+            
+            var status = success ? "SUCCESS" : "FAILED";
+            var message = $"NPC {npcId} '{npcName}' {operation} {status}";
+            if (!string.IsNullOrEmpty(location))
+            {
+                message += $" at {location}";
+            }
+            LogDebug(message);
+        }
+
+        #endregion Service-Specific Logging Methods
 
         #region Map Diagnostic Methods
 
