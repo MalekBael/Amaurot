@@ -102,9 +102,6 @@
 		<Resource Include="amaurot.ico" />
 	</ItemGroup>
 	<ItemGroup>
-		<None Update="Libs\app_data.sqlite">
-			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
-		</None>
 		<None Update="Libs\Definitions\BNpcBase.json">
 			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
 		</None>

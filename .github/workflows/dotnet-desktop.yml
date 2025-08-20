@@ -1,114 +1,263 @@
-name: WPF .NET Desktop Build
+﻿name: Build and Release Amaurot Map Editor
+permissions:
+  contents: write
 
 on:
   push:
-    branches: [ "master", "main" ]
+    branches: [ "master" ]
   pull_request:
-    branches: [ "master", "main" ]
+    branches: [ "master" ]
 
 jobs:
   build:
     strategy:
       matrix:
-        configuration: [Debug, Release]
+        configuration: [Release]
 
     runs-on: windows-latest
 
     env:
-      Solution_Name: "map editor.sln"
-      Project_Path: Amaurot.csproj
-      
+      Solution_Name: "map editor.sln"                     
+      Project_Path: Amaurot.csproj                         
+    
+
     steps:
     - name: Checkout
       uses: actions/checkout@v4
       with:
         fetch-depth: 0
+        submodules: recursive       
+             
+         
+    - name: Initialize and fix submodules
+      run: |
+        Write-Host "🔧 Initializing submodules..."
+        git submodule update --init --recursive
+        
+        Write-Host "🔧 Checking LGB-Parser submodule..."
+        if (Test-Path "./LGB-Parser") {
+          cd LGB-Parser
+          git fetch origin
+          git checkout main
+          git pull origin main
+          cd ..
+          Write-Host "✅ LGB-Parser submodule updated"
+        } else {
+          Write-Host "⚠️ LGB-Parser submodule not found"
+        }
+        
+        Write-Host "🔧 Checking unluac submodule..."
+        if (Test-Path "./unluac") {
+          cd unluac
+          git fetch origin
+          git checkout master
+          git pull origin master
+          cd ..
+          Write-Host "✅ unluac submodule updated"
+        } else {
+          Write-Host "⚠️ unluac submodule not found"
+        }
 
-    - name: Install .NET 8
+         
+     
+    - name: Install .NET Core
       uses: actions/setup-dotnet@v4
       with:
         dotnet-version: 8.0.x
-
-    - name: Restore dependencies
+    - name: Add MSBuild to PATH
+      uses: microsoft/setup-msbuild@v1.0.2
+      
+    - name: Restore main solution dependencies
       run: dotnet restore "$env:Solution_Name"
 
-    - name: Build application
-      run: dotnet build "$env:Solution_Name" --configuration ${{ matrix.configuration }} --no-restore
+           
+       
+    - name: Restore LGB-Parser dependencies
+      run: |
+        if (Test-Path "./LGB-Parser/LGB-Parser.csproj") {
+          Write-Host "🔧 Restoring LGB-Parser dependencies..."
+          dotnet restore "./LGB-Parser/LGB-Parser.csproj"
+          Write-Host "✅ LGB-Parser dependencies restored"
+        } else {
+          Write-Host "⚠️ LGB-Parser project file not found"
+        }
 
+               
+    - name: Build
+      run: dotnet build "$env:Solution_Name" --configuration ${{ matrix.configuration }} --no-restore
     - name: Execute unit tests
       run: dotnet test "$env:Solution_Name" --configuration ${{ matrix.configuration }} --no-build --verbosity normal
       continue-on-error: true
-
-    - name: Publish application
-      run: dotnet publish "$env:Project_Path" --configuration ${{ matrix.configuration }} --runtime win-x64 --self-contained true --output ./publish/win-x64
-
-    - name: Create default settings file
+    - name: Publish Windows x64
       run: |
-        @"
-        {
-          "GameInstallationPath": "",
-          "AutoLoadGameData": false,
-          "DebugMode": false,
-          "HideDuplicateTerritories": false,
-          "SapphireServerPath": "",
-          "SapphireBuildPath": ""
+                
+        dotnet publish $env:Project_Path --configuration ${{ matrix.configuration }} --runtime win-x64 --self-contained true --output ./publish/win-x64
+        
+        Write-Host "📂 Publish completed. Contents:"
+        Get-ChildItem "./publish/win-x64" -Recurse | Select-Object Name, FullName | Format-Table
+
+                 
+             
+    - name: Copy external tools and dependencies
+      run: |
+        Write-Host "🔧 Setting up Tools directory..."
+        New-Item -ItemType Directory -Force -Path ./publish/win-x64/Tools
+        
+              
+      
+        $lgbParserFound = $false
+        $lgbParserLocations = @(
+          "./Tools/LGB-Parser.exe",
+          "./bin/Release/net8.0-windows/win-x64/Tools/LGB-Parser.exe",
+          "./LGB-Parser/bin/Release/net8.0/LGB-Parser.exe",
+          "./LGB-Parser/bin/Release/net6.0/LGB-Parser.exe",
+          "./LGB-Parser/bin/Release/LGB-Parser.exe"
+        )
+        
+        foreach ($location in $lgbParserLocations) {
+          if (Test-Path $location) {
+            Copy-Item $location "./publish/win-x64/Tools/" -Force
+            Write-Host "✅ Copied LGB-Parser.exe from: $location"
+            $lgbParserFound = $true
+            break
+          }
         }
-        "@ | Out-File -FilePath "./publish/win-x64/settings.json" -Encoding UTF8
+        
+        if (-not $lgbParserFound) {
+          Write-Host "⚠️ LGB-Parser.exe not found in any expected location"
+          Write-Host "📂 Searching for LGB-Parser.exe in build output..."
+          $foundFiles = Get-ChildItem -Path . -Name "LGB-Parser.exe" -Recurse -ErrorAction SilentlyContinue
+          if ($foundFiles) {
+            foreach ($file in $foundFiles) {
+              Write-Host "   Found: $file"
+              $fullPath = Resolve-Path $file
+              Copy-Item $fullPath "./publish/win-x64/Tools/" -Force
+              Write-Host "✅ Copied LGB-Parser.exe from: $fullPath"
+              $lgbParserFound = $true
+              break
+            }
+          }
+        }
+        
+        if (-not $lgbParserFound) {
+          Write-Host "❌ LGB-Parser.exe not found anywhere - build may have failed"
+          Write-Host "📂 Debug: Checking LGB-Parser directory structure..."
+          if (Test-Path "./LGB-Parser") {
+            Get-ChildItem "./LGB-Parser" -Recurse -Include "*.exe" | ForEach-Object { Write-Host "   EXE found: $($_.FullName)" }
+          }
+        }
+        
+              
+      
+        $unluacFound = $false
+        $unluacLocations = @(
+          "./Tools/unluac.jar",
+          "./bin/Release/net8.0-windows/win-x64/Tools/unluac.jar",
+          "./unluac/unluac.jar"
+        )
+        foreach ($location in $unluacLocations) {
+          if (Test-Path $location) {
+            Copy-Item $location "./publish/win-x64/Tools/" -Force
+            Write-Host "✅ Copied unluac.jar from: $location"
+            $unluacFound = $true
+            break
+          }
+        }
+        
+        if (-not $unluacFound) {
+          Write-Host "⚠️ unluac.jar not found - this is optional"
+        }
+        if (Test-Path "./Libs") {
+          Write-Host "🔧 Copying Libs directory..."
+                    
+          if (Test-Path "./publish/win-x64/Libs") {
+            Remove-Item -Path "./publish/win-x64/Libs" -Recurse -Force
+            Write-Host "   Removed existing Libs directory"
+          }
+          Copy-Item -Path "./Libs" -Destination "./publish/win-x64/" -Recurse -Force
+          Write-Host "✅ Copied Libs directory"
+        } else {
+          Write-Host "⚠️ Libs directory not found"
+        }
+        
+             
+     
+        Write-Host "📂 Final Tools directory contents:"
+        if (Test-Path "./publish/win-x64/Tools") {
+          Get-ChildItem "./publish/win-x64/Tools" | Format-Table Name, Length
+        }
 
-    - name: Create README
+         
+     
+    - name: Create Windows ZIP
       run: |
-        @"
-        # FFXIV Map Editor
+        $version = "v1.0.${{ github.run_number }}"
+        Compress-Archive -Path ./publish/win-x64/* -DestinationPath "./Amaurot-Map-Editor-$version-win-x64.zip" -Force
+        Write-Host "✅ Created release archive: Amaurot-Map-Editor-$version-win-x64.zip"
 
-        ## Portable Settings
-        This application uses a portable settings.json file in the same directory as the executable.
         
-        ## Features
-        - Cross-platform settings storage (no more AppData dependency)
-        - VSCode URI scheme integration for script editing
-        
-        ## Usage
-        1. Run Amaurot.exe
-        2. Settings will be saved to settings.json in this directory
-        3. Copy the entire folder to make it portable
-        
-        ## VSCode Integration
-        The "Open in VSCode" buttons use the vscode://file/ URI scheme which works across platforms.
-        "@ | Out-File -FilePath "./publish/win-x64/README.md" -Encoding UTF8
-
-    - name: Create distribution archive
-      run: Compress-Archive -Path "./publish/win-x64/*" -DestinationPath "ffxiv-map-editor-windows-${{ matrix.configuration }}.zip"
-
-    - name: Upload build artifacts
+    
+    - name: Upload Windows artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: FFXIV-Map-Editor-Windows-${{ matrix.configuration }}
-        path: ffxiv-map-editor-windows-${{ matrix.configuration }}.zip
-        retention-days: 30
+        name: Amaurot-Map-Editor-Windows-${{ matrix.configuration }}
+        path: ./Amaurot-Map-Editor-*-win-x64.zip
 
+         
+     
+    - name: Upload Windows executables
+      uses: actions/upload-artifact@v4
+      with:
+        name: Amaurot-Map-Editor-Windows-Executable-${{ matrix.configuration }}
+        path: ./publish/win-x64/
+
+          
+        
   release:
     needs: build
-    runs-on: windows-latest
-    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
     
     steps:
-    - name: Download artifacts
+    - name: Checkout (for commit info)
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 1
+
+    - name: Download Windows artifacts
       uses: actions/download-artifact@v4
-      
+      with:
+        name: Amaurot-Map-Editor-Windows-Release
+        path: ./release-assets/
+
+    - name: Generate version number
+      id: version
+      run: echo "VERSION=v1.0.${{ github.run_number }}" >> $GITHUB_OUTPUT
+
+    - name: Get latest commit info
+      id: commit
+      run: |
+        echo "SHORT_SHA=${GITHUB_SHA:0:7}" >> $GITHUB_OUTPUT
+        echo "COMMIT_MESSAGE=$(git log -1 --pretty=format:'%s')" >> $GITHUB_OUTPUT
+
     - name: Create Release
       uses: softprops/action-gh-release@v1
       with:
-        files: |
-          **/ffxiv-map-editor-*.zip
+        tag_name: ${{ steps.version.outputs.VERSION }}
+        name: "Amaurot Map Editor ${{ steps.version.outputs.VERSION }}"
         body: |
-          ## FFXIV Map Editor Release
+                
+      
           
-          ### Installation
-          1. Download the ZIP file
-          2. Extract to any folder
-          3. Run Amaurot.exe
-          4. Settings will be saved as settings.json in the same folder
+          **Auto-generated release from commit:** [`${{ steps.commit.outputs.SHORT_SHA }}`](${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }})
+          
+          **Latest changes:** ${{ steps.commit.outputs.COMMIT_MESSAGE }}
+          
+          ---
+         
         draft: false
         prerelease: false
+        files: |
+          ./release-assets/Amaurot-Map-Editor-${{ steps.version.outputs.VERSION }}-win-x64.zip
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -19,7 +19,6 @@ mono_crash.*
 notes/
 notes/*.csv
 notes/Lumina/
-Libs/app_data.sqlite
 Libs/SaintCoinach.History.zip
 Resources/
 
@@ -369,7 +368,5 @@ MigrationBackup/
 # Don't ignore submodules
 !LGB-Parser/
 
-# Fody - auto-generated XML schema
 FodyWeavers.xsd
-/Libs/app_data.sqlite
 /.github/copilot-instructions.md
