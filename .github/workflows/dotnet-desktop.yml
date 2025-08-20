@@ -1,4 +1,4 @@
-name: Build and Release Amaurot Quest Editor
+name: Build and Release Amaurot Map Editor
 permissions:
   contents: write
 
@@ -84,17 +84,50 @@ jobs:
       run: dotnet test "$env:Solution_Name" --configuration ${{ matrix.configuration }} --no-build --verbosity normal
       continue-on-error: true
 
-    - name: Publish Windows x64
+    # Use PublishSingleFile for clean deployment
+    - name: Publish Windows x64 (Single File)
       run: |
-        dotnet publish $env:Project_Path --configuration ${{ matrix.configuration }} --runtime win-x64 --self-contained true --output ./publish/win-x64
+        dotnet publish $env:Project_Path --configuration ${{ matrix.configuration }} --runtime win-x64 --self-contained true --output ./publish/win-x64 -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true
         
-        Write-Host "📂 Publish completed. Contents:"
-        Get-ChildItem "./publish/win-x64" -Recurse | Select-Object Name, FullName | Format-Table
+        Write-Host "📂 Single-file publish completed. Contents:"
+        Get-ChildItem "./publish/win-x64" | Select-Object Name, Length | Format-Table
 
-    - name: Copy external tools and dependencies
+    # Copy external files that must exist alongside the single file executable
+    - name: Copy essential external files
       run: |
-        Write-Host "🔧 Setting up Tools directory..."
+        Write-Host "🔧 Setting up essential external files..."
+        
+        # Create Tools directory
         New-Item -ItemType Directory -Force -Path ./publish/win-x64/Tools
+        Write-Host "✅ Created Tools directory"
+        
+        # Copy Libs directory (CRITICAL: Contains app_data.sqlite)
+        if (Test-Path "./Libs") {
+          Copy-Item -Path "./Libs" -Destination "./publish/win-x64/" -Recurse -Force
+          Write-Host "✅ Copied Libs directory with SQLite database"
+          
+          # Verify SQLite database was copied
+          if (Test-Path "./publish/win-x64/Libs/app_data.sqlite") {
+            $sqliteSize = (Get-Item "./publish/win-x64/Libs/app_data.sqlite").Length
+            Write-Host "   ✓ app_data.sqlite copied successfully ($sqliteSize bytes)"
+          } else {
+            Write-Host "   ❌ app_data.sqlite NOT found after copy!"
+          }
+        } else {
+          Write-Host "❌ Libs directory not found in source!"
+        }
+        
+        # Copy Definitions directory (CRITICAL: Contains FFXIV data definitions)
+        if (Test-Path "./Definitions") {
+          Copy-Item -Path "./Definitions" -Destination "./publish/win-x64/" -Recurse -Force
+          Write-Host "✅ Copied Definitions directory"
+          
+          # Count definition files
+          $defCount = (Get-ChildItem "./publish/win-x64/Definitions" -Filter "*.json").Count
+          Write-Host "   ✓ Copied $defCount definition files"
+        } else {
+          Write-Host "⚠️ Definitions directory not found in source"
+        }
         
         # Copy LGB-Parser.exe from multiple possible locations
         $lgbParserFound = $false
@@ -109,7 +142,8 @@ jobs:
         foreach ($location in $lgbParserLocations) {
           if (Test-Path $location) {
             Copy-Item $location "./publish/win-x64/Tools/" -Force
-            Write-Host "✅ Copied LGB-Parser.exe from: $location"
+            $lgbSize = (Get-Item $location).Length
+            Write-Host "✅ Copied LGB-Parser.exe from: $location ($lgbSize bytes)"
             $lgbParserFound = $true
             break
           }
@@ -131,14 +165,6 @@ jobs:
           }
         }
         
-        if (-not $lgbParserFound) {
-          Write-Host "❌ LGB-Parser.exe not found anywhere - build may have failed"
-          Write-Host "📂 Debug: Checking LGB-Parser directory structure..."
-          if (Test-Path "./LGB-Parser") {
-            Get-ChildItem "./LGB-Parser" -Recurse -Include "*.exe" | ForEach-Object { Write-Host "   EXE found: $($_.FullName)" }
-          }
-        }
-        
         # Copy unluac.jar from multiple possible locations
         $unluacFound = $false
         $unluacLocations = @(
@@ -150,7 +176,8 @@ jobs:
         foreach ($location in $unluacLocations) {
           if (Test-Path $location) {
             Copy-Item $location "./publish/win-x64/Tools/" -Force
-            Write-Host "✅ Copied unluac.jar from: $location"
+            $unluacSize = (Get-Item $location).Length
+            Write-Host "✅ Copied unluac.jar from: $location ($unluacSize bytes)"
             $unluacFound = $true
             break
           }
@@ -160,30 +187,32 @@ jobs:
           Write-Host "⚠️ unluac.jar not found - this is optional"
         }
         
-        # Copy Libs directory if it exists
-        if (Test-Path "./Libs") {
-          Write-Host "🔧 Copying Libs directory..."
-          if (Test-Path "./publish/win-x64/Libs") {
-            Remove-Item -Path "./publish/win-x64/Libs" -Recurse -Force
-            Write-Host "   Removed existing Libs directory"
-          }
-          Copy-Item -Path "./Libs" -Destination "./publish/win-x64/" -Recurse -Force
-          Write-Host "✅ Copied Libs directory"
-        } else {
-          Write-Host "⚠️ Libs directory not found"
-        }
+        Write-Host ""
+        Write-Host "📂 Final publish directory structure:"
+        Get-ChildItem "./publish/win-x64" -Recurse | Select-Object FullName, Length | Format-Table -AutoSize
         
-        # List final Tools directory contents
-        Write-Host "📂 Final Tools directory contents:"
+        Write-Host ""
+        Write-Host "📊 Directory sizes:"
+        if (Test-Path "./publish/win-x64/Libs") {
+          $libsSize = (Get-ChildItem "./publish/win-x64/Libs" -Recurse | Measure-Object -Property Length -Sum).Sum
+          Write-Host "   Libs: $([math]::Round($libsSize/1MB, 2)) MB"
+        }
+        if (Test-Path "./publish/win-x64/Definitions") {
+          $defSize = (Get-ChildItem "./publish/win-x64/Definitions" -Recurse | Measure-Object -Property Length -Sum).Sum
+          Write-Host "   Definitions: $([math]::Round($defSize/1MB, 2)) MB"
+        }
         if (Test-Path "./publish/win-x64/Tools") {
-          Get-ChildItem "./publish/win-x64/Tools" | Format-Table Name, Length
+          $toolsSize = (Get-ChildItem "./publish/win-x64/Tools" -Recurse | Measure-Object -Property Length -Sum).Sum
+          Write-Host "   Tools: $([math]::Round($toolsSize/1MB, 2)) MB"
         }
 
     - name: Create Windows ZIP
       run: |
         $version = "v1.0.${{ github.run_number }}"
         Compress-Archive -Path ./publish/win-x64/* -DestinationPath "./Amaurot-Map-Editor-$version-win-x64.zip" -Force
-        Write-Host "✅ Created release archive: Amaurot-Map-Editor-$version-win-x64.zip"
+        
+        $zipSize = (Get-Item "./Amaurot-Map-Editor-$version-win-x64.zip").Length
+        Write-Host "✅ Created release archive: Amaurot-Map-Editor-$version-win-x64.zip ($([math]::Round($zipSize/1MB, 2)) MB)"
 
     - name: Upload Windows artifacts
       uses: actions/upload-artifact@v4
@@ -228,13 +257,14 @@ jobs:
       uses: softprops/action-gh-release@v1
       with:
         tag_name: ${{ steps.version.outputs.VERSION }}
-        name: "Amaurot Map Editor ${{ steps.version.outputs.VERSION }}"
+        name: "Amaurot Quest Editor ${{ steps.version.outputs.VERSION }}"
         body: |
-          ## Amaurot FFXIV Map Editor ${{ steps.version.outputs.VERSION }}
+          ## Amaurot FFXIV Quest Editor ${{ steps.version.outputs.VERSION }}
           
           **Auto-generated release from commit:** [`${{ steps.commit.outputs.SHORT_SHA }}`](${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }})
           
           **Latest changes:** ${{ steps.commit.outputs.COMMIT_MESSAGE }}
+          
           
           ---
         draft: false
