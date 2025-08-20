@@ -1,4 +1,4 @@
-﻿name: Build and Release Amaurot Map Editor
+name: Build and Release Amaurot Quest Editor
 permissions:
   contents: write
 
@@ -19,7 +19,6 @@ jobs:
     env:
       Solution_Name: "map editor.sln"                     
       Project_Path: Amaurot.csproj                         
-    
 
     steps:
     - name: Checkout
@@ -28,7 +27,6 @@ jobs:
         fetch-depth: 0
         submodules: recursive       
              
-         
     - name: Initialize and fix submodules
       run: |
         Write-Host "🔧 Initializing submodules..."
@@ -58,19 +56,16 @@ jobs:
           Write-Host "⚠️ unluac submodule not found"
         }
 
-         
-     
     - name: Install .NET Core
       uses: actions/setup-dotnet@v4
       with:
         dotnet-version: 8.0.x
+
     - name: Add MSBuild to PATH
       uses: microsoft/setup-msbuild@v1.0.2
       
     - name: Restore main solution dependencies
       run: dotnet restore "$env:Solution_Name"
-
-           
        
     - name: Restore LGB-Parser dependencies
       run: |
@@ -82,29 +77,26 @@ jobs:
           Write-Host "⚠️ LGB-Parser project file not found"
         }
 
-               
     - name: Build
       run: dotnet build "$env:Solution_Name" --configuration ${{ matrix.configuration }} --no-restore
+
     - name: Execute unit tests
       run: dotnet test "$env:Solution_Name" --configuration ${{ matrix.configuration }} --no-build --verbosity normal
       continue-on-error: true
+
     - name: Publish Windows x64
       run: |
-                
         dotnet publish $env:Project_Path --configuration ${{ matrix.configuration }} --runtime win-x64 --self-contained true --output ./publish/win-x64
         
         Write-Host "📂 Publish completed. Contents:"
         Get-ChildItem "./publish/win-x64" -Recurse | Select-Object Name, FullName | Format-Table
 
-                 
-             
     - name: Copy external tools and dependencies
       run: |
         Write-Host "🔧 Setting up Tools directory..."
         New-Item -ItemType Directory -Force -Path ./publish/win-x64/Tools
         
-              
-      
+        # Copy LGB-Parser.exe from multiple possible locations
         $lgbParserFound = $false
         $lgbParserLocations = @(
           "./Tools/LGB-Parser.exe",
@@ -147,14 +139,14 @@ jobs:
           }
         }
         
-              
-      
+        # Copy unluac.jar from multiple possible locations
         $unluacFound = $false
         $unluacLocations = @(
           "./Tools/unluac.jar",
           "./bin/Release/net8.0-windows/win-x64/Tools/unluac.jar",
           "./unluac/unluac.jar"
         )
+        
         foreach ($location in $unluacLocations) {
           if (Test-Path $location) {
             Copy-Item $location "./publish/win-x64/Tools/" -Force
@@ -167,9 +159,10 @@ jobs:
         if (-not $unluacFound) {
           Write-Host "⚠️ unluac.jar not found - this is optional"
         }
+        
+        # Copy Libs directory if it exists
         if (Test-Path "./Libs") {
           Write-Host "🔧 Copying Libs directory..."
-                    
           if (Test-Path "./publish/win-x64/Libs") {
             Remove-Item -Path "./publish/win-x64/Libs" -Recurse -Force
             Write-Host "   Removed existing Libs directory"
@@ -180,39 +173,30 @@ jobs:
           Write-Host "⚠️ Libs directory not found"
         }
         
-             
-     
+        # List final Tools directory contents
         Write-Host "📂 Final Tools directory contents:"
         if (Test-Path "./publish/win-x64/Tools") {
           Get-ChildItem "./publish/win-x64/Tools" | Format-Table Name, Length
         }
 
-         
-     
     - name: Create Windows ZIP
       run: |
         $version = "v1.0.${{ github.run_number }}"
         Compress-Archive -Path ./publish/win-x64/* -DestinationPath "./Amaurot-Map-Editor-$version-win-x64.zip" -Force
         Write-Host "✅ Created release archive: Amaurot-Map-Editor-$version-win-x64.zip"
 
-        
-    
     - name: Upload Windows artifacts
       uses: actions/upload-artifact@v4
       with:
         name: Amaurot-Map-Editor-Windows-${{ matrix.configuration }}
         path: ./Amaurot-Map-Editor-*-win-x64.zip
 
-         
-     
     - name: Upload Windows executables
       uses: actions/upload-artifact@v4
       with:
         name: Amaurot-Map-Editor-Windows-Executable-${{ matrix.configuration }}
         path: ./publish/win-x64/
 
-          
-        
   release:
     needs: build
     runs-on: ubuntu-latest
@@ -246,15 +230,13 @@ jobs:
         tag_name: ${{ steps.version.outputs.VERSION }}
         name: "Amaurot Map Editor ${{ steps.version.outputs.VERSION }}"
         body: |
-                
-      
+          ## Amaurot FFXIV Map Editor ${{ steps.version.outputs.VERSION }}
           
           **Auto-generated release from commit:** [`${{ steps.commit.outputs.SHORT_SHA }}`](${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }})
           
           **Latest changes:** ${{ steps.commit.outputs.COMMIT_MESSAGE }}
           
           ---
-         
         draft: false
         prerelease: false
         files: |
