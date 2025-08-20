@@ -87,6 +87,181 @@ namespace Amaurot.Services
             return TryOpenMultipleWithVSCodeProcess(validPaths);
         }
 
+        public bool OpenMultipleInVisualStudio(params string[] scriptPaths)
+        {
+            if (scriptPaths == null || scriptPaths.Length == 0)
+            {
+                return false;
+            }
+
+            var validPaths = scriptPaths.Where(path => !string.IsNullOrEmpty(path) && File.Exists(path)).ToArray();
+
+            if (validPaths.Length == 0)
+            {
+                _logDebug?.Invoke("No valid script paths provided for Visual Studio opening");
+                return false;
+            }
+
+            _logDebug?.Invoke($"Attempting to open {validPaths.Length} files in Visual Studio");
+
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+            {
+                return TryOpenMultipleInVisualStudioLinux(validPaths);
+            }
+            else if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            {
+                return TryOpenMultipleInVisualStudioWindows(validPaths);
+            }
+            else
+            {
+                return TryGenericMultipleEditorOpen(validPaths, "devenv");
+            }
+        }
+
+        private bool TryOpenMultipleInVisualStudioLinux(string[] scriptPaths)
+        {
+            _logDebug?.Invoke("Linux detected: Visual Studio not natively available, trying VSCode as alternative for multiple files");
+
+            // Fall back to VSCode for multiple files on Linux
+            return TryOpenMultipleWithVSCodeProcess(scriptPaths);
+        }
+
+        private bool TryOpenMultipleInVisualStudioWindows(string[] scriptPaths)
+        {
+            if (IsRunningOnWine())
+            {
+                _logDebug?.Invoke("Wine detected: trying VSCode as better alternative for multiple files");
+
+                if (TryOpenMultipleWithVSCodeProcess(scriptPaths))
+                {
+                    return true;
+                }
+            }
+
+            // Try opening all files in a single Visual Studio instance
+            var arguments = string.Join(" ", scriptPaths.Select(path => $"\"{path}\""));
+
+            var vsCommands = new[] { "devenv.exe", "devenv" };
+
+            foreach (var vsCmd in vsCommands)
+            {
+                try
+                {
+                    var processInfo = new ProcessStartInfo
+                    {
+                        FileName = vsCmd,
+                        Arguments = arguments,
+                        UseShellExecute = false,
+                        CreateNoWindow = true,
+                        RedirectStandardError = true
+                    };
+
+                    var process = Process.Start(processInfo);
+                    if (process != null)
+                    {
+                        process.WaitForExit(3000);
+                        if (process.ExitCode == 0)
+                        {
+                            _logDebug?.Invoke($"✅ Successfully opened {scriptPaths.Length} files in Visual Studio via '{vsCmd}'");
+                            return true;
+                        }
+                        else
+                        {
+                            _logDebug?.Invoke($"❌ '{vsCmd}' command failed with exit code: {process.ExitCode}");
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logDebug?.Invoke($"❌ Error with '{vsCmd}' for multiple files: {ex.Message}");
+                    continue;
+                }
+            }
+
+            var vsExecutables = new[]
+            {
+        @"C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\IDE\devenv.exe",
+        @"C:\Program Files\Microsoft Visual Studio\2022\Professional\Common7\IDE\devenv.exe",
+        @"C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\devenv.exe",
+        @"C:\Program Files (x86)\Microsoft Visual Studio\2019\Enterprise\Common7\IDE\devenv.exe",
+        @"C:\Program Files (x86)\Microsoft Visual Studio\2019\Professional\Common7\IDE\devenv.exe",
+        @"C:\Program Files (x86)\Microsoft Visual Studio\2019\Community\Common7\IDE\devenv.exe"
+    };
+
+            foreach (var vsPath in vsExecutables)
+            {
+                if (File.Exists(vsPath))
+                {
+                    try
+                    {
+                        _logDebug?.Invoke($"Attempting to open {scriptPaths.Length} files using Visual Studio at: {vsPath}");
+
+                        var processInfo = new ProcessStartInfo
+                        {
+                            FileName = vsPath,
+                            Arguments = arguments,
+                            UseShellExecute = false,
+                            CreateNoWindow = true
+                        };
+
+                        var process = Process.Start(processInfo);
+                        if (process != null)
+                        {
+                            _logDebug?.Invoke($"✅ Successfully opened {scriptPaths.Length} files in Visual Studio at: {vsPath}");
+                            return true;
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logDebug?.Invoke($"❌ Error opening Visual Studio at {vsPath} with multiple files: {ex.Message}");
+                        continue;
+                    }
+                }
+            }
+
+            _logDebug?.Invoke("Visual Studio not found for multiple files, trying VSCode as fallback");
+            return TryOpenMultipleWithVSCodeProcess(scriptPaths);
+        }
+
+        private bool TryGenericMultipleEditorOpen(string[] scriptPaths, string command)
+        {
+            try
+            {
+                var arguments = string.Join(" ", scriptPaths.Select(path => $"\"{path}\""));
+                _logDebug?.Invoke($"Trying generic command: {command} for {scriptPaths.Length} files");
+
+                var processInfo = new ProcessStartInfo
+                {
+                    FileName = command,
+                    Arguments = arguments,
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                    RedirectStandardError = true
+                };
+
+                var process = Process.Start(processInfo);
+                if (process != null)
+                {
+                    if (!process.WaitForExit(2000))
+                    {
+                        _logDebug?.Invoke($"✅ Successfully started {command} with multiple files (process still running)");
+                        return true;
+                    }
+                    else if (process.ExitCode == 0)
+                    {
+                        _logDebug?.Invoke($"✅ Successfully opened {scriptPaths.Length} files with {command}");
+                        return true;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logDebug?.Invoke($"❌ Generic command {command} failed for multiple files: {ex.Message}");
+            }
+
+            return false;
+        }
+
         private bool TryOpenWithVSCodeUri(string scriptPath)
         {
             try

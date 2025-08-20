@@ -15,6 +15,7 @@ namespace Amaurot.Services
         public bool HideDuplicateTerritories { get; set; } = false;
         public string SapphireServerPath { get; set; } = string.Empty;
         public string SapphireBuildPath { get; set; } = string.Empty;
+        public bool HideZeroQuestNpcs { get; set; } = false;
     }
 
     public class SettingsService
@@ -259,6 +260,12 @@ namespace Amaurot.Services
         public void UpdateSapphireBuildPath(string path)
         {
             _settings.SapphireBuildPath = path;
+            SaveSettings();
+        }
+
+        public void UpdateHideZeroQuestNpcs(bool hideZeroQuestNpcs)
+        {
+            Settings.HideZeroQuestNpcs = hideZeroQuestNpcs;
             SaveSettings();
         }
 

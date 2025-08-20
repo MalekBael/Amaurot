@@ -1,0 +1,52 @@
+<Window x:Class="Amaurot.QuestBattleDetailsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Quest Battle Details" Height="600" Width="700"
+        WindowStyle="SingleBorderWindow" ShowInTaskbar="False"
+        WindowStartupLocation="CenterOwner" Background="White">
+
+    <Grid Margin="15">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <!-- Header Section -->
+        <StackPanel Grid.Row="0" Margin="0,0,0,20">
+            <!-- Title -->
+            <TextBlock x:Name="QuestBattleTitleText" FontSize="24" FontWeight="Bold"
+                       HorizontalAlignment="Center" Margin="0,0,0,10"
+                       TextWrapping="Wrap" />
+            
+            <!-- Subtitle -->
+            <TextBlock x:Name="QuestBattleSubtitleText" FontSize="14" Foreground="Gray"
+                       HorizontalAlignment="Center" Margin="0,0,0,15"
+                       TextWrapping="Wrap" />
+
+            <!-- Badges Section Removed -->
+        </StackPanel>
+
+        <Separator Grid.Row="1" Margin="0,0,0,20" />
+
+        <!-- Content Area -->
+        <ScrollViewer Grid.Row="3" VerticalScrollBarVisibility="Auto" 
+                      HorizontalScrollBarVisibility="Disabled">
+            <Grid x:Name="QuestBattleDetailsGrid" Margin="0,0,0,20">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="150" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <!-- Content will be populated dynamically -->
+            </Grid>
+        </ScrollViewer>
+
+        <!-- Close Button -->
+        <StackPanel Grid.Row="4" Orientation="Horizontal" HorizontalAlignment="Right">
+            <Button Content="Close" Width="80" Height="30" Click="CloseButton_Click"
+                    Background="#FFE7E7E7" BorderBrush="#FFADADAD" />
+        </StackPanel>
+    </Grid>
+</Window>

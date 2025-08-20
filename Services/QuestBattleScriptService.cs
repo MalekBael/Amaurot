@@ -1,9 +1,10 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using Amaurot.Services;
+using System.Collections.Generic;
 using System.Threading.Tasks;
-using Amaurot.Services.Entities;
+using QuestBattleInfo = Amaurot.Services.Entities.QuestBattleInfo;
 
 namespace Amaurot.Services
 {
@@ -298,11 +299,97 @@ namespace Amaurot.Services
             }
         }
 
+        #region Enhanced Quest Battle Script Management
+
+        /// <summary>
+        /// Gets enhanced script information for a quest battle
+        /// </summary>
+        public QuestBattleScriptInfoExtended GetQuestBattleScriptInfoExtended(string questBattleName, uint? questBattleId = null)
+        {
+            var scriptPath = FindQuestBattleScript(questBattleName, questBattleId);
+            
+            bool canSearchForScripts = _settingsService.IsValidSapphireServerPath();
+
+            return new QuestBattleScriptInfoExtended
+            {
+                QuestBattleName = questBattleName,
+                QuestBattleId = questBattleId,
+                ScriptPath = scriptPath,
+                Exists = !string.IsNullOrEmpty(scriptPath),
+                CanOpenInVSCode = IsVSCodeAvailable() && canSearchForScripts,
+                CanOpenInVisualStudio = IsVisualStudioAvailable() && canSearchForScripts
+            };
+        }
+
+        /// <summary>
+        /// Finds all script files related to a quest battle (C++ only for now)
+        /// </summary>
+        public string[] FindQuestBattleScriptFiles(string questBattleName, uint? questBattleId = null)
+        {
+            var foundFiles = new List<string>();
+
+            var cppScript = FindQuestBattleScript(questBattleName, questBattleId);
+            if (!string.IsNullOrEmpty(cppScript))
+            {
+                foundFiles.Add(cppScript);
+            }
+
+            DebugModeManager.LogDebug($"Found {foundFiles.Count} files for quest battle '{questBattleName}': " +
+                            $"{string.Join(", ", foundFiles.Select(Path.GetFileName))}");
+
+            return foundFiles.ToArray();
+        }
+
+        /// <summary>
+        /// Checks if a quest battle has any scripts available
+        /// </summary>
+        public bool HasQuestBattleScript(string questBattleName, uint? questBattleId = null)
+        {
+            if (string.IsNullOrEmpty(questBattleName))
+            {
+                DebugModeManager.LogDebug($"HasQuestBattleScript: Empty questBattleName");
+                return false;
+            }
+
+            try
+            {
+                var repoScript = FindQuestBattleScript(questBattleName, questBattleId);
+                if (!string.IsNullOrEmpty(repoScript))
+                {
+                    DebugModeManager.LogDebug($"HasQuestBattleScript({questBattleName}): Found in repo - {Path.GetFileName(repoScript)}");
+                    return true;
+                }
+
+                DebugModeManager.LogDebug($"HasQuestBattleScript({questBattleName}): No scripts found");
+                return false;
+            }
+            catch (Exception ex)
+            {
+                DebugModeManager.LogDebug($"HasQuestBattleScript({questBattleName}): Error - {ex.Message}");
+                return false;
+            }
+        }
+
+        #endregion Enhanced Quest Battle Script Management
+
         private class ScriptMetadata
         {
             public uint TerritoryId { get; set; } = 0;
             public string TerritoryName { get; set; } = string.Empty;
             public uint MapId { get; set; } = 0;
         }
+    }
+
+    /// <summary>
+    /// Enhanced script information for quest battles
+    /// </summary>
+    public class QuestBattleScriptInfoExtended
+    {
+        public string QuestBattleName { get; set; } = string.Empty;
+        public uint? QuestBattleId { get; set; }
+        public string? ScriptPath { get; set; }
+        public bool Exists { get; set; }
+        public bool CanOpenInVSCode { get; set; }
+        public bool CanOpenInVisualStudio { get; set; }
     }
 }

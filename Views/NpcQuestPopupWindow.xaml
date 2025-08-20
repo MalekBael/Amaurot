@@ -1,7 +1,7 @@
 ﻿<Window x:Class="Amaurot.NpcQuestPopupWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="NPC Quests" Height="450" Width="300"
+        Title="NPC Quests" Height="600" Width="450"
         WindowStyle="ToolWindow" ShowInTaskbar="False"
         WindowStartupLocation="CenterOwner">
 
@@ -27,9 +27,17 @@
 
         <!-- Quest List -->
         <GroupBox Grid.Row="2" Header="Available Quests" Margin="0,0,0,10">
-            <!-- ✅ FIXED: Removed MouseDoubleClick event handler since we're using custom ListBoxItems -->
-            <ListBox x:Name="QuestListBox">
-                <!-- ✅ REMOVED: ItemTemplate since we're creating items programmatically -->
+            <!-- Enhanced quest list with script editing capabilities -->
+            <ListBox x:Name="QuestListBox" 
+                     ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                     ScrollViewer.VerticalScrollBarVisibility="Auto">
+                <ListBox.ItemContainerStyle>
+                    <Style TargetType="ListBoxItem">
+                        <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                        <Setter Property="Margin" Value="2"/>
+                        <Setter Property="Padding" Value="5"/>
+                    </Style>
+                </ListBox.ItemContainerStyle>
                 <!-- The CreateEnhancedQuestList() method will populate this ListBox -->
             </ListBox>
         </GroupBox>

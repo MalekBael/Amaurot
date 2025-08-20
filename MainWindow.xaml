@@ -79,7 +79,6 @@
                   Margin="5,0" Checked="PanelVisibility_Changed" Unchecked="PanelVisibility_Changed" />
                 <CheckBox x:Name="ShowEobjsCheckBox" Content="Eobjs" IsChecked="False"
                   Margin="5,0" Checked="PanelVisibility_Changed" Unchecked="PanelVisibility_Changed" />
-                <!-- ✅ REMOVED: ShowEventItemCheckBox completely removed -->
             </WrapPanel>
         </GroupBox>
 
@@ -133,7 +132,7 @@
                     <RowDefinition Height="200" />
                 </Grid.RowDefinitions>
 
-                <!-- Map Canvas with Overlay - Using Grid to stack them perfectly -->
+                <!-- Map Canvas with Overlay  -->
                 <Border Grid.Row="0" Background="LightGray" Margin="5">
                     <Grid ClipToBounds="True">
                         <!-- Map Canvas - Bottom Layer -->
@@ -144,7 +143,6 @@
                                 MouseRightButtonDown="MapCanvas_MouseRightButtonDown"
                                 MouseMove="MapCanvas_MouseMove">
 
-                            <!-- Image must be the first element to be drawn behind everything else -->
                             <Image x:Name="MapImageControl"
                                    Canvas.Left="0" Canvas.Top="0"
                                    RenderTransformOrigin="0,0">
@@ -156,7 +154,7 @@
                                 </Image.RenderTransform>
                             </Image>
 
-                            <!-- Placeholder text for when no map is selected -->
+
                             <TextBlock Text="Select a territory to view its map"
                                        Canvas.Left="10" Canvas.Top="10"
                                        Foreground="Gray"
@@ -264,7 +262,7 @@
                                     <ColumnDefinition Width="Auto" />
                                 </Grid.ColumnDefinitions>
 
-                                <!-- Location Indicator - ✅ UPDATED: Only show in debug mode -->
+                                <!-- Location Indicator -->
                                 <TextBlock Grid.Column="0"
                                            Text="📍"
                                            FontSize="12"
@@ -319,6 +317,12 @@
                          Text="" TextChanged="NpcSearchBox_TextChanged"
                          Background="White" BorderThickness="1" BorderBrush="Gray"
                          ToolTip="Search NPCs by name or ID" />
+                <!-- checkbox to hide NPCs with 0 quests -->
+                <CheckBox DockPanel.Dock="Top" x:Name="HideZeroQuestNpcsCheckBox"
+                          Content="Hide NPCs with 0 quests" Margin="2,0,2,5"
+                          IsChecked="False" Checked="HideZeroQuestNpcsCheckBox_Changed"
+                          Unchecked="HideZeroQuestNpcsCheckBox_Changed"
+                          ToolTip="Hide NPCs that have no associated quests" />
                 <ListBox Name="NpcList"
                          ItemsSource="{Binding FilteredNpcs}"
                          SelectionChanged="NpcList_SelectionChanged"

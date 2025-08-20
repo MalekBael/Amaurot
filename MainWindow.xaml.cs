@@ -1,15 +1,11 @@
 ﻿using Amaurot.Services;
-using System.Windows.Forms;
-using Microsoft.Win32;
 using SaintCoinach;
-using SaintCoinach.Ex;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
-using System.ComponentModel.Design;
+using System.ComponentModel;
 using System.IO;
 using System.Linq;
-using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
@@ -22,12 +18,10 @@ using EntityNpcInfo = Amaurot.Services.Entities.NpcInfo;
 using EntityNpcQuestInfo = Amaurot.Services.Entities.NpcQuestInfo;
 using FateInfo = Amaurot.Services.Entities.FateInfo;
 using InstanceContentInfo = Amaurot.Services.Entities.InstanceContentInfo;
-using QuestInfo = Amaurot.Services.Entities.QuestInfo;
-using ServiceNpcInfo = Amaurot.Services.NpcInfo;
-using ServiceNpcQuestInfo = Amaurot.Services.NpcQuestInfo;
-using TerritoryInfo = Amaurot.Services.Entities.TerritoryInfo;
 using QuestBattleInfo = Amaurot.Services.Entities.QuestBattleInfo;
-using System.ComponentModel;
+using QuestInfo = Amaurot.Services.Entities.QuestInfo;
+using TerritoryInfo = Amaurot.Services.Entities.TerritoryInfo;
+
 
 namespace Amaurot
 {
@@ -44,6 +38,8 @@ namespace Amaurot
         private bool _isLoadingData;
         private DispatcherTimer? _searchDebounceTimer;
         private FilterService? _filterService;
+
+        private bool _hideZeroQuestNpcs = false;
 
         #endregion Fields
 
@@ -80,7 +76,7 @@ namespace Amaurot
             Loaded += OnWindowLoaded;
 
             this.Closing += MainWindow_Closing;
-            
+
             DebugModeManager.DebugModeChanged += OnDebugModeChanged;
         }
 
@@ -89,11 +85,46 @@ namespace Amaurot
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsDebugModeEnabled)));
         }
 
+        private void HideZeroQuestNpcsCheckBox_Changed(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                if (sender is System.Windows.Controls.CheckBox checkBox)
+                {
+                    _hideZeroQuestNpcs = checkBox.IsChecked == true;
+
+                    // Save the setting if SettingsService is available
+                    _services.Get<SettingsService>()?.UpdateHideZeroQuestNpcs(_hideZeroQuestNpcs);
+
+                    LogDebug($"Hide zero quest NPCs checkbox changed: {_hideZeroQuestNpcs}");
+
+                    // Only re-apply the NPC filter if data is loaded and NPCs exist
+                    if (!_isLoadingData && _entities.AllNpcs.Count > 0)
+                    {
+                        // Apply filtering immediately without delay
+                        FilterNpcs();
+                    }
+                    else
+                    {
+                        LogDebug("Skipping NPC filtering - data not ready");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                LogDebug($"Error in HideZeroQuestNpcsCheckBox_Changed: {ex.Message}");
+            }
+        }
+
         private void SafeShutdown()
         {
             try
             {
                 LogDebug("Application shutting down - disposing resources...");
+
+                // Flush any remaining debug messages before shutdown
+                DebugModeManager.FlushAllMessages();
+                DebugModeManager.Shutdown();
 
                 _filterService?.Dispose();
 
@@ -129,9 +160,9 @@ namespace Amaurot
             try
             {
                 _services.Register(new SettingsService());
-                
+
                 DebugModeManager.Initialize(this);
-                
+
                 _services.Register(new MapRenderer(_realm));
                 _services.Register(new UIUpdateService());
 
@@ -247,7 +278,14 @@ namespace Amaurot
                 autoLoadMenuItem.IsChecked = settings.AutoLoadGameData;
             }
 
-            LogDebug($"Settings applied - Auto-load: {settings.AutoLoadGameData}, Debug: {settings.DebugMode}");
+            if (FindName("HideZeroQuestNpcsCheckBox") is System.Windows.Controls.CheckBox hideZeroQuestNpcsCheckBox)
+            {
+                hideZeroQuestNpcsCheckBox.IsChecked = settings.HideZeroQuestNpcs;
+                _hideZeroQuestNpcs = settings.HideZeroQuestNpcs;
+                // Don't trigger filtering here - wait until data is loaded
+            }
+
+            LogDebug($"Settings applied - Auto-load: {settings.AutoLoadGameData}, Debug: {settings.DebugMode}, Hide zero quest NPCs: {_hideZeroQuestNpcs}");
         }
 
         #endregion Initialization
@@ -385,6 +423,18 @@ namespace Amaurot
             {
                 ApplyTerritoryFilters();
             }
+
+            // REMOVE THIS - it's causing startup hangs
+            // Apply initial NPC filtering AFTER all data is loaded
+            // await Task.Delay(100); // Small delay to ensure UI is ready
+            // if (_hideZeroQuestNpcs && _entities.AllNpcs.Count > 0)
+            // {
+            //     LogDebug("Applying initial zero quest NPC filter after data load completion");
+            //     FilterNpcs();
+            // }
+
+            // Instead, just log that data loading is complete
+            LogDebug("All data loading completed - NPC filtering will be applied when territories are selected");
         }
 
         private async Task LoadEntityData<T>(
@@ -481,6 +531,11 @@ namespace Amaurot
                     }
 
                     UpdateEntityCount<EntityNpcInfo>();
+
+                    // Debug: Check quest counts
+                    LogNpcQuestCounts();
+
+                    LogDebug($"NPCs loaded - initial filtering will be applied after data loading completes");
                 });
 
                 LogDebug($"Loaded {npcs.Count} NPCs");
@@ -516,7 +571,8 @@ namespace Amaurot
                 }
             }
 
-            if (_entities.AllNpcs.Count > 0 && TerritoryList.SelectedItem != null)
+            // Only filter NPCs if we have data loaded and we're not currently loading
+            if (!_isLoadingData && _entities.AllNpcs.Count > 0 && TerritoryList.SelectedItem != null)
             {
                 FilterNpcs();
             }
@@ -697,7 +753,7 @@ namespace Amaurot
 
                 foreach (var npc in npcsForMap)
                 {
-                    uint iconId = 71031;     
+                    uint iconId = 71031;
                     string iconPath = "ui/icon/071000/071031.tex";
                     int scriptsAvailable = 0;
 
@@ -741,7 +797,7 @@ namespace Amaurot
                     .Where(quest => quest != null && !string.IsNullOrEmpty(quest.QuestIdString))
                     .Select(quest => quest.QuestIdString!)
                     .Distinct()
-                    .Take(100)       
+                    .Take(100)
                     .ToList();
 
                 LogDebug($"Checking script availability for {uniqueQuestIds.Count} unique quests on this map");
@@ -1034,20 +1090,58 @@ namespace Amaurot
         {
             try
             {
+                // Safety check: don't filter if data is still loading or collections are empty
+                if (_isLoadingData || _entities.AllNpcs.Count == 0)
+                {
+                    LogDebug("Skipping NPC filtering - data still loading or no NPCs available");
+                    return;
+                }
+
                 var npcSearchBox = FindName("NpcSearchBox") as System.Windows.Controls.TextBox;
                 var searchText = npcSearchBox?.Text ?? "";
                 var currentMapId = _mapState.CurrentTerritory?.MapId;
 
-                var filterService = _services.Get<FilterService>();
-                filterService?.FilterEntitiesWithTerritoryFilter(
-                    searchText,
-                    _entities.AllNpcs,
-                    _entities.FilteredNpcs,
-                    currentMapId,
-                    (npc, text) => npc.NpcName.Contains(text, StringComparison.OrdinalIgnoreCase) ||
-                                  npc.NpcId.ToString().Contains(text));
+                LogDebug($"Starting NPC filter - Search: '{searchText}', Territory: {currentMapId}, Hide zero quests: {_hideZeroQuestNpcs}");
 
-                UpdateEntityCount<EntityNpcInfo>();
+                // Apply manual filtering instead of relying on FilterService
+                var sourceNpcs = _entities.AllNpcs.AsEnumerable();
+
+                // Apply territory filter first if we have a current territory
+                if (currentMapId.HasValue && currentMapId.Value > 0)
+                {
+                    sourceNpcs = sourceNpcs.Where(npc => npc.MapId == currentMapId.Value);
+                }
+
+                // Apply zero quest filter if enabled
+                if (_hideZeroQuestNpcs)
+                {
+                    sourceNpcs = sourceNpcs.Where(npc => npc.QuestCount > 0);
+                }
+
+                // Apply search text filter if provided
+                if (!string.IsNullOrEmpty(searchText))
+                {
+                    sourceNpcs = sourceNpcs.Where(npc =>
+                        npc.NpcName.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
+                        npc.NpcId.ToString().Contains(searchText));
+                }
+
+                var filteredNpcs = sourceNpcs.ToList();
+
+                // Update the UI on the dispatcher thread
+                Dispatcher.BeginInvoke(() =>
+                {
+                    _entities.FilteredNpcs.Clear();
+                    foreach (var npc in filteredNpcs)
+                    {
+                        _entities.FilteredNpcs.Add(npc);
+                    }
+                    UpdateEntityCount<EntityNpcInfo>();
+                });
+
+                LogDebug($"NPC filtering completed: {filteredNpcs.Count} shown " +
+                        $"(Hide zero quests: {_hideZeroQuestNpcs}, Search: '{searchText}', " +
+                        $"Territory: {currentMapId?.ToString() ?? "All"})");
             }
             catch (Exception ex)
             {
@@ -1167,7 +1261,7 @@ namespace Amaurot
                 _services.Get<SettingsService>()?.UpdateDebugMode(enabled);
 
                 DebugModeManager.LogInfo($"Debug mode {(enabled ? "enabled" : "disabled")}");
-                
+
                 RefreshQuestListPinVisibility();
             }
         }
@@ -1176,7 +1270,7 @@ namespace Amaurot
         {
             try
             {
-                var questList = FindName("QuestList") as System.Windows.Controls.ListBox;      
+                var questList = FindName("QuestList") as System.Windows.Controls.ListBox;
                 if (questList?.ItemsSource != null)
                 {
                     var currentSource = questList.ItemsSource;
@@ -1387,18 +1481,10 @@ namespace Amaurot
         {
             try
             {
-                var details = $"Quest Battle: {questBattle.QuestBattleName}\n" +
-                             $"ID: {questBattle.QuestBattleId}\n" +
-                             $"Territory: {questBattle.TerritoryName}\n" +
-                             $"Layer: {questBattle.LayerName}\n" +
-                             $"Asset Type: {questBattle.AssetType}\n" +
-                             $"Source: {questBattle.Source}\n" +
-                             $"Coordinates: ({questBattle.MapX:F1}, {questBattle.MapY:F1}, {questBattle.MapZ:F1})";
-
-                System.Windows.MessageBox.Show(details, "Quest Battle Details", 
-                    MessageBoxButton.OK, MessageBoxImage.Information);
-
-                LogDebug($"Showed quest battle details for: {questBattle.QuestBattleName}");
+                var questBattleScriptService = _services.Get<QuestBattleScriptService>();
+                var window = new QuestBattleDetailsWindow(questBattle, this, questBattleScriptService);
+                window.Show();
+                LogDebug($"Opened quest battle details for: {questBattle.QuestBattleName}");
             }
             catch (Exception ex)
             {
@@ -1532,7 +1618,7 @@ namespace Amaurot
             else if (toolName == "lgb-parser.exe")
             {
                 toolPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, toolName);
-                
+
                 if (!File.Exists(toolPath))
                 {
                     var fallbackPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Tools", toolName);
@@ -1546,7 +1632,7 @@ namespace Amaurot
             else
             {
                 toolPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Tools", toolName);
-                
+
                 if (!File.Exists(toolPath))
                 {
                     var rootPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, toolName);
@@ -1811,6 +1897,11 @@ namespace Amaurot
             return _services?.Get<QuestScriptService>();
         }
 
+        public QuestBattleScriptService? GetQuestBattleScriptService()
+        {
+            return _services?.Get<QuestBattleScriptService>();
+        }
+
         public void ToggleNpcMarkers(bool visible)
         {
             var npcMarkers = _mapState.CurrentMapMarkers.Where(m => m.Type == MarkerType.Npc).ToList();
@@ -1888,25 +1979,44 @@ namespace Amaurot
                 }
                 else
                 {
-                    System.Windows.MessageBox.Show($"Could not find territory for quest '{quest.Name}'",
-                        "Territory Not Found", MessageBoxButton.OK, MessageBoxImage.Information);
+                    // Only show debug window when debug mode is enabled
+                    if (DebugModeManager.IsDebugModeEnabled)
+                    {
+                        System.Windows.MessageBox.Show($"Could not find territory for quest '{quest.Name}'",
+                            "Territory Not Found", MessageBoxButton.OK, MessageBoxImage.Information);
+                    }
+                    else
+                    {
+                        // Just log to debug and show brief status message
+                        LogDebug($"Could not find territory for quest '{quest.Name}' (MapId: {quest.MapId}, PlaceName: {quest.PlaceName})");
+                        StatusText.Text = $"Territory not found for quest '{quest.Name}'";
+                    }
                 }
             }
             catch (Exception ex)
             {
                 LogDebug($"Error navigating to quest: {ex.Message}");
-                System.Windows.MessageBox.Show($"Error: {ex.Message}", "Error",
-                    MessageBoxButton.OK, MessageBoxImage.Error);
+
+                // Only show error dialog when debug mode is enabled
+                if (DebugModeManager.IsDebugModeEnabled)
+                {
+                    System.Windows.MessageBox.Show($"Error: {ex.Message}", "Error",
+                        MessageBoxButton.OK, MessageBoxImage.Error);
+                }
+                else
+                {
+                    StatusText.Text = $"Error navigating to quest: {quest.Name}";
+                }
             }
         }
 
         private static readonly PanelConfig[] PanelConfigurations = [
             new("QuestsPanel", "ShowQuestsCheckBox", 1),
-            new("NpcsPanel", "ShowNpcsCheckBox", 2),
-            new("FatesPanel", "ShowFatesCheckBox", 3),
-            new("BNpcsPanel", "ShowBNpcsCheckBox", 4),
-            new("InstanceContentPanel", "ShowInstanceContentCheckBox", 5),
-            new("EobjsPanel", "ShowEobjsCheckBox", 6),
+    new("NpcsPanel", "ShowNpcsCheckBox", 2),
+    new("FatesPanel", "ShowFatesCheckBox", 3),
+    new("BNpcsPanel", "ShowBNpcsCheckBox", 4),
+    new("InstanceContentPanel", "ShowInstanceContentCheckBox", 5),
+    new("EobjsPanel", "ShowEobjsCheckBox", 6)
         ];
 
         private record PanelConfig(string PanelName, string CheckBoxName, int Priority);
@@ -2051,6 +2161,37 @@ namespace Amaurot
         }
 
         #endregion Helper Methods
+
+        private void LogNpcQuestCounts()
+        {
+            if (_entities.AllNpcs.Count == 0)
+            {
+                LogDebug("No NPCs loaded for quest count analysis");
+                return;
+            }
+
+            var zeroQuestNpcs = _entities.AllNpcs.Count(n => n.QuestCount == 0);
+            var questNpcs = _entities.AllNpcs.Count(n => n.QuestCount > 0);
+            var totalNpcs = _entities.AllNpcs.Count;
+
+            LogDebug($"NPC Quest Count Analysis: Total={totalNpcs}, WithQuests={questNpcs}, WithoutQuests={zeroQuestNpcs}");
+
+            // Log a few examples
+            var sampleZeroQuest = _entities.AllNpcs.Where(n => n.QuestCount == 0).Take(3);
+            var sampleWithQuests = _entities.AllNpcs.Where(n => n.QuestCount > 0).Take(3);
+
+            LogDebug("Sample NPCs with 0 quests:");
+            foreach (var npc in sampleZeroQuest)
+            {
+                LogDebug($"  - {npc.NpcName} (ID: {npc.NpcId}, QuestCount: {npc.QuestCount})");
+            }
+
+            LogDebug("Sample NPCs with quests:");
+            foreach (var npc in sampleWithQuests)
+            {
+                LogDebug($"  - {npc.NpcName} (ID: {npc.NpcId}, QuestCount: {npc.QuestCount})");
+            }
+        }
     }
 
     #region Helper Classes - ONLY ONE DEFINITION
@@ -2147,7 +2288,7 @@ namespace Amaurot
         public void UpdateStatus(string message)
         {
             var displayMessage = message.Length > 120 ? message.Substring(0, 117) + "..." : message;
-            
+
             _window.ProgressStatusText.Text = displayMessage;
             _window.StatusText.Text = displayMessage;
         }
@@ -2155,11 +2296,11 @@ namespace Amaurot
         public void Hide()
         {
             _window.ProgressOverlay.Visibility = Visibility.Collapsed;
-            
+
             _window.QuestExtractionProgressBar.IsIndeterminate = true;
             _window.QuestExtractionProgressBar.Value = 0;
             _window.QuestExtractionProgressBar.Foreground = new SolidColorBrush(Colors.Green);
-            
+
             _cancellationSource?.Dispose();
             _cancellationSource = null;
             _currentProcess = null;

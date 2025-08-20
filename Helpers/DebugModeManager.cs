@@ -1,12 +1,17 @@
 ﻿using SaintCoinach.Xiv;
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
+using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using System.Windows.Threading;
 using WpfPanel = System.Windows.Controls.Panel;
 using FateInfo = Amaurot.Services.Entities.FateInfo;
 
@@ -15,9 +20,19 @@ namespace Amaurot
     public static class DebugModeManager
     {
         #region Static Debug Mode Management
-        
+
         private static bool _isDebugModeEnabled = false;
         private static MainWindow? _mainWindow;
+
+        private static readonly ConcurrentQueue<string> _logQueue = new();
+        private static readonly System.Threading.Timer _logFlushTimer;
+        private static readonly object _logFlushLock = new();
+        private static volatile bool _isFlushInProgress = false;
+
+        static DebugModeManager()
+        {
+            _logFlushTimer = new System.Threading.Timer(FlushLogQueue, null, 100, 100);
+        }
 
         public static bool IsDebugModeEnabled
         {
@@ -34,9 +49,6 @@ namespace Amaurot
 
         public static event Action<bool>? DebugModeChanged;
 
-        /// <summary>
-        /// Initialize the debug manager with the main window reference
-        /// </summary>
         public static void Initialize(MainWindow mainWindow)
         {
             _mainWindow = mainWindow;
@@ -51,9 +63,8 @@ namespace Amaurot
             if (_isDebugModeEnabled)
             {
                 System.Diagnostics.Debug.WriteLine($"[DEBUG] {message}");
-                
-                // Also log to UI if main window is available
-                LogToUI(message);
+
+                QueueLogMessage(message);
             }
         }
 
@@ -62,9 +73,7 @@ namespace Amaurot
             if (_isDebugModeEnabled)
             {
                 System.Diagnostics.Debug.WriteLine($"[VERBOSE] {message}");
-                
-                // Also log to UI if main window is available
-                LogToUI($"[VERBOSE] {message}");
+                QueueLogMessage($"[VERBOSE] {message}");
             }
         }
 
@@ -73,7 +82,7 @@ namespace Amaurot
             if (_isDebugModeEnabled)
             {
                 System.Diagnostics.Debug.WriteLine($"[INFO] {message}");
-                LogToUI($"[INFO] {message}");
+                QueueLogMessage($"[INFO] {message}");
             }
         }
 
@@ -82,7 +91,7 @@ namespace Amaurot
             if (_isDebugModeEnabled)
             {
                 System.Diagnostics.Debug.WriteLine($"[WARNING] {message}");
-                LogToUI($"[WARNING] {message}");
+                QueueLogMessage($"[WARNING] {message}");
             }
         }
 
@@ -91,49 +100,114 @@ namespace Amaurot
             if (_isDebugModeEnabled)
             {
                 System.Diagnostics.Debug.WriteLine($"[ERROR] {message}");
-                LogToUI($"[ERROR] {message}");
+                QueueLogMessage($"[ERROR] {message}");
             }
         }
 
-        /// <summary>
-        /// Log message to the UI debug text box with timestamp and automatic scroll
-        /// </summary>
-        private static void LogToUI(string message)
+        private static void QueueLogMessage(string message)
         {
             if (_mainWindow == null) return;
 
-            if (!_mainWindow.Dispatcher.CheckAccess())
-            {
-                _mainWindow.Dispatcher.Invoke(() => LogToUI(message));
+            string timestampedMessage = $"[{DateTime.Now:HH:mm:ss.fff}] {message}";
+            _logQueue.Enqueue(timestampedMessage);
+        }
+
+        private static void FlushLogQueue(object? state)
+        {
+            if (_mainWindow == null || _isFlushInProgress || _logQueue.IsEmpty)
                 return;
+
+            lock (_logFlushLock)
+            {
+                if (_isFlushInProgress) return;
+                _isFlushInProgress = true;
             }
+
+            try
+            {
+                var messages = new List<string>();
+                while (_logQueue.TryDequeue(out string? message) && messages.Count < 50)    
+                {
+                    messages.Add(message);
+                }
+
+                if (messages.Count == 0) return;
+
+                _mainWindow.Dispatcher.BeginInvoke(() =>
+                {
+                    try
+                    {
+                        UpdateUIWithBatchedMessages(messages);
+                    }
+                    finally
+                    {
+                        _isFlushInProgress = false;
+                    }
+                }, DispatcherPriority.Background);
+            }
+            catch
+            {
+                _isFlushInProgress = false;
+            }
+        }
+
+        private static void UpdateUIWithBatchedMessages(List<string> messages)
+        {
+            if (_mainWindow?.DebugTextBox == null) return;
 
             const int MaxLogLines = 500;
-            string timestampedMessage = $"[{DateTime.Now:HH:mm:ss.fff}] {message}";
-            _mainWindow.DebugTextBox.AppendText(timestampedMessage + Environment.NewLine);
 
-            // Trim old lines if too many
-            if (_mainWindow.DebugTextBox.LineCount > MaxLogLines)
+            var sb = new StringBuilder();
+            foreach (var message in messages)
             {
-                int charsToRemove = _mainWindow.DebugTextBox.GetCharacterIndexFromLineIndex(_mainWindow.DebugTextBox.LineCount - MaxLogLines);
-                _mainWindow.DebugTextBox.Text = _mainWindow.DebugTextBox.Text.Substring(charsToRemove);
+                sb.AppendLine(message);
             }
 
-            // Auto-scroll if enabled
+            _mainWindow.DebugTextBox.AppendText(sb.ToString());
+
+            if (_mainWindow.DebugTextBox.LineCount > MaxLogLines + 100)       
+            {
+                try
+                {
+                    int linesToRemove = _mainWindow.DebugTextBox.LineCount - MaxLogLines;
+                    int charsToRemove = _mainWindow.DebugTextBox.GetCharacterIndexFromLineIndex(linesToRemove);
+
+                    if (charsToRemove > 0 && charsToRemove < _mainWindow.DebugTextBox.Text.Length)
+                    {
+                        _mainWindow.DebugTextBox.Text = _mainWindow.DebugTextBox.Text.Substring(charsToRemove);
+                    }
+                }
+                catch
+                {
+                    _mainWindow.DebugTextBox.Clear();
+                    _mainWindow.DebugTextBox.AppendText(sb.ToString());
+                }
+            }
+
             if (_mainWindow.AutoScrollCheckBox?.IsChecked == true)
             {
-                _mainWindow.DebugScrollViewer.ScrollToEnd();
+                _mainWindow.DebugScrollViewer?.ScrollToEnd();
+            }
+        }
+
+        public static void FlushAllMessages()
+        {
+            FlushLogQueue(null);
+
+            if (_mainWindow != null)
+            {
+                _mainWindow.Dispatcher.Invoke(() => {        });
             }
         }
 
         #endregion Basic Logging Methods
 
-        #region Service-Specific Logging Methods
+        #region Service-Specific Logging Methods (Throttled)
 
         public static void LogServiceInitialization(string serviceName, bool success, string? details = null)
         {
             if (!_isDebugModeEnabled) return;
-            
+
             var status = success ? "SUCCESS" : "FAILED";
             var message = $"{serviceName} initialization {status}";
             if (!string.IsNullOrEmpty(details))
@@ -146,7 +220,7 @@ namespace Amaurot
         public static void LogDataLoading(string dataType, int count, string? details = null)
         {
             if (!_isDebugModeEnabled) return;
-            
+
             var message = $"Loaded {count} {dataType}";
             if (!string.IsNullOrEmpty(details))
             {
@@ -158,7 +232,7 @@ namespace Amaurot
         public static void LogMarkerCreation(string markerType, int count, uint? mapId = null)
         {
             if (!_isDebugModeEnabled) return;
-            
+
             var message = $"Created {count} {markerType} markers";
             if (mapId.HasValue)
             {
@@ -170,7 +244,7 @@ namespace Amaurot
         public static void LogCacheOperation(string operation, string cacheType, int count, uint? id = null)
         {
             if (!_isDebugModeEnabled) return;
-            
+
             var message = $"{operation} {cacheType} cache";
             if (id.HasValue)
             {
@@ -186,7 +260,7 @@ namespace Amaurot
         public static void LogFileOperation(string operation, string fileName, bool success, string? details = null)
         {
             if (!_isDebugModeEnabled) return;
-            
+
             var status = success ? "SUCCESS" : "FAILED";
             var message = $"File {operation} {status}: {fileName}";
             if (!string.IsNullOrEmpty(details))
@@ -199,7 +273,7 @@ namespace Amaurot
         public static void LogCoordinateConversion(string sourceType, string targetType, double x, double y, double z, uint? mapId = null)
         {
             if (!_isDebugModeEnabled) return;
-            
+
             var message = $"Coordinate conversion {sourceType} -> {targetType}: ({x:F1}, {y:F1}, {z:F1})";
             if (mapId.HasValue)
             {
@@ -211,7 +285,7 @@ namespace Amaurot
         public static void LogQuestProcessing(uint questId, string questName, string operation, bool success, string? details = null)
         {
             if (!_isDebugModeEnabled) return;
-            
+
             var status = success ? "SUCCESS" : "FAILED";
             var message = $"Quest {questId} '{questName}' {operation} {status}";
             if (!string.IsNullOrEmpty(details))
@@ -224,14 +298,14 @@ namespace Amaurot
         public static void LogLgbProcessing(string lgbType, string territoryFolder, uint territoryId, int layerCount)
         {
             if (!_isDebugModeEnabled) return;
-            
+
             LogDebug($"Processing {lgbType} LGB for territory {territoryId} ({territoryFolder}): {layerCount} layers");
         }
 
         public static void LogNpcProcessing(uint npcId, string npcName, string operation, bool success, string? location = null)
         {
             if (!_isDebugModeEnabled) return;
-            
+
             var status = success ? "SUCCESS" : "FAILED";
             var message = $"NPC {npcId} '{npcName}' {operation} {status}";
             if (!string.IsNullOrEmpty(location))
@@ -507,7 +581,7 @@ namespace Amaurot
                 bool gameFolderExists = System.IO.Directory.Exists(System.IO.Path.Combine(directory, "game"));
                 bool bootFolderExists = System.IO.Directory.Exists(System.IO.Path.Combine(directory, "boot"));
                 bool isValid = gameFolderExists && bootFolderExists;
-                
+
                 LogDebug($"Validation result: {isValid} (game: {gameFolderExists}, boot: {bootFolderExists})");
                 return isValid;
             }
@@ -519,16 +593,29 @@ namespace Amaurot
         }
 
         #endregion Validation Methods
+
+        #region Cleanup Methods
+
+        public static void Shutdown()
+        {
+            try
+            {
+                _logFlushTimer?.Dispose();
+                FlushAllMessages();
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error during DebugModeManager shutdown: {ex.Message}");
+            }
+        }
+
+        #endregion Cleanup Methods
     }
 
-    /// <summary>
-    /// TraceListener that redirects System.Diagnostics output to the debug manager
-    /// </summary>
     public class DebugManagerTraceListener : System.Diagnostics.TraceListener
     {
         public override void Write(string? message)
         {
-            // Handle partial writes - usually we want WriteLine for complete messages
         }
 
         public override void WriteLine(string? message)
