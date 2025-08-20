@@ -1,114 +1,131 @@
-name: WPF .NET Desktop Build
+name: Build and Release Amaurot Map Editor
+permissions:
+  contents: write
 
 on:
   push:
-    branches: [ "master", "main" ]
+    branches: [ "master" ]
   pull_request:
-    branches: [ "master", "main" ]
+    branches: [ "master" ]
 
 jobs:
   build:
     strategy:
       matrix:
-        configuration: [Debug, Release]
+        configuration: [Release]
 
     runs-on: windows-latest
 
     env:
-      Solution_Name: "map editor.sln"
-      Project_Path: Amaurot.csproj
-      
+      Solution_Name: map editor.sln                       # Main solution file
+      Project_Path: Amaurot.csproj                     # Main WPF project file
+
     steps:
     - name: Checkout
       uses: actions/checkout@v4
       with:
         fetch-depth: 0
+        submodules: recursive  # For unluac submodule
 
-    - name: Install .NET 8
+    # Install the .NET Core workload
+    - name: Install .NET Core
       uses: actions/setup-dotnet@v4
       with:
         dotnet-version: 8.0.x
 
+    # Add MSBuild to PATH for external tool building
+    - name: Add MSBuild to PATH
+      uses: microsoft/setup-msbuild@v1.0.2
+
+    # Restore dependencies
     - name: Restore dependencies
-      run: dotnet restore "$env:Solution_Name"
+      run: dotnet restore $env:Solution_Name
 
-    - name: Build application
-      run: dotnet build "$env:Solution_Name" --configuration ${{ matrix.configuration }} --no-restore
+    # Build the application (this will also build LGB-Parser via MSBuild targets)
+    - name: Build
+      run: dotnet build $env:Solution_Name --configuration ${{ matrix.configuration }} --no-restore
 
+    # Execute unit tests (if any exist)
     - name: Execute unit tests
-      run: dotnet test "$env:Solution_Name" --configuration ${{ matrix.configuration }} --no-build --verbosity normal
+      run: dotnet test $env:Solution_Name --configuration ${{ matrix.configuration }} --no-build --verbosity normal
       continue-on-error: true
 
-    - name: Publish application
-      run: dotnet publish "$env:Project_Path" --configuration ${{ matrix.configuration }} --runtime win-x64 --self-contained true --output ./publish/win-x64
+    # Publish self-contained executable for Windows
+    - name: Publish Windows x64
+      run: dotnet publish $env:Project_Path --configuration ${{ matrix.configuration }} --runtime win-x64 --self-contained true --output ./publish/win-x64 -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true
 
-    - name: Create default settings file
+    # Copy external tools to publish directory
+    - name: Copy external tools
       run: |
-        @"
-        {
-          "GameInstallationPath": "",
-          "AutoLoadGameData": false,
-          "DebugMode": false,
-          "HideDuplicateTerritories": false,
-          "SapphireServerPath": "",
-          "SapphireBuildPath": ""
+        New-Item -ItemType Directory -Force -Path ./publish/win-x64/Tools
+        if (Test-Path "./Tools/LGB-Parser.exe") {
+          Copy-Item "./Tools/LGB-Parser.exe" "./publish/win-x64/Tools/"
         }
-        "@ | Out-File -FilePath "./publish/win-x64/settings.json" -Encoding UTF8
+        if (Test-Path "./Tools/unluac.jar") {
+          Copy-Item "./Tools/unluac.jar" "./publish/win-x64/Tools/"
+        }
+        if (Test-Path "./Libs") {
+          Copy-Item -Recurse "./Libs" "./publish/win-x64/"
+        }
 
-    - name: Create README
+    # Create ZIP archive for distribution
+    - name: Create Windows ZIP
       run: |
-        @"
-        # FFXIV Map Editor
+        $version = "v1.0.${{ github.run_number }}"
+        Compress-Archive -Path ./publish/win-x64/* -DestinationPath "./Amaurot-Map-Editor-$version-win-x64.zip"
 
-        ## Portable Settings
-        This application uses a portable settings.json file in the same directory as the executable.
-        
-        ## Features
-        - Cross-platform settings storage (no more AppData dependency)
-        - VSCode URI scheme integration for script editing
-        
-        ## Usage
-        1. Run Amaurot.exe
-        2. Settings will be saved to settings.json in this directory
-        3. Copy the entire folder to make it portable
-        
-        ## VSCode Integration
-        The "Open in VSCode" buttons use the vscode://file/ URI scheme which works across platforms.
-        "@ | Out-File -FilePath "./publish/win-x64/README.md" -Encoding UTF8
-
-    - name: Create distribution archive
-      run: Compress-Archive -Path "./publish/win-x64/*" -DestinationPath "ffxiv-map-editor-windows-${{ matrix.configuration }}.zip"
-
-    - name: Upload build artifacts
+    # Upload Windows build artifacts
+    - name: Upload Windows artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: FFXIV-Map-Editor-Windows-${{ matrix.configuration }}
-        path: ffxiv-map-editor-windows-${{ matrix.configuration }}.zip
-        retention-days: 30
+        name: Amaurot-Map-Editor-Windows-${{ matrix.configuration }}
+        path: ./Amaurot-Map-Editor-*-win-x64.zip
 
+    # Upload raw executables for debugging
+    - name: Upload Windows executables
+      uses: actions/upload-artifact@v4
+      with:
+        name: Amaurot-Map-Editor-Windows-Executable-${{ matrix.configuration }}
+        path: ./publish/win-x64/
+
+  # Release job triggers on every push to master
   release:
     needs: build
-    runs-on: windows-latest
-    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
     
     steps:
-    - name: Download artifacts
+    - name: Download Windows artifacts
       uses: actions/download-artifact@v4
-      
+      with:
+        name: Amaurot-Map-Editor-Windows-Release
+        path: ./release-assets/
+
+    - name: Generate version number
+      id: version
+      run: echo "VERSION=v1.0.${{ github.run_number }}" >> $GITHUB_OUTPUT
+
+    - name: Get latest commit info
+      id: commit
+      run: |
+        echo "SHORT_SHA=${GITHUB_SHA:0:7}" >> $GITHUB_OUTPUT
+        echo "COMMIT_MESSAGE=$(git log -1 --pretty=format:'%s')" >> $GITHUB_OUTPUT
+
     - name: Create Release
       uses: softprops/action-gh-release@v1
       with:
-        files: |
-          **/ffxiv-map-editor-*.zip
+        tag_name: ${{ steps.version.outputs.VERSION }}
+        name: "Amaurot Map Editor ${{ steps.version.outputs.VERSION }}"
         body: |
-          ## FFXIV Map Editor Release
+          ## Amaurot FFXIV Map Editor ${{ steps.version.outputs.VERSION }}
           
-          ### Installation
-          1. Download the ZIP file
-          2. Extract to any folder
-          3. Run Amaurot.exe
-          4. Settings will be saved as settings.json in the same folder
+          **Auto-generated release from commit:** [`${{ steps.commit.outputs.SHORT_SHA }}`](${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }})
+          
+          **Latest changes:** ${{ steps.commit.outputs.COMMIT_MESSAGE }}
+          
         draft: false
         prerelease: false
+        files: |
+          ./release-assets/Amaurot-Map-Editor-${{ steps.version.outputs.VERSION }}-win-x64.zip
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
