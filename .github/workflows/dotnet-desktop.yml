@@ -154,6 +154,49 @@ jobs:
           Write-Host "❌ LGB-Parser.dll not found at: $lgbDllPath"
         }
         
+        # Copy all other LGB-Parser dependency DLLs
+        Write-Host "🔧 Copying LGB-Parser dependencies..."
+        
+        $lgbDepLocations = @(
+          "./bin/Release/net8.0-windows/win-x64/",
+          "./LGB-Parser/bin/Release/net8.0/"
+        )
+        
+        foreach ($depDir in $lgbDepLocations) {
+          if (Test-Path $depDir) {
+            Write-Host "📂 Checking dependencies in: $depDir"
+            
+            # Copy specific LGB-Parser dependencies (INCLUDING LGB-Parser.dll!)
+            $lgbDependencies = @(
+              "LGB-Parser.dll",                    # ← ADD THIS! The main LGB-Parser library
+              "DotNetZip.dll",
+              "EntityFramework.dll", 
+              "EntityFramework.SqlServer.dll",
+              "Lumina.dll",
+              "Microsoft.Extensions.ObjectPool.dll",
+              "Newtonsoft.Json.dll"
+            )
+            
+            foreach ($depDll in $lgbDependencies) {
+              $sourcePath = Join-Path $depDir $depDll
+              $targetPath = "./publish/win-x64/$depDll"
+              
+              if (Test-Path $sourcePath) {
+                if (-not (Test-Path $targetPath)) {
+                  Copy-Item $sourcePath $targetPath -Force
+                  $size = (Get-Item $sourcePath).Length
+                  Write-Host "   ✅ Copied LGB-Parser dependency: $depDll ($([math]::Round($size/1KB, 1)) KB)"
+                } else {
+                  Write-Host "   ✓ Dependency already exists: $depDll"
+                }
+              } else {
+                Write-Host "   ⚠️ Missing dependency: $depDll"
+              }
+            }
+            break  # Stop after first successful directory
+          }
+        }
+        
         Write-Host ""
         Write-Host "📊 Final clean structure:"
         Write-Host "Root files:"
