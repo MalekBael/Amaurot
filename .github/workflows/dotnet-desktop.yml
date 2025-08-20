@@ -145,6 +145,15 @@ jobs:
           }
         }
         
+        # Explicitly copy LGB-Parser.dll if it exists
+        $lgbDllPath = "$lgbBuildDir/LGB-Parser.dll"
+        if (Test-Path $lgbDllPath) {
+          Copy-Item $lgbDllPath "./publish/win-x64/" -Force
+          Write-Host "✅ Copied LGB-Parser.dll"
+        } else {
+          Write-Host "❌ LGB-Parser.dll not found at: $lgbDllPath"
+        }
+        
         Write-Host ""
         Write-Host "📊 Final clean structure:"
         Write-Host "Root files:"
