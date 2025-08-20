@@ -1,4 +1,4 @@
-﻿name: Build and Release Amaurot Map Editor
+﻿name: Build and Release Amaurot Quest Editor
 permissions:
   contents: write
 
@@ -19,7 +19,6 @@ jobs:
     env:
       Solution_Name: "map editor.sln"                     
       Project_Path: Amaurot.csproj                         
-    
 
     steps:
     - name: Checkout
@@ -28,7 +27,6 @@ jobs:
         fetch-depth: 0
         submodules: recursive       
              
-         
     - name: Initialize and fix submodules
       run: |
         Write-Host "🔧 Initializing submodules..."
@@ -58,19 +56,16 @@ jobs:
           Write-Host "⚠️ unluac submodule not found"
         }
 
-         
-     
     - name: Install .NET Core
       uses: actions/setup-dotnet@v4
       with:
         dotnet-version: 8.0.x
+
     - name: Add MSBuild to PATH
       uses: microsoft/setup-msbuild@v1.0.2
       
     - name: Restore main solution dependencies
       run: dotnet restore "$env:Solution_Name"
-
-           
        
     - name: Restore LGB-Parser dependencies
       run: |
@@ -82,83 +77,112 @@ jobs:
           Write-Host "⚠️ LGB-Parser project file not found"
         }
 
-               
     - name: Build
       run: dotnet build "$env:Solution_Name" --configuration ${{ matrix.configuration }} --no-restore
+
     - name: Execute unit tests
       run: dotnet test "$env:Solution_Name" --configuration ${{ matrix.configuration }} --no-build --verbosity normal
       continue-on-error: true
+
     - name: Publish Windows x64
       run: |
-                
         dotnet publish $env:Project_Path --configuration ${{ matrix.configuration }} --runtime win-x64 --self-contained true --output ./publish/win-x64
         
-        Write-Host "📂 Publish completed. Contents:"
-        Get-ChildItem "./publish/win-x64" -Recurse | Select-Object Name, FullName | Format-Table
+        Write-Host "📂 Publish completed. Root directory contents:"
+        Get-ChildItem "./publish/win-x64" -File | Select-Object Name, Length | Format-Table
 
-                 
-             
-    - name: Copy external tools and dependencies
+    - name: Copy external tools and verify LGB-Parser location
       run: |
-        Write-Host "🔧 Setting up Tools directory..."
-        New-Item -ItemType Directory -Force -Path ./publish/win-x64/Tools
+        Write-Host "🔍 Verifying LGB-Parser.exe location..."
         
-              
-      
-        $lgbParserFound = $false
-        $lgbParserLocations = @(
-          "./Tools/LGB-Parser.exe",
-          "./bin/Release/net8.0-windows/win-x64/Tools/LGB-Parser.exe",
-          "./LGB-Parser/bin/Release/net8.0/LGB-Parser.exe",
-          "./LGB-Parser/bin/Release/net6.0/LGB-Parser.exe",
-          "./LGB-Parser/bin/Release/LGB-Parser.exe"
-        )
-        
-        foreach ($location in $lgbParserLocations) {
-          if (Test-Path $location) {
-            Copy-Item $location "./publish/win-x64/Tools/" -Force
-            Write-Host "✅ Copied LGB-Parser.exe from: $location"
-            $lgbParserFound = $true
-            break
-          }
-        }
-        
-        if (-not $lgbParserFound) {
-          Write-Host "⚠️ LGB-Parser.exe not found in any expected location"
-          Write-Host "📂 Searching for LGB-Parser.exe in build output..."
-          $foundFiles = Get-ChildItem -Path . -Name "LGB-Parser.exe" -Recurse -ErrorAction SilentlyContinue
-          if ($foundFiles) {
-            foreach ($file in $foundFiles) {
-              Write-Host "   Found: $file"
-              $fullPath = Resolve-Path $file
-              Copy-Item $fullPath "./publish/win-x64/Tools/" -Force
-              Write-Host "✅ Copied LGB-Parser.exe from: $fullPath"
+        # Check if LGB-Parser.exe is already in the root directory (from MSBuild target)
+        if (Test-Path "./publish/win-x64/LGB-Parser.exe") {
+          Write-Host "✅ LGB-Parser.exe found in root directory (from MSBuild target)"
+          $lgbSize = (Get-Item "./publish/win-x64/LGB-Parser.exe").Length
+          Write-Host "   Size: $lgbSize bytes"
+        } else {
+          Write-Host "⚠️ LGB-Parser.exe not found in root directory, searching for it..."
+          
+          # Search for LGB-Parser.exe and copy to root if found
+          $lgbParserFound = $false
+          $lgbParserLocations = @(
+            "./bin/Release/net8.0-windows/win-x64/LGB-Parser.exe",  # MSBuild output location
+            "./LGB-Parser/bin/Release/net8.0/LGB-Parser.exe",      # Submodule build location
+            "./LGB-Parser/bin/Release/net6.0/LGB-Parser.exe",      # Fallback
+            "./LGB-Parser/bin/Release/LGB-Parser.exe"              # Fallback
+          )
+          
+          foreach ($location in $lgbParserLocations) {
+            if (Test-Path $location) {
+              Copy-Item $location "./publish/win-x64/" -Force
+              $lgbSize = (Get-Item $location).Length
+              Write-Host "✅ Copied LGB-Parser.exe to root from: $location ($lgbSize bytes)"
               $lgbParserFound = $true
               break
             }
           }
-        }
-        
-        if (-not $lgbParserFound) {
-          Write-Host "❌ LGB-Parser.exe not found anywhere - build may have failed"
-          Write-Host "📂 Debug: Checking LGB-Parser directory structure..."
-          if (Test-Path "./LGB-Parser") {
-            Get-ChildItem "./LGB-Parser" -Recurse -Include "*.exe" | ForEach-Object { Write-Host "   EXE found: $($_.FullName)" }
+          
+          if (-not $lgbParserFound) {
+            Write-Host "❌ LGB-Parser.exe not found anywhere - searching recursively..."
+            $foundFiles = Get-ChildItem -Path . -Name "LGB-Parser.exe" -Recurse -ErrorAction SilentlyContinue
+            if ($foundFiles) {
+              foreach ($file in $foundFiles) {
+                Write-Host "   Found: $file"
+                $fullPath = Resolve-Path $file
+                Copy-Item $fullPath "./publish/win-x64/" -Force
+                Write-Host "✅ Copied LGB-Parser.exe to root from: $fullPath"
+                $lgbParserFound = $true
+                break
+              }
+            }
+          }
+          
+          if (-not $lgbParserFound) {
+            Write-Host "❌ LGB-Parser.exe not found anywhere - build may have failed"
           }
         }
         
-              
-      
+        # Check for and copy LGB-Parser DLLs that might be needed
+        Write-Host "🔍 Checking for LGB-Parser dependencies..."
+        $lgbDllLocations = @(
+          "./bin/Release/net8.0-windows/win-x64/",
+          "./LGB-Parser/bin/Release/net8.0/",
+          "./LGB-Parser/bin/Release/net6.0/"
+        )
+        
+        foreach ($dllLocation in $lgbDllLocations) {
+          if (Test-Path $dllLocation) {
+            $lgbDlls = Get-ChildItem "$dllLocation*.dll" -ErrorAction SilentlyContinue
+            foreach ($dll in $lgbDlls) {
+              $targetPath = "./publish/win-x64/$($dll.Name)"
+              # Only copy if it doesn't already exist (don't overwrite Amaurot's DLLs)
+              if (-not (Test-Path $targetPath)) {
+                Copy-Item $dll.FullName $targetPath -Force
+                Write-Host "   Copied LGB-Parser DLL: $($dll.Name)"
+              }
+            }
+            if ($lgbDlls) { break }  # Stop after first location with DLLs
+          }
+        }
+        
+        # Create Tools directory and copy unluac.jar
+        Write-Host "🔧 Setting up Tools directory for unluac.jar..."
+        New-Item -ItemType Directory -Force -Path ./publish/win-x64/Tools
+        
+        # Copy unluac.jar from multiple possible locations
         $unluacFound = $false
         $unluacLocations = @(
-          "./Tools/unluac.jar",
           "./bin/Release/net8.0-windows/win-x64/Tools/unluac.jar",
-          "./unluac/unluac.jar"
+          "./Tools/unluac.jar",
+          "./unluac/unluac.jar",
+          "./unluac/bin/unluac.jar"
         )
+        
         foreach ($location in $unluacLocations) {
           if (Test-Path $location) {
             Copy-Item $location "./publish/win-x64/Tools/" -Force
-            Write-Host "✅ Copied unluac.jar from: $location"
+            $unluacSize = (Get-Item $location).Length
+            Write-Host "✅ Copied unluac.jar to Tools from: $location ($unluacSize bytes)"
             $unluacFound = $true
             break
           }
@@ -167,52 +191,57 @@ jobs:
         if (-not $unluacFound) {
           Write-Host "⚠️ unluac.jar not found - this is optional"
         }
+        
+        # Copy Libs directory if it exists
         if (Test-Path "./Libs") {
           Write-Host "🔧 Copying Libs directory..."
-                    
           if (Test-Path "./publish/win-x64/Libs") {
             Remove-Item -Path "./publish/win-x64/Libs" -Recurse -Force
             Write-Host "   Removed existing Libs directory"
           }
           Copy-Item -Path "./Libs" -Destination "./publish/win-x64/" -Recurse -Force
           Write-Host "✅ Copied Libs directory"
+          
+          # Verify SQLite database
+          if (Test-Path "./publish/win-x64/Libs/app_data.sqlite") {
+            $sqliteSize = (Get-Item "./publish/win-x64/Libs/app_data.sqlite").Length
+            Write-Host "   ✓ app_data.sqlite verified ($sqliteSize bytes)"
+          }
         } else {
           Write-Host "⚠️ Libs directory not found"
         }
         
-             
-     
-        Write-Host "📂 Final Tools directory contents:"
+        Write-Host ""
+        Write-Host "📂 Final publish structure:"
+        Write-Host "Root directory:"
+        Get-ChildItem "./publish/win-x64" -File | Select-Object Name, Length | Format-Table
+        Write-Host "Tools directory:"
         if (Test-Path "./publish/win-x64/Tools") {
           Get-ChildItem "./publish/win-x64/Tools" | Format-Table Name, Length
         }
+        Write-Host "Directories:"
+        Get-ChildItem "./publish/win-x64" -Directory | Select-Object Name | Format-Table
 
-         
-     
     - name: Create Windows ZIP
       run: |
         $version = "v1.0.${{ github.run_number }}"
         Compress-Archive -Path ./publish/win-x64/* -DestinationPath "./Amaurot-Map-Editor-$version-win-x64.zip" -Force
-        Write-Host "✅ Created release archive: Amaurot-Map-Editor-$version-win-x64.zip"
-
         
-    
+        $zipSize = (Get-Item "./Amaurot-Map-Editor-$version-win-x64.zip").Length
+        Write-Host "✅ Created release archive: Amaurot-Map-Editor-$version-win-x64.zip ($([math]::Round($zipSize/1MB, 2)) MB)"
+
     - name: Upload Windows artifacts
       uses: actions/upload-artifact@v4
       with:
         name: Amaurot-Map-Editor-Windows-${{ matrix.configuration }}
         path: ./Amaurot-Map-Editor-*-win-x64.zip
 
-         
-     
     - name: Upload Windows executables
       uses: actions/upload-artifact@v4
       with:
         name: Amaurot-Map-Editor-Windows-Executable-${{ matrix.configuration }}
         path: ./publish/win-x64/
 
-          
-        
   release:
     needs: build
     runs-on: ubuntu-latest
@@ -246,15 +275,20 @@ jobs:
         tag_name: ${{ steps.version.outputs.VERSION }}
         name: "Amaurot Map Editor ${{ steps.version.outputs.VERSION }}"
         body: |
-                
-      
+          ## Amaurot FFXIV Map Editor ${{ steps.version.outputs.VERSION }}
           
           **Auto-generated release from commit:** [`${{ steps.commit.outputs.SHORT_SHA }}`](${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }})
           
           **Latest changes:** ${{ steps.commit.outputs.COMMIT_MESSAGE }}
           
+          ### 📦 Package Structure
+          - `Amaurot.exe` - Main application
+          - `LGB-Parser.exe` - LGB file parser (root directory)
+          - `Libs/` - SQLite database and data files
+          - `Definitions/` - FFXIV data definitions  
+          - `Tools/unluac.jar` - Lua decompiler
+          
           ---
-         
         draft: false
         prerelease: false
         files: |
