@@ -49,18 +49,22 @@
 	</ItemGroup>
 
 	<ItemGroup>
+		<Compile Remove="LGB-Parser\**" />
 		<Compile Remove="notes\**" />
 		<Compile Remove="Resources\LgbData\**" />
 		<Compile Remove="Tools\**" />
 		<Compile Remove="unluac\**" />
+		<EmbeddedResource Remove="LGB-Parser\**" />
 		<EmbeddedResource Remove="notes\**" />
 		<EmbeddedResource Remove="Resources\LgbData\**" />
 		<EmbeddedResource Remove="Tools\**" />
 		<EmbeddedResource Remove="unluac\**" />
+		<None Remove="LGB-Parser\**" />
 		<None Remove="notes\**" />
 		<None Remove="Resources\LgbData\**" />
 		<None Remove="Tools\**" />
 		<None Remove="unluac\**" />
+		<Page Remove="LGB-Parser\**" />
 		<Page Remove="notes\**" />
 		<Page Remove="Resources\LgbData\**" />
 		<Page Remove="Tools\**" />
@@ -74,9 +78,6 @@
 	</ItemGroup>
 
 	<ItemGroup>
-		<None Include="LGB-Parser\.github\workflows\main.yml" />
-		<None Include="LGB-Parser\LGB-Parser.csproj" />
-		<None Include="LGB-Parser\LGB-Parser.sln" />
 		<None Include="map editor.sln" />
 	</ItemGroup>
 	<ItemGroup>
