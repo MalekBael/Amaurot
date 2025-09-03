@@ -1,6 +1,6 @@
 ﻿# Amaurot - Quest Editor
 
-A work in progress tool for visualizing and navigating Final Fantasy XIV map data, territories, quests, NPCs, and game content.
+A work in progress tool for visualizing and navigating Final Fantasy XIV map data, territories, quests, NPCs, and game content. This tool's primary focus is to be used for assisting the development of Project Sapphire.
 
 <img src="https://github.com/user-attachments/assets/d6a5dd69-5e02-4f28-8fe7-d9ea18e75423" alt="Map Editor Interface" width="900">
 
