@@ -3,6 +3,7 @@ using System.IO;
 using System.Linq;
 using System.Windows;
 using Amaurot.Services;
+using Amaurot.Helpers;
 using WpfMessageBox = System.Windows.MessageBox;
 
 namespace Amaurot
@@ -226,16 +227,44 @@ namespace Amaurot
                 return;
             }
 
+            // Validate path for security
+            if (!PathValidator.IsValidDirectoryPath(path))
+            {
+                WpfMessageBox.Show("The specified path contains invalid characters or is potentially unsafe.", "Open Folder",
+                    MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
             try
             {
                 _logDebug?.Invoke($"Opening Sapphire Server folder: {path}");
 
-                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                // Use explorer.exe on Windows or appropriate file manager on other platforms
+                // This is safer than UseShellExecute = true with arbitrary paths
+                if (System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(
+                    System.Runtime.InteropServices.OSPlatform.Windows))
                 {
-                    FileName = path,
-                    UseShellExecute = true,
-                    Verb = "open"
-                });
+                    System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                    {
+                        FileName = "explorer.exe",
+                        Arguments = $"\"{path}\"",
+                        UseShellExecute = false,
+                        CreateNoWindow = true
+                    });
+                }
+                else
+                {
+                    // For Linux/Mac, use xdg-open or open command
+                    string opener = System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(
+                        System.Runtime.InteropServices.OSPlatform.OSX) ? "open" : "xdg-open";
+                    System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                    {
+                        FileName = opener,
+                        Arguments = $"\"{path}\"",
+                        UseShellExecute = false,
+                        CreateNoWindow = true
+                    });
+                }
             }
             catch (Exception ex)
             {
@@ -263,16 +292,44 @@ namespace Amaurot
                 return;
             }
 
+            // Validate path for security
+            if (!PathValidator.IsValidDirectoryPath(path))
+            {
+                WpfMessageBox.Show("The specified path contains invalid characters or is potentially unsafe.", "Open Folder",
+                    MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
             try
             {
                 _logDebug?.Invoke($"Opening Sapphire Server build folder: {path}");
 
-                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                // Use explorer.exe on Windows or appropriate file manager on other platforms
+                // This is safer than UseShellExecute = true with arbitrary paths
+                if (System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(
+                    System.Runtime.InteropServices.OSPlatform.Windows))
                 {
-                    FileName = path,
-                    UseShellExecute = true,
-                    Verb = "open"
-                });
+                    System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                    {
+                        FileName = "explorer.exe",
+                        Arguments = $"\"{path}\"",
+                        UseShellExecute = false,
+                        CreateNoWindow = true
+                    });
+                }
+                else
+                {
+                    // For Linux/Mac, use xdg-open or open command
+                    string opener = System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(
+                        System.Runtime.InteropServices.OSPlatform.OSX) ? "open" : "xdg-open";
+                    System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                    {
+                        FileName = opener,
+                        Arguments = $"\"{path}\"",
+                        UseShellExecute = false,
+                        CreateNoWindow = true
+                    });
+                }
             }
             catch (Exception ex)
             {

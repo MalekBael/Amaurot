@@ -4,6 +4,7 @@ using System.Text.Json;
 using System.Diagnostics;
 using System.Linq;
 using System.Runtime.InteropServices;
+using Amaurot.Helpers;
 
 namespace Amaurot.Services
 {
@@ -283,16 +284,41 @@ namespace Amaurot.Services
                 return;
             }
 
+            // Validate path for security
+            if (!PathValidator.IsValidDirectoryPath(_settings.SapphireServerPath))
+            {
+                _logDebug?.Invoke("Cannot open Sapphire Server path: path validation failed");
+                return;
+            }
+
             try
             {
                 _logDebug?.Invoke($"Opening Sapphire Server path: {_settings.SapphireServerPath}");
 
-                Process.Start(new ProcessStartInfo
+                // Use explorer.exe on Windows or appropriate file manager on other platforms
+                // This is safer than UseShellExecute = true with arbitrary paths
+                if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
                 {
-                    FileName = _settings.SapphireServerPath,
-                    UseShellExecute = true,
-                    Verb = "open"
-                });
+                    Process.Start(new ProcessStartInfo
+                    {
+                        FileName = "explorer.exe",
+                        Arguments = $"\"{_settings.SapphireServerPath}\"",
+                        UseShellExecute = false,
+                        CreateNoWindow = true
+                    });
+                }
+                else
+                {
+                    // For Linux/Mac, use xdg-open or open command
+                    string opener = RuntimeInformation.IsOSPlatform(OSPlatform.OSX) ? "open" : "xdg-open";
+                    Process.Start(new ProcessStartInfo
+                    {
+                        FileName = opener,
+                        Arguments = $"\"{_settings.SapphireServerPath}\"",
+                        UseShellExecute = false,
+                        CreateNoWindow = true
+                    });
+                }
             }
             catch (Exception ex)
             {
@@ -308,16 +334,41 @@ namespace Amaurot.Services
                 return;
             }
 
+            // Validate path for security
+            if (!PathValidator.IsValidDirectoryPath(_settings.SapphireBuildPath))
+            {
+                _logDebug?.Invoke("Cannot open Sapphire Server build path: path validation failed");
+                return;
+            }
+
             try
             {
                 _logDebug?.Invoke($"Opening Sapphire Server build path: {_settings.SapphireBuildPath}");
 
-                Process.Start(new ProcessStartInfo
+                // Use explorer.exe on Windows or appropriate file manager on other platforms
+                // This is safer than UseShellExecute = true with arbitrary paths
+                if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
                 {
-                    FileName = _settings.SapphireBuildPath,
-                    UseShellExecute = true,
-                    Verb = "open"
-                });
+                    Process.Start(new ProcessStartInfo
+                    {
+                        FileName = "explorer.exe",
+                        Arguments = $"\"{_settings.SapphireBuildPath}\"",
+                        UseShellExecute = false,
+                        CreateNoWindow = true
+                    });
+                }
+                else
+                {
+                    // For Linux/Mac, use xdg-open or open command
+                    string opener = RuntimeInformation.IsOSPlatform(OSPlatform.OSX) ? "open" : "xdg-open";
+                    Process.Start(new ProcessStartInfo
+                    {
+                        FileName = opener,
+                        Arguments = $"\"{_settings.SapphireBuildPath}\"",
+                        UseShellExecute = false,
+                        CreateNoWindow = true
+                    });
+                }
             }
             catch (Exception ex)
             {

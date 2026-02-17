@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
 using Microsoft.Win32;
+using Amaurot.Helpers;
 
 namespace Amaurot.Services
 {
@@ -27,6 +28,13 @@ namespace Amaurot.Services
                 return false;
             }
 
+            // Validate path for security
+            if (!PathValidator.IsValidFilePath(scriptPath))
+            {
+                _logDebug?.Invoke($"Path validation failed for: {scriptPath}");
+                return false;
+            }
+
             _logDebug?.Invoke($"Attempting to open {scriptPath} in VSCode using URI scheme");
 
             if (TryOpenWithVSCodeUri(scriptPath))
@@ -42,6 +50,13 @@ namespace Amaurot.Services
         {
             if (string.IsNullOrEmpty(scriptPath) || !File.Exists(scriptPath))
             {
+                return false;
+            }
+
+            // Validate path for security
+            if (!PathValidator.IsValidFilePath(scriptPath))
+            {
+                _logDebug?.Invoke($"Path validation failed for: {scriptPath}");
                 return false;
             }
 
@@ -68,7 +83,8 @@ namespace Amaurot.Services
                 return false;
             }
 
-            var validPaths = scriptPaths.Where(path => !string.IsNullOrEmpty(path) && File.Exists(path)).ToArray();
+            // Validate all paths for security before processing
+            var validPaths = PathValidator.FilterValidFilePaths(scriptPaths);
             
             if (validPaths.Length == 0)
             {
@@ -94,7 +110,8 @@ namespace Amaurot.Services
                 return false;
             }
 
-            var validPaths = scriptPaths.Where(path => !string.IsNullOrEmpty(path) && File.Exists(path)).ToArray();
+            // Validate all paths for security before processing
+            var validPaths = PathValidator.FilterValidFilePaths(scriptPaths);
 
             if (validPaths.Length == 0)
             {

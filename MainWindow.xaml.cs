@@ -1778,14 +1778,49 @@ namespace Amaurot
         {
             try
             {
-                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                // Validate tool path and arguments for security
+                if (!Helpers.PathValidator.IsValidFilePath(toolPath))
+                {
+                    LogDebug($"Invalid tool path: {toolPath}");
+                    System.Windows.MessageBox.Show("Invalid tool path specified.", "Error",
+                        System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
+                    return;
+                }
+
+                // Validate all arguments - check for dangerous shell metacharacters
+                // Even with UseShellExecute=false, cmd.exe interprets metacharacters
+                var validatedArgs = arguments?.Where(a => 
+                    !string.IsNullOrWhiteSpace(a) && 
+                    !a.Contains(';') && 
+                    !a.Contains('|') && 
+                    !a.Contains('&') &&
+                    !a.Contains('>') &&
+                    !a.Contains('<') &&
+                    !a.Contains('`') &&
+                    !a.Contains('$') &&
+                    !a.Contains('\n') &&
+                    !a.Contains('\r') &&
+                    !a.Contains('^') &&
+                    !a.Contains('%')).ToArray() ?? Array.Empty<string>();
+
+                // Build command more safely
+                // Note: Even with UseShellExecute=false, cmd.exe /k interprets the command
+                // We use doubled quotes for arguments passed through cmd.exe's /k
+                var psi = new System.Diagnostics.ProcessStartInfo
                 {
                     FileName = "cmd.exe",
-                    Arguments = $"/k \"\"{toolPath}\" {string.Join(" ", arguments.Select(a => $"\"{a}\""))}\"",
-                    WorkingDirectory = Path.GetDirectoryName(toolPath),
-                    UseShellExecute = true,
-                    CreateNoWindow = false
-                });
+                    UseShellExecute = false,
+                    CreateNoWindow = false,
+                    WorkingDirectory = Path.GetDirectoryName(toolPath)
+                };
+
+                // For cmd.exe with /k, we need to double quotes for proper escaping
+                // The outer quotes are for cmd.exe, inner doubled quotes protect the arguments
+                var escapedToolPath = toolPath.Replace("\"", "\"\"");
+                var escapedArgs = string.Join(" ", validatedArgs.Select(a => $"\"{a.Replace("\"", "\"\"")}\""));
+                psi.Arguments = $"/k \"\"{escapedToolPath}\" {escapedArgs}\"";
+
+                System.Diagnostics.Process.Start(psi);
 
                 StatusText.Text = "Tool opened in console window";
             }
