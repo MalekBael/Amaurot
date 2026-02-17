@@ -1787,9 +1787,18 @@ namespace Amaurot
                     return;
                 }
 
-                // Validate all arguments
-                var validatedArgs = arguments?.Where(a => !string.IsNullOrWhiteSpace(a) && 
-                    !a.Contains(';') && !a.Contains('|') && !a.Contains('&')).ToArray() ?? Array.Empty<string>();
+                // Validate all arguments - check for dangerous shell metacharacters
+                var validatedArgs = arguments?.Where(a => 
+                    !string.IsNullOrWhiteSpace(a) && 
+                    !a.Contains(';') && 
+                    !a.Contains('|') && 
+                    !a.Contains('&') &&
+                    !a.Contains('>') &&
+                    !a.Contains('<') &&
+                    !a.Contains('`') &&
+                    !a.Contains('$') &&
+                    !a.Contains('\n') &&
+                    !a.Contains('\r')).ToArray() ?? Array.Empty<string>();
 
                 // Build command more safely - avoid shell interpretation
                 // Use ProcessStartInfo with arguments list instead of string concatenation
@@ -1801,10 +1810,10 @@ namespace Amaurot
                     WorkingDirectory = Path.GetDirectoryName(toolPath)
                 };
 
-                // Build the argument string more carefully
-                // Still using /k for keep-alive, but with better escaping
-                var escapedToolPath = toolPath.Replace("\"", "\"\"");
-                var escapedArgs = string.Join(" ", validatedArgs.Select(a => $"\"{a.Replace("\"", "\"\"")}\""));
+                // Build the argument string more carefully with proper escaping
+                // For cmd.exe, quotes are escaped with backslash
+                var escapedToolPath = toolPath.Replace("\"", "\\\"");
+                var escapedArgs = string.Join(" ", validatedArgs.Select(a => $"\"{a.Replace("\"", "\\\"")}\""));
                 psi.Arguments = $"/k \"\"{escapedToolPath}\" {escapedArgs}\"";
 
                 System.Diagnostics.Process.Start(psi);

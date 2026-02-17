@@ -37,9 +37,22 @@ namespace Amaurot.Helpers
 
                 // Additional security: check for shell metacharacters that could be used for injection
                 // These are particularly dangerous when paths are passed to shell commands
-                char[] dangerousChars = new[] { ';', '|', '&', '>', '<', '`', '$', '\n', '\r' };
-                if (path.IndexOfAny(dangerousChars) >= 0)
-                    return false;
+                // On Windows, these characters should not appear in valid paths
+                if (System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(
+                    System.Runtime.InteropServices.OSPlatform.Windows))
+                {
+                    char[] dangerousChars = new[] { ';', '|', '&', '>', '<', '`', '$', '\n', '\r' };
+                    if (path.IndexOfAny(dangerousChars) >= 0)
+                        return false;
+                }
+                else
+                {
+                    // On Unix-like systems, only check for the most dangerous characters
+                    // Note: ; is a valid filename character on Unix
+                    char[] dangerousChars = new[] { '|', '&', '>', '<', '`', '$', '\n', '\r', '\0' };
+                    if (path.IndexOfAny(dangerousChars) >= 0)
+                        return false;
+                }
 
                 return true;
             }
@@ -109,12 +122,13 @@ namespace Amaurot.Helpers
             {
                 string fullPath = Path.GetFullPath(path!);
                 
-                // For Windows, quote the path and escape any quotes inside
+                // For Windows, quote the path and escape any quotes inside using backslash
                 if (System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(
                     System.Runtime.InteropServices.OSPlatform.Windows))
                 {
-                    // Escape any existing quotes
-                    fullPath = fullPath.Replace("\"", "\"\"");
+                    // Escape any existing quotes with backslash (Windows cmd.exe style)
+                    // Note: for cmd.exe, quotes within quotes need to be escaped as \"
+                    fullPath = fullPath.Replace("\"", "\\\"");
                     return $"\"{fullPath}\"";
                 }
                 else
