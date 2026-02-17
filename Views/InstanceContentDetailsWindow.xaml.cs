@@ -8,6 +8,7 @@ using System.Windows.Data;
 using System.Windows.Media;
 using Amaurot.Services.Entities;
 using Amaurot.Services;
+using Amaurot.Helpers;
 
 namespace Amaurot
 {
@@ -437,6 +438,14 @@ namespace Amaurot
         {
             try
             {
+                // Validate file path for security
+                if (!PathValidator.IsValidFilePath(filePath))
+                {
+                    System.Windows.MessageBox.Show("Invalid or potentially unsafe file path.", "Error",
+                        MessageBoxButton.OK, MessageBoxImage.Warning);
+                    return;
+                }
+
                 // ✅ Use the injected InstanceScriptService directly (like QuestDetailsWindow)
                 if (_instanceScriptService != null)
                 {
@@ -453,7 +462,7 @@ namespace Amaurot
                 }
                 else
                 {
-                    // Fallback if service not available
+                    // Fallback if service not available - use safer approach
                     if (useVSCode)
                     {
                         var process = new System.Diagnostics.Process
@@ -477,7 +486,8 @@ namespace Amaurot
                             {
                                 FileName = "devenv",
                                 Arguments = $"\"{filePath}\"",
-                                UseShellExecute = true
+                                UseShellExecute = false,
+                                CreateNoWindow = true
                             }
                         };
                         process.Start();
@@ -486,19 +496,9 @@ namespace Amaurot
             }
             catch (Exception ex)
             {
-                // Fallback to default application
-                try
-                {
-                    System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(filePath) 
-                    { 
-                        UseShellExecute = true 
-                    });
-                }
-                catch
-                {
-                    System.Windows.MessageBox.Show($"Could not open file: {ex.Message}", "Error", 
-                        MessageBoxButton.OK, MessageBoxImage.Error);
-                }
+                // Don't fall back to UseShellExecute=true for security reasons
+                System.Windows.MessageBox.Show($"Could not open file: {ex.Message}\n\nPlease ensure the appropriate editor is installed.", 
+                    "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 

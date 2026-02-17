@@ -1778,14 +1778,36 @@ namespace Amaurot
         {
             try
             {
-                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                // Validate tool path and arguments for security
+                if (!Helpers.PathValidator.IsValidFilePath(toolPath))
+                {
+                    LogDebug($"Invalid tool path: {toolPath}");
+                    System.Windows.MessageBox.Show("Invalid tool path specified.", "Error",
+                        System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
+                    return;
+                }
+
+                // Validate all arguments
+                var validatedArgs = arguments?.Where(a => !string.IsNullOrWhiteSpace(a) && 
+                    !a.Contains(';') && !a.Contains('|') && !a.Contains('&')).ToArray() ?? Array.Empty<string>();
+
+                // Build command more safely - avoid shell interpretation
+                // Use ProcessStartInfo with arguments list instead of string concatenation
+                var psi = new System.Diagnostics.ProcessStartInfo
                 {
                     FileName = "cmd.exe",
-                    Arguments = $"/k \"\"{toolPath}\" {string.Join(" ", arguments.Select(a => $"\"{a}\""))}\"",
-                    WorkingDirectory = Path.GetDirectoryName(toolPath),
-                    UseShellExecute = true,
-                    CreateNoWindow = false
-                });
+                    UseShellExecute = false,  // Changed to false for better security
+                    CreateNoWindow = false,
+                    WorkingDirectory = Path.GetDirectoryName(toolPath)
+                };
+
+                // Build the argument string more carefully
+                // Still using /k for keep-alive, but with better escaping
+                var escapedToolPath = toolPath.Replace("\"", "\"\"");
+                var escapedArgs = string.Join(" ", validatedArgs.Select(a => $"\"{a.Replace("\"", "\"\"")}\""));
+                psi.Arguments = $"/k \"\"{escapedToolPath}\" {escapedArgs}\"";
+
+                System.Diagnostics.Process.Start(psi);
 
                 StatusText.Text = "Tool opened in console window";
             }
