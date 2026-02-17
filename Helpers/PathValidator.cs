@@ -48,7 +48,11 @@ namespace Amaurot.Helpers
                 else
                 {
                     // On Unix-like systems, only check for the most dangerous characters
-                    // Note: ; is a valid filename character on Unix
+                    // Note: Semicolon (;) is a valid filename character on Unix but could be
+                    // interpreted as a command separator in shell contexts. We allow it in
+                    // filenames since we validate paths and avoid shell interpretation (UseShellExecute=false)
+                    // when possible. When paths must be used in shell contexts, additional validation
+                    // should be performed.
                     char[] dangerousChars = new[] { '|', '&', '>', '<', '`', '$', '\n', '\r', '\0' };
                     if (path.IndexOfAny(dangerousChars) >= 0)
                         return false;
@@ -109,10 +113,12 @@ namespace Amaurot.Helpers
         }
 
         /// <summary>
-        /// Escapes a file path for safe use in shell commands (when UseShellExecute=true is unavoidable)
+        /// Escapes a file path for safe use in shell commands when UseShellExecute=true.
+        /// Note: When using UseShellExecute=false, ProcessStartInfo handles escaping automatically.
+        /// This method is for legacy code or unavoidable shell execution scenarios.
         /// </summary>
         /// <param name="path">The path to escape</param>
-        /// <returns>Escaped path suitable for shell execution, or null if path is invalid</returns>
+        /// <returns>Escaped path suitable for shell execution with UseShellExecute=true, or null if path is invalid</returns>
         public static string? EscapeForShell(string? path)
         {
             if (!IsValidPath(path))
@@ -122,21 +128,24 @@ namespace Amaurot.Helpers
             {
                 string fullPath = Path.GetFullPath(path!);
                 
-                // For Windows, quote the path and escape any quotes inside using backslash
+                // For Windows cmd.exe with UseShellExecute=true, use doubled quotes
+                // Note: This is different from UseShellExecute=false where backslash escaping is used
                 if (System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(
                     System.Runtime.InteropServices.OSPlatform.Windows))
                 {
-                    // Escape any existing quotes with backslash (Windows cmd.exe style)
-                    // Note: for cmd.exe, quotes within quotes need to be escaped as \"
-                    fullPath = fullPath.Replace("\"", "\\\"");
+                    // For cmd.exe shell interpretation, quotes are escaped by doubling
+                    fullPath = fullPath.Replace("\"", "\"\"");
                     return $"\"{fullPath}\"";
                 }
                 else
                 {
-                    // For Unix-like systems, escape special characters
+                    // For Unix-like shells (bash, sh), escape special characters with backslash
                     var escaped = new StringBuilder();
                     foreach (char c in fullPath)
                     {
+                        // Semicolon is a valid filename character on Unix but could be interpreted
+                        // as a command separator in shell contexts - we allow it since we validate
+                        // paths before use and don't use shell interpretation when possible
                         if (c == '\'' || c == '\"' || c == '\\' || c == ' ' || c == '$' || c == '`')
                         {
                             escaped.Append('\\');

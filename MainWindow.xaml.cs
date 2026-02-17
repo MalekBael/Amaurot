@@ -1788,6 +1788,7 @@ namespace Amaurot
                 }
 
                 // Validate all arguments - check for dangerous shell metacharacters
+                // Even with UseShellExecute=false, cmd.exe interprets metacharacters
                 var validatedArgs = arguments?.Where(a => 
                     !string.IsNullOrWhiteSpace(a) && 
                     !a.Contains(';') && 
@@ -1798,22 +1799,25 @@ namespace Amaurot
                     !a.Contains('`') &&
                     !a.Contains('$') &&
                     !a.Contains('\n') &&
-                    !a.Contains('\r')).ToArray() ?? Array.Empty<string>();
+                    !a.Contains('\r') &&
+                    !a.Contains('^') &&
+                    !a.Contains('%')).ToArray() ?? Array.Empty<string>();
 
-                // Build command more safely - avoid shell interpretation
-                // Use ProcessStartInfo with arguments list instead of string concatenation
+                // Build command more safely
+                // Note: Even with UseShellExecute=false, cmd.exe /k interprets the command
+                // We use doubled quotes for arguments passed through cmd.exe's /k
                 var psi = new System.Diagnostics.ProcessStartInfo
                 {
                     FileName = "cmd.exe",
-                    UseShellExecute = false,  // Changed to false for better security
+                    UseShellExecute = false,
                     CreateNoWindow = false,
                     WorkingDirectory = Path.GetDirectoryName(toolPath)
                 };
 
-                // Build the argument string more carefully with proper escaping
-                // For cmd.exe, quotes are escaped with backslash
-                var escapedToolPath = toolPath.Replace("\"", "\\\"");
-                var escapedArgs = string.Join(" ", validatedArgs.Select(a => $"\"{a.Replace("\"", "\\\"")}\""));
+                // For cmd.exe with /k, we need to double quotes for proper escaping
+                // The outer quotes are for cmd.exe, inner doubled quotes protect the arguments
+                var escapedToolPath = toolPath.Replace("\"", "\"\"");
+                var escapedArgs = string.Join(" ", validatedArgs.Select(a => $"\"{a.Replace("\"", "\"\"")}\""));
                 psi.Arguments = $"/k \"\"{escapedToolPath}\" {escapedArgs}\"";
 
                 System.Diagnostics.Process.Start(psi);
