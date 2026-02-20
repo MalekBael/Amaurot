@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
 	<PropertyGroup>
 		<OutputType>WinExe</OutputType>
@@ -20,7 +20,7 @@
 	</PropertyGroup>
 
 	<ItemGroup>
-		<PackageReference Include="DotNetZip" Version="1.16.0" />
+		<PackageReference Include="DotNetZip" Version="1.19.0" />
 		<PackageReference Include="EntityFramework" Version="6.0.0" />
 		<PackageReference Include="Lumina" Version="6.3.0" />
 		<PackageReference Include="Lumina.Excel" Version="7.2.3" />
