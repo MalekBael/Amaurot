@@ -1805,7 +1805,6 @@ namespace Amaurot
 
                 // Build command more safely
                 // Note: Even with UseShellExecute=false, cmd.exe /k interprets the command
-                // We use doubled quotes for arguments passed through cmd.exe's /k
                 var psi = new System.Diagnostics.ProcessStartInfo
                 {
                     FileName = "cmd.exe",
@@ -1814,11 +1813,13 @@ namespace Amaurot
                     WorkingDirectory = Path.GetDirectoryName(toolPath)
                 };
 
-                // For cmd.exe with /k, we need to double quotes for proper escaping
-                // The outer quotes are for cmd.exe, inner doubled quotes protect the arguments
-                var escapedToolPath = toolPath.Replace("\"", "\"\"");
-                var escapedArgs = string.Join(" ", validatedArgs.Select(a => $"\"{a.Replace("\"", "\"\"")}\""));
-                psi.Arguments = $"/k \"\"{escapedToolPath}\" {escapedArgs}\"";
+                // Use ArgumentList to prevent command injection
+                psi.ArgumentList.Add("/k");
+                psi.ArgumentList.Add(toolPath);
+                foreach (var arg in validatedArgs)
+                {
+                    psi.ArgumentList.Add(arg);
+                }
 
                 System.Diagnostics.Process.Start(psi);
 
