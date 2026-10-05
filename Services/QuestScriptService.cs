@@ -453,12 +453,14 @@ namespace Amaurot.Services
                 var processInfo = new System.Diagnostics.ProcessStartInfo
                 {
                     FileName = "java",
-                    Arguments = $"-jar \"{unluacPath}\" \"{inputPath}\"",
                     UseShellExecute = false,
                     RedirectStandardOutput = true,
                     RedirectStandardError = true,
                     CreateNoWindow = true
                 };
+                processInfo.ArgumentList.Add("-jar");
+                processInfo.ArgumentList.Add(unluacPath);
+                processInfo.ArgumentList.Add(inputPath);
 
                 using var process = System.Diagnostics.Process.Start(processInfo);
                 if (process == null) return false;
