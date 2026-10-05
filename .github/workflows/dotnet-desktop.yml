@@ -1,6 +1,5 @@
 name: Build and Release Amaurot Quest Editor
-permissions:
-  contents: write
+permissions: {}
 
 on:
   push:
@@ -10,6 +9,8 @@ on:
 
 jobs:
   build:
+    permissions:
+      contents: read
     strategy:
       matrix:
         configuration: [Debug]
