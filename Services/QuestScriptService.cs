@@ -105,6 +105,11 @@ namespace Amaurot.Services
             {
                 var shortenedFileName = $"{basePart}.cpp";
 
+                if (shortenedFileName.Contains(".."))
+                {
+                    throw new ArgumentException("Invalid file path");
+                }
+
                 var mainScriptPath = Path.Combine(scriptsPath, shortenedFileName);
                 if (File.Exists(mainScriptPath))
                 {
@@ -723,6 +728,15 @@ namespace Amaurot.Services
         {
             try
             {
+                if (generatedScriptPath == null || generatedScriptPath.Contains(".."))
+                {
+                    return new ImportResult
+                    {
+                        Success = false,
+                        ErrorMessage = "Invalid file path"
+                    };
+                }
+
                 if (!File.Exists(generatedScriptPath))
                 {
                     return new ImportResult
@@ -754,7 +768,17 @@ namespace Amaurot.Services
                 }
 
                 var targetFileName = $"{questIdString}.cpp";
-                var targetFilePath = Path.Combine(questScriptsPath, targetFileName);
+                var questScriptsPathFull = Path.GetFullPath(questScriptsPath);
+                var targetFilePath = Path.GetFullPath(Path.Combine(questScriptsPathFull, targetFileName));
+                if (!targetFilePath.StartsWith(questScriptsPathFull + Path.DirectorySeparatorChar, StringComparison.Ordinal)
+                    && targetFilePath != questScriptsPathFull)
+                {
+                    return new ImportResult
+                    {
+                        Success = false,
+                        ErrorMessage = "Invalid file path"
+                    };
+                }
 
                 if (File.Exists(targetFilePath))
                 {
